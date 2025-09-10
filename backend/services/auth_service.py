@@ -88,8 +88,8 @@ class AuthService:
                 "token_type": "bearer",
             }
 
-    async def authenticate_google_user(self, token: str) -> Optional[User]:
-        google_user_info = await self.google_provider.verify_token(token)
+    async def authenticate_google_user(self, authorization_code: str, redirect_uri: str = None) -> Optional[User]:
+        google_user_info = await self.google_provider.verify_authorization_code(authorization_code, redirect_uri)
 
         user_dict = await self.db.find_one(
             user_collection, 
@@ -103,7 +103,7 @@ class AuthService:
                 await self.db.update_one(
                     user_collection,
                     {"id": user.id},
-                    {"google_id": google_user_info.id, "updated_at": int(dt.now(tz.utc).timestamp())},
+                    {"google_id": google_user_info.id, "updated_at": int(dt.now(tz.utc).timestamp()), "picture": google_user_info.picture},
                 )
                 user.google_id = google_user_info.id
 
@@ -114,6 +114,7 @@ class AuthService:
                 google_id=google_user_info.id,
                 email=google_user_info.email,
                 hashed_pwd=self.get_password_hash(google_user_info.id),
+                picture=google_user_info.picture,
                 name=google_user_info.name,
                 created_at=int(dt.now(tz.utc).timestamp()),
                 updated_at=int(dt.now(tz.utc).timestamp()),
@@ -122,6 +123,28 @@ class AuthService:
             )
             await self.db.insert_one(user_collection, new_user.model_dump())
             return new_user
+
+    def verify_password(self, password: str, hashed_pwd: str) -> bool:
+        return pwd_context.verify(password, hashed_pwd)
+
+    async def authenticate_user(self, name: str = None, email: str = None, password: str = None) -> Optional[User]:
+        if name:
+            user_dict = await self.db.find_one(user_collection, {"name": name})
+        elif email:
+            user_dict = await self.db.find_one(user_collection, {"email": email})
+        else:
+            raise ValueError("Either name or email must be provided")
+
+        if not user_dict:
+            return None
+
+        user = User(**user_dict)
+        if not self.verify_password(password, user.hashed_pwd):
+            return None
+        return user
+
+    async def verify_user(self, user_id: str) -> bool:
+        return
 
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
     credentials_exception = HTTPException(
@@ -146,21 +169,3 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
 
     return User(**user_dict)
     
-    def verify_password(self, password: str, hashed_pwd: str) -> bool:
-        return pwd_context.verify(password, hashed_pwd)
-
-    async def authenticate_user(self, name: str = None, email: str = None, password: str = None) -> Optional[User]:
-        if name:
-            user_dict = await self.db.find_one(user_collection, {"name": name})
-        elif email:
-            user_dict = await self.db.find_one(user_collection, {"email": email})
-        else:
-            raise ValueError("Either name or email must be provided")
-
-        if not user_dict:
-            return None
-
-        user = User(**user_dict)
-        if not self.verify_password(password, user.hashed_pwd):
-            return None
-        return user

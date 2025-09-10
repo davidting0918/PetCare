@@ -18,7 +18,8 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/access_token")
 
 class GoogleAuthRequest(BaseModel):
-    token: str
+    code: str  # Authorization code from Google
+    redirect_uri: str = None  # Redirect URI used for the OAuth flow
 
 class GoogleUserInfo(BaseModel):
     id: str

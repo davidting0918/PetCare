@@ -10,9 +10,9 @@ auth_service = AuthService()
 
 @router.post("/google/login")
 async def validate_google_login_route(request: GoogleAuthRequest):
-    user = await auth_service.authenticate_google_user(request.token)
+    user = await auth_service.authenticate_google_user(request.code, request.redirect_uri)
     if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Google token")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Google authorization code")
 
     token_info = await auth_service.get_or_create_token(user.id)
 
