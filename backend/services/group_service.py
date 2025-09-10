@@ -1,3 +1,4 @@
+import random
 import secrets
 import string
 from datetime import datetime as dt
@@ -55,7 +56,7 @@ class GroupService:
         """
         use 10 digits current timestamp + 3 digit random number
         """
-        return str(int(dt.now(tz.utc).timestamp())) + str(secrets.randint(100, 999))
+        return str(int(dt.now(tz.utc).timestamp())) + str(random.randint(100, 999))
 
     @staticmethod
     def _generate_group_id() -> str:
@@ -107,18 +108,14 @@ class GroupService:
             group_id=group_id,
             user_id=user_id,
             role=role,
-            joined_at=int(dt.now(tz.utc).timestamp()),
+            created_at=int(dt.now(tz.utc).timestamp()),
+            updated_at=int(dt.now(tz.utc).timestamp()),
             invited_by=invited_by,
             is_active=True,
         )
 
         # Insert membership record
-        await self.db.insert_one(group_member_collection, membership.dict())
-
-        # Still update user.group_ids for backwards compatibility and faster user group queries
-        await self.db.db[user_collection].update_one(
-            {"id": user_id, "is_active": True}, {"$addToSet": {"group_ids": group_id}}
-        )
+        await self.db.insert_one(group_member_collection, membership.model_dump())
 
     # ================== Permission Management Functions (CREATOR Only) ==================
 
@@ -166,9 +163,10 @@ class GroupService:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot change the creator's role")
 
         # Update the member's role
-        await self.db.db[group_member_collection].update_one(
+        await self.db.update_one(
+            group_member_collection,
             {"group_id": group_id, "user_id": request.user_id, "is_active": True},
-            {"$set": {"role": request.new_role.value}},
+            {"role": request.new_role.value, "updated_at": int(dt.now(tz.utc).timestamp())},
         )
 
         return {
@@ -211,13 +209,10 @@ class GroupService:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot remove the group creator")
 
         # Deactivate the membership
-        await self.db.db[group_member_collection].update_one(
-            {"group_id": group_id, "user_id": request.user_id, "is_active": True}, {"$set": {"is_active": False}}
-        )
-
-        # Remove group from user's group list
-        await self.db.db[user_collection].update_one(
-            {"id": request.user_id, "is_active": True}, {"$pull": {"group_ids": group_id}}
+        await self.db.update_one(
+            group_member_collection,
+            {"group_id": group_id, "user_id": request.user_id, "is_active": True},
+            {"is_active": False, "updated_at": int(dt.now(tz.utc).timestamp())},
         )
 
         return {
@@ -270,8 +265,10 @@ class GroupService:
             name=group.name,
             creator_id=group.creator_id,
             created_at=group.created_at,
+            updated_at=group.updated_at,
             member_count=1,  # Creator is the only member initially
             is_creator=True,
+            is_active=group.is_active,
         )
 
     async def create_invitation(self, group_id: str, user: UserInfo) -> Dict[str, Any]:
@@ -361,33 +358,39 @@ class GroupService:
 
         # Add user to group atomically with default MEMBER role
         # The invited_by field is retrieved from the invitation
-        invited_by = invitation_dict.get("created_by")  # Who created this invitation
+        invited_by = invitation_dict.get("invited_by")  # Who created this invitation
         await self._add_user_to_group(group_id=group_id, user_id=user_id, role=GroupRole.MEMBER, invited_by=invited_by)
 
         # Update invitation status
         await self.db.update_one(
             group_invitation_collection,
             {"id": invitation_dict["id"]},
-            {"status": InvitationStatus.ACCEPTED.value, "accepted_at": current_time, "accepted_by": user_id},
+            {
+                "status": InvitationStatus.ACCEPTED.value,
+                "accepted_at": current_time,
+                "accepted_by": user_id,
+                "updated_at": current_time,
+            },
         )
 
         # Get updated group info
         group_dict = await self.db.find_one(group_collection, {"id": group_id, "is_active": True})
         if not group_dict:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to join group")
+        await self.db.update_one(group_collection, {"id": group_id}, {"updated_at": current_time})
 
         # Calculate member count from GroupMember collection
-        member_count = await self.db.db[group_member_collection].count_documents(
-            {"group_id": group_id, "is_active": True}
-        )
+        member_count = await self.db.count_documents(group_member_collection, {"group_id": group_id, "is_active": True})
 
         return GroupInfo(
             id=group_dict["id"],
             name=group_dict["name"],
             creator_id=group_dict["creator_id"],
             created_at=group_dict["created_at"],
+            updated_at=group_dict["updated_at"],
             member_count=member_count,
             is_creator=(user_id == group_dict["creator_id"]),
+            is_active=group_dict["is_active"],
         )
 
     # ================== Helper Functions ==================
@@ -403,43 +406,23 @@ class GroupService:
         Returns:
             List[GroupInfo]: User's group memberships with accurate member counts
         """
-        # Get user's group list
-        user_dict = await self.db.find_one(user_collection, {"id": user_id, "is_active": True})
-        if not user_dict or not user_dict.get("group_ids"):
-            return []
+        memberships = await self.db.find_many(group_member_collection, {"user_id": user_id, "is_active": True})
 
-        group_ids = user_dict["group_ids"]
-
-        # Find all active groups user belongs to
-        groups = await self.db.db[group_collection].find({"id": {"$in": group_ids}, "is_active": True}).to_list(None)
-
-        if not groups:
-            return []
-
-        # Efficiently get member counts for all groups in one aggregation query
-        member_count_pipeline = [
-            {"$match": {"group_id": {"$in": [g["id"] for g in groups]}, "is_active": True}},
-            {"$group": {"_id": "$group_id", "count": {"$sum": 1}}},
-        ]
-
-        member_counts_cursor = self.db.db[group_member_collection].aggregate(member_count_pipeline)
-        member_counts = {doc["_id"]: doc["count"] async for doc in member_counts_cursor}
-
-        # Build group info list with accurate member counts
-        group_infos = []
-        for group_data in groups:
-            group_infos.append(
-                GroupInfo(
-                    id=group_data["id"],
-                    name=group_data["name"],
-                    creator_id=group_data["creator_id"],
-                    created_at=group_data["created_at"],
-                    member_count=member_counts.get(group_data["id"], 0),
-                    is_creator=(user_id == group_data["creator_id"]),
-                )
+        group_ids = [membership["group_id"] for membership in memberships]
+        groups = await self.db.find_many(group_collection, {"id": {"$in": group_ids}, "is_active": True})
+        return [
+            GroupInfo(
+                id=group["id"],
+                name=group["name"],
+                creator_id=group["creator_id"],
+                created_at=group["created_at"],
+                updated_at=group["updated_at"],
+                member_count=len(memberships),
+                is_creator=(user_id == group["creator_id"]),
+                is_active=group["is_active"],
             )
-
-        return group_infos
+            for group in groups
+        ]
 
     async def get_group_members(self, group_id: str, user_id: str) -> List[GroupMemberInfo]:
         """
@@ -498,7 +481,8 @@ class GroupService:
                     user_name=user_data["name"],
                     user_email=user_data["email"],
                     role=GroupRole(membership["role"]),
-                    joined_at=membership["joined_at"],
+                    created_at=membership["created_at"],
+                    updated_at=membership["updated_at"],
                     invited_by=membership.get("invited_by"),
                     invited_by_name=invited_by_name,
                     is_active=membership["is_active"],
@@ -507,7 +491,7 @@ class GroupService:
 
         # Sort members: CREATOR first, then by join date
         members.sort(
-            key=lambda m: (0 if m.role == GroupRole.CREATOR else 1, m.joined_at)  # Creator first  # Then by join date
+            key=lambda m: (0 if m.role == GroupRole.CREATOR else 1, m.created_at)  # Creator first  # Then by join date
         )
 
         return members

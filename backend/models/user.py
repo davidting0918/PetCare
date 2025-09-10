@@ -1,6 +1,6 @@
-from typing import List, Optional
+from typing import Optional
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr
 
 user_collection = "users"
 
@@ -12,7 +12,6 @@ class User(BaseModel):
     picture: Optional[str] = ""
     hashed_pwd: str  # if login with google, then pwd default will be hashed google id
     name: str  # if login with google, then name default will be google name
-    group_ids: List[str] = Field(default_factory=list)  # List of group IDs user belongs to
     created_at: int
     updated_at: int
     source: str
@@ -25,7 +24,6 @@ class UserInfo(BaseModel):
     email: EmailStr
     name: str
     picture: Optional[str] = ""
-    group_ids: List[str] = Field(default_factory=list)  # List of group IDs user belongs to
     created_at: int
     updated_at: int
     source: str

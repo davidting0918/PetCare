@@ -119,8 +119,10 @@ class GroupInfo(BaseModel):
     name: str
     creator_id: str
     created_at: int
+    updated_at: int
     member_count: int
     is_creator: bool  # True if current user is the creator
+    is_active: bool
 
 
 class GroupMemberInfo(BaseModel):
