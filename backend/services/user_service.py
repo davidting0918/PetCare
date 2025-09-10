@@ -1,10 +1,13 @@
-from backend.core.database import MongoAsyncClient
-from backend.models.user import CreateUserRequest, UserInfo, user_collection, User
-from fastapi import HTTPException
 import uuid
 from datetime import datetime as dt
 from datetime import timezone as tz
+
+from fastapi import HTTPException
+
+from backend.core.database import MongoAsyncClient
 from backend.models.auth import pwd_context
+from backend.models.user import CreateUserRequest, User, UserInfo, user_collection
+
 
 class UserService:
     def __init__(self):

@@ -1,12 +1,14 @@
 from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 
+from backend.models.auth import EmailAuthRequest, GoogleAuthRequest
 from backend.services.auth_service import AuthService
-from backend.models.auth import GoogleAuthRequest, EmailAuthRequest
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 auth_service = AuthService()
+
 
 @router.post("/email/login")
 async def validate_email_login_route(request: EmailAuthRequest) -> dict:
@@ -45,6 +47,7 @@ async def validate_google_login_route(request: GoogleAuthRequest) -> dict:
         "message": "Google login successful",
     }
 
+
 @router.post("/access_token")
 async def get_access_token_route(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]) -> dict:
     user = await auth_service.authenticate_user(name=form_data.username, password=form_data.password)
@@ -58,4 +61,3 @@ async def get_access_token_route(form_data: Annotated[OAuth2PasswordRequestForm,
         "token_type": token_info["token_type"],
         "message": "Access token generated successfully",
     }
-    

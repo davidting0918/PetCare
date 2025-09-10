@@ -1,7 +1,9 @@
-from typing import Optional, List
+from typing import List, Optional
+
 from pydantic import BaseModel, EmailStr, Field
 
 user_collection = "users"
+
 
 class User(BaseModel):
     id: str
@@ -23,7 +25,7 @@ class UserInfo(BaseModel):
     email: EmailStr
     name: str
     picture: Optional[str] = ""
-    group_ids: List[str] = Field(default_factory=list)  # List of group IDs user belongs to  
+    group_ids: List[str] = Field(default_factory=list)  # List of group IDs user belongs to
     created_at: int
     updated_at: int
     source: str

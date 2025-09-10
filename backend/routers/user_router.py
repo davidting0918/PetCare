@@ -2,9 +2,8 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
-from backend.services.auth_service import AuthService, get_current_user, verify_api_key
-
 from backend.models.user import CreateUserRequest, User
+from backend.services.auth_service import get_current_user, verify_api_key
 from backend.services.user_service import UserService
 
 router = APIRouter(prefix="/user", tags=["user"])
@@ -12,13 +11,12 @@ router = APIRouter(prefix="/user", tags=["user"])
 user_service = UserService()
 
 
-
 # Private endpoint - API key required
 @router.post("/create")
 async def create_user(request: CreateUserRequest, api_key: Annotated[dict, Depends(verify_api_key)]) -> dict:
     """
     Create user - private endpoint, API key required
-    api key only provide to frontend, 
+    api key only provide to frontend,
     """
     try:
         user_info = await user_service.create_user(request, api_key)
