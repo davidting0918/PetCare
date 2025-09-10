@@ -18,8 +18,11 @@ from backend.models.auth import (
     access_token_collection,
     oauth2_scheme,
     pwd_context,
+    api_key_scheme,
+    api_key_collection,
 )
-from backend.models.user import User, user_collection
+from backend.models.user import User, UserInfo, user_collection
+from fastapi.security import HTTPAuthorizationCredentials
 
 _db = MongoAsyncClient()
 
@@ -146,7 +149,7 @@ class AuthService:
     async def verify_user(self, user_id: str) -> bool:
         return
 
-async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
+async def get_current_user(token: str = Depends(oauth2_scheme)) -> UserInfo:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -167,5 +170,48 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
     if user_dict is None:
         raise credentials_exception
 
-    return User(**user_dict)
+    return UserInfo(
+        id=user_dict["id"],
+        email=user_dict["email"],
+        name=user_dict["name"],
+        created_at=user_dict["created_at"],
+        updated_at=user_dict["updated_at"],
+        source=user_dict["source"],
+        is_active=user_dict["is_active"],
+        is_verified=user_dict["is_verified"],
+        picture=user_dict["picture"],
+    )
     
+async def verify_api_key(credentials: HTTPAuthorizationCredentials = Depends(api_key_scheme)) -> dict:
+    """
+    Dependency function to verify API key and secret from request headers
+    Expects Authorization header with Bearer token containing "key:secret"
+    """
+    if not credentials:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="API key required")
+
+    try:
+        # Extract key and secret from Bearer token (format: "key:secret")
+        token = credentials.credentials
+        if ":" not in token:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key format")
+
+        provided_key, provided_secret = token.split(":", 1)
+
+        # Get API key from database
+        key = await _db.find_one(api_key_collection, {"api_key": provided_key})
+
+        if not key:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
+
+        # Verify secret matches if provided
+        if provided_secret and provided_secret != key["api_secret"]:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key or secret")
+
+        return {
+            "api_key": key["api_key"],
+            "name": key["name"],
+        }
+
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key format")

@@ -12,6 +12,24 @@ class User(BaseModel):
     name: str  # if login with google, then name default will be google name
     created_at: int
     updated_at: int
-    source: str = ""
+    source: str
     is_active: bool = True
-    is_verified: bool = False
+    is_verified: bool = True
+
+
+class UserInfo(BaseModel):
+    id: str
+    email: EmailStr
+    name: str
+    picture: Optional[str] = ""
+    created_at: int
+    updated_at: int
+    source: str
+    is_active: bool
+    is_verified: bool
+
+
+class CreateUserRequest(BaseModel):
+    email: EmailStr
+    name: str
+    pwd: str

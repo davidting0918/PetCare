@@ -35,7 +35,8 @@ async def get_access_token_route(form_data: Annotated[OAuth2PasswordRequestForm,
     token_info = await auth_service.get_or_create_token(user.id)
 
     return {
-        "status": 1,
-        "data": {"access_token": token_info["access_token"], "token_type": token_info["token_type"]},
+        "access_token": token_info["access_token"],
+        "token_type": token_info["token_type"],
         "message": "Access token generated successfully",
     }
+    

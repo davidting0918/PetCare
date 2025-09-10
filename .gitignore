@@ -1,3 +1,6 @@
 venv
 .env
 __pycache__
+.env.local
+node_modules
+.pyc
