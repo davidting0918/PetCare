@@ -9,6 +9,7 @@ from scalar_fastapi import get_scalar_api_reference
 from backend.routers.auth_router import router as auth_router
 from backend.core.environment import env_config, get_config
 from backend.routers.user_router import router as user_router
+from backend.routers.group_router import router as group_router
 
 logging.basicConfig(
     level=getattr(logging, get_config("log_level")), 
@@ -28,7 +29,7 @@ async def lifespan(app: FastAPI):
 # Create FastAPI application with environment-aware configuration
 app = FastAPI(
     title="PetCare API",
-    description="Google Login API with environment management",
+    description="Pet Health Tracker API with user authentication and group collaboration features",
     version="1.0.0",
     debug=get_config("debug"),
     lifespan=lifespan,
@@ -48,6 +49,7 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(user_router)
+app.include_router(group_router)
 
 
 # Add Scalar API documentation

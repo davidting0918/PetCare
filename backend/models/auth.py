@@ -37,3 +37,7 @@ class AccessToken(BaseModel):
     created_at: int
     expires_at: int
     is_active: bool = True
+
+class EmailAuthRequest(BaseModel):
+    email: str
+    pwd: str
