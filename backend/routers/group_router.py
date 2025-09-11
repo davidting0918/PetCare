@@ -161,3 +161,43 @@ async def remove_member(
         return {"status": 1, "data": result, "message": "Member removed successfully"}
     except Exception as e:
         raise e
+
+
+# ================== Group Pet Management ==================
+
+
+@router.get("/{group_id}/pets", response_model=dict)
+async def get_group_pets(group_id: str, current_user: Annotated[UserInfo, Depends(get_current_user)]) -> dict:
+    """
+    Retrieves all pets assigned to a specific group.
+
+    Authorization: Group membership required (any role: creator, member, or viewer)
+
+    This endpoint enables group members to see all pets they can collaborate on
+    within their shared care environment. It's perfect for:
+    - Family members viewing all household pets
+    - Care teams seeing their assigned pets
+    - Group overview and coordination
+
+    The response includes:
+    - All pets currently assigned to the group
+    - Pet owner information for each pet
+    - User's permission level for each pet
+    - Essential pet information for collaboration
+
+    Permission context per pet:
+    - "owner": User owns the pet (full permissions)
+    - "creator": User created the group (management permissions)
+    - "member": User is group member (care recording permissions)
+    - "viewer": User is group viewer (read-only permissions)
+
+    Returns:
+    - List of pets in the group with owner and permission context
+    - Each pet shows basic info needed for group collaboration
+    - Permission indicators help UI show appropriate actions
+    """
+    try:
+        pets = await group_service.get_group_pets(group_id, current_user.id)
+        return {"status": 1, "data": pets, "message": f"Found {len(pets)} pets in group"}
+    except Exception as e:
+        raise e

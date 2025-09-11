@@ -495,3 +495,67 @@ class GroupService:
         )
 
         return members
+
+    # ================== Group Pet Operations ==================
+
+    async def get_group_pets(self, group_id: str, user_id: str) -> List[Dict[str, Any]]:
+        """
+        Get all pets assigned to a specific group.
+        User must be a member of the group to view its pets.
+
+        This method is placed in GroupService (rather than PetService) to maintain
+        the design principle of single service dependency per router.
+
+        Args:
+            group_id: Group ID
+            user_id: User requesting the information
+
+        Returns:
+            List[Dict]: Pets assigned to the group with owner and permission context
+        """
+        # Check group membership
+        group_dict = await self.db.find_one(group_collection, {"id": group_id, "is_active": True})
+        if not group_dict:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
+
+        if user_id not in group_dict.get("member_ids", []):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="You must be a member of this group to view its pets"
+            )
+
+        # Determine user's role in group
+        user_role = "creator" if group_dict["creator_id"] == user_id else "member"
+
+        # Get pets assigned to this group from pet collection
+        from backend.models.pet import pet_collection
+
+        pets = await self.db.db[pet_collection].find({"group_id": group_id, "is_active": True}).to_list(None)
+
+        pet_infos = []
+        for pet_dict in pets:
+            # Get owner name
+            owner_dict = await self.db.find_one(user_collection, {"id": pet_dict["owner_id"]})
+            owner_name = owner_dict["name"] if owner_dict else "Unknown"
+
+            # Build pet info response
+            pet_info = {
+                "id": pet_dict["id"],
+                "name": pet_dict["name"],
+                "pet_type": pet_dict["pet_type"],
+                "breed": pet_dict.get("breed"),
+                "gender": pet_dict["gender"],
+                "current_weight_kg": pet_dict.get("current_weight_kg"),
+                "owner_id": pet_dict["owner_id"],
+                "owner_name": owner_name,
+                "group_id": pet_dict["group_id"],
+                "current_group_name": group_dict["name"],
+                "created_at": pet_dict["created_at"],
+                "is_owned_by_user": (pet_dict["owner_id"] == user_id),
+                "user_permission": "owner" if pet_dict["owner_id"] == user_id else user_role,
+            }
+            pet_infos.append(pet_info)
+
+        # Sort by pet name
+        pet_infos.sort(key=lambda p: p["name"].lower())
+
+        return pet_infos

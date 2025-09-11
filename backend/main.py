@@ -9,6 +9,7 @@ from scalar_fastapi import get_scalar_api_reference
 from backend.core.environment import env_config, get_config
 from backend.routers.auth_router import router as auth_router
 from backend.routers.group_router import router as group_router
+from backend.routers.pet_router import router as pet_router
 from backend.routers.user_router import router as user_router
 
 logging.basicConfig(
@@ -49,6 +50,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(user_router)
 app.include_router(group_router)
+app.include_router(pet_router)
 
 
 # Add Scalar API documentation
