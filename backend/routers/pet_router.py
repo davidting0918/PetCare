@@ -184,7 +184,7 @@ async def assign_pet_to_group(
         return {
             "status": 1,
             "data": assignment_info.model_dump(),
-            "message": f"Pet '{assignment_info.pet_name}' assigned to group '{assignment_info.current_group_name}'",
+            "message": f"Pet '{assignment_info.pet_name}' assigned to group '{assignment_info.group_name}'",
         }
     except Exception as e:
         raise e

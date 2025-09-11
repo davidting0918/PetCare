@@ -152,7 +152,7 @@ class PetInfo(BaseModel):
     owner_id: str
     owner_name: str
     group_id: Optional[str]
-    current_group_name: Optional[str]
+    group_name: Optional[str]
     created_at: int
     is_owned_by_user: bool  # True if current user is the owner
     user_permission: str  # "owner", "member", "viewer"
@@ -186,7 +186,7 @@ class PetDetails(BaseModel):
     owner_id: str
     owner_name: str
     group_id: Optional[str]
-    current_group_name: Optional[str]
+    group_name: Optional[str]
 
     # Metadata
     created_at: int
@@ -204,7 +204,7 @@ class GroupAssignmentInfo(BaseModel):
     pet_id: str
     pet_name: str
     group_id: Optional[str]
-    current_group_name: Optional[str]
+    group_name: Optional[str]
     member_count: Optional[int]
     user_role_in_group: Optional[str]  # "creator", "member", "viewer"
     assigned_at: Optional[int]

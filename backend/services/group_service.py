@@ -548,7 +548,7 @@ class GroupService:
                 "owner_id": pet_dict["owner_id"],
                 "owner_name": owner_name,
                 "group_id": pet_dict["group_id"],
-                "current_group_name": group_dict["name"],
+                "group_name": group_dict["name"],
                 "created_at": pet_dict["created_at"],
                 "is_owned_by_user": (pet_dict["owner_id"] == user_id),
                 "user_permission": "owner" if pet_dict["owner_id"] == user_id else user_role,
