@@ -23,6 +23,7 @@ from backend.models.auth import (
 )
 from backend.models.user import User, UserInfo, user_collection
 from backend.services.google_auth_provider import GoogleAuthProvider
+from backend.services.group_service import GroupService
 
 _db = MongoAsyncClient()
 
@@ -121,6 +122,7 @@ class AuthService:
                 hashed_pwd=self.get_password_hash(google_user_info.id),
                 picture=google_user_info.picture,
                 name=google_user_info.name,
+                personal_group_id=GroupService._generate_group_id(),
                 created_at=int(dt.now(tz.utc).timestamp()),
                 updated_at=int(dt.now(tz.utc).timestamp()),
                 source="google",
@@ -177,6 +179,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> UserInfo:
         id=user_dict["id"],
         email=user_dict["email"],
         name=user_dict["name"],
+        personal_group_id=user_dict["personal_group_id"],
         created_at=user_dict["created_at"],
         updated_at=user_dict["updated_at"],
         source=user_dict["source"],

@@ -186,7 +186,16 @@ class TestHelper:
         Args:
             user_data: User data dictionary
         """
-        required_fields = ["id", "email", "name", "created_at", "updated_at", "is_active", "source"]
+        required_fields = [
+            "id",
+            "email",
+            "name",
+            "created_at",
+            "updated_at",
+            "is_active",
+            "source",
+            "personal_group_id",
+        ]
         for field in required_fields:
             assert field in user_data, f"Missing required field: {field}"
 

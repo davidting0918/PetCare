@@ -68,7 +68,7 @@ class GroupService:
             str: 8-character group ID (e.g., 'a5b2c9x1')
         """
         alphabet = string.ascii_lowercase + string.digits  # a-z, 0-9 (36 characters)
-        return "".join(secrets.choice(alphabet) for _ in range(6))
+        return "".join(secrets.choice(alphabet) for _ in range(8))
 
     async def _get_user_membership(self, group_id: str, user_id: str) -> Optional[GroupMember]:
         """Get user's membership info if they are a member of the group"""

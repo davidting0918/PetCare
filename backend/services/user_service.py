@@ -7,6 +7,7 @@ from fastapi import HTTPException
 from backend.core.database import MongoAsyncClient
 from backend.models.auth import pwd_context
 from backend.models.user import CreateUserRequest, User, UserInfo, user_collection
+from backend.services.group_service import GroupService
 
 
 class UserService:
@@ -25,6 +26,7 @@ class UserService:
             email=request.email,
             name=request.name,
             hashed_pwd=pwd_context.hash(request.pwd),
+            personal_group_id=GroupService._generate_group_id(),
             created_at=int(dt.now(tz.utc).timestamp()),
             updated_at=int(dt.now(tz.utc).timestamp()),
             is_active=True,
@@ -35,6 +37,7 @@ class UserService:
             id=user.id,
             email=user.email,
             name=user.name,
+            personal_group_id=user.personal_group_id,
             created_at=user.created_at,
             updated_at=user.updated_at,
             is_active=user.is_active,
