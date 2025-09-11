@@ -24,6 +24,7 @@ os.environ["APP_ENV"] = "test"
 from backend.core.database import MongoAsyncClient
 from backend.main import app
 from backend.models.auth import access_token_collection, api_key_collection
+from backend.models.group import group_collection, group_invitation_collection, group_member_collection
 from backend.models.user import user_collection
 
 
@@ -48,7 +49,14 @@ async def test_db() -> AsyncGenerator[MongoAsyncClient, None]:
 
     yield db
 
-    collections = [user_collection, api_key_collection, access_token_collection]
+    collections = [
+        user_collection,
+        api_key_collection,
+        access_token_collection,
+        group_collection,
+        group_invitation_collection,
+        group_member_collection,
+    ]
     for collection in collections:
         await db.delete_many(collection, {})
 
@@ -64,13 +72,28 @@ async def clean_db(test_db: MongoAsyncClient):
     and cleans up after the test completes.
     """
     # Clean before test
-    collections = [user_collection, api_key_collection, access_token_collection]
+    collections = [
+        user_collection,
+        api_key_collection,
+        access_token_collection,
+        group_collection,
+        group_invitation_collection,
+        group_member_collection,
+    ]
     for collection in collections:
         await test_db.delete_many(collection, {})
 
     yield
 
     # Clean after test
+    collections = [
+        user_collection,
+        api_key_collection,
+        access_token_collection,
+        group_collection,
+        group_invitation_collection,
+        group_member_collection,
+    ]
     for collection in collections:
         await test_db.delete_many(collection, {})
 
@@ -199,8 +222,97 @@ class TestHelper:
         for field in required_fields:
             assert field in user_data, f"Missing required field: {field}"
 
+    @staticmethod
+    def assert_group_structure(group_data: dict):
+        """
+        Assert that group data contains required fields.
+        """
+        required_fields = [
+            "id",
+            "name",
+            "creator_id",
+            "created_at",
+            "updated_at",
+            "is_active",
+            "is_creator",
+            "member_count",
+        ]
+        for field in required_fields:
+            assert field in group_data, f"Missing required field: {field}"
+
 
 @pytest.fixture
 def test_helper() -> TestHelper:
     """Provide test helper instance."""
     return TestHelper()
+
+
+# User Authentication Fixtures for Group Testing
+@pytest_asyncio.fixture
+async def test_user1(test_api_key: Dict[str, str], async_client: AsyncClient) -> Dict[str, str]:
+    """Create test user 1 and return user info with JWT token"""
+    user_data = {"email": "testuser1@example.com", "name": "Test User 1", "pwd": "TestPassword123!"}
+
+    # Create user
+    create_response = await async_client.post(
+        "/user/create",
+        headers={"Authorization": f"Bearer {test_api_key['auth_header']}", "Content-Type": "application/json"},
+        json=user_data,
+    )
+    assert create_response.status_code == 200
+    created_user = create_response.json()["data"]
+
+    # Login to get JWT token
+    login_response = await async_client.post(
+        "/auth/email/login", json={"email": user_data["email"], "pwd": user_data["pwd"]}
+    )
+    assert login_response.status_code == 200
+    token_data = login_response.json()["data"]
+
+    return {
+        "id": created_user["id"],
+        "email": user_data["email"],
+        "name": user_data["name"],
+        "access_token": token_data["access_token"],
+    }
+
+
+@pytest_asyncio.fixture
+async def test_user2(test_api_key: Dict[str, str], async_client: AsyncClient) -> Dict[str, str]:
+    """Create test user 2 and return user info with JWT token"""
+    user_data = {"email": "testuser2@example.com", "name": "Test User 2", "pwd": "TestPassword123!"}
+
+    # Create user
+    create_response = await async_client.post(
+        "/user/create",
+        headers={"Authorization": f"Bearer {test_api_key['auth_header']}", "Content-Type": "application/json"},
+        json=user_data,
+    )
+    assert create_response.status_code == 200
+    created_user = create_response.json()["data"]
+
+    # Login to get JWT token
+    login_response = await async_client.post(
+        "/auth/email/login", json={"email": user_data["email"], "pwd": user_data["pwd"]}
+    )
+    assert login_response.status_code == 200
+    token_data = login_response.json()["data"]
+
+    return {
+        "id": created_user["id"],
+        "email": user_data["email"],
+        "name": user_data["name"],
+        "access_token": token_data["access_token"],
+    }
+
+
+@pytest_asyncio.fixture
+async def auth_headers_user1(test_user1: Dict[str, str]) -> Dict[str, str]:
+    """Provide authenticated headers for test user 1"""
+    return {"Authorization": f"Bearer {test_user1['access_token']}", "Content-Type": "application/json"}
+
+
+@pytest_asyncio.fixture
+async def auth_headers_user2(test_user2: Dict[str, str]) -> Dict[str, str]:
+    """Provide authenticated headers for test user 2"""
+    return {"Authorization": f"Bearer {test_user2['access_token']}", "Content-Type": "application/json"}

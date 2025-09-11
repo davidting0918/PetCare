@@ -77,7 +77,6 @@ class GroupInvitation(BaseModel):
     status: InvitationStatus = InvitationStatus.PENDING
     created_at: int
     expires_at: int  # Invitations expire after 7 days
-    accepted_at: Optional[int] = None
     accepted_by: Optional[str] = None  # User ID who accepted
 
 

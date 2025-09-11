@@ -367,7 +367,6 @@ class GroupService:
             {"id": invitation_dict["id"]},
             {
                 "status": InvitationStatus.ACCEPTED.value,
-                "accepted_at": current_time,
                 "accepted_by": user_id,
                 "updated_at": current_time,
             },
