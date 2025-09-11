@@ -134,7 +134,7 @@ class UpdatePetRequest(BaseModel):
 class AssignPetToGroupRequest(BaseModel):
     """Request to assign pet to a different group"""
 
-    target_group_id: str
+    group_id: str
 
 
 # ================== Response Models ==================

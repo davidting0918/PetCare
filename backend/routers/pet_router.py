@@ -15,7 +15,7 @@ pet_service = PetService()
 # ================== Pet Creation and Basic Management ==================
 
 
-@router.post("/", response_model=dict)
+@router.post("/create", response_model=dict)
 async def create_pet(request: CreatePetRequest, current_user: Annotated[UserInfo, Depends(get_current_user)]) -> dict:
     """
     Creates a new pet owned by the authenticated user.
@@ -39,16 +39,6 @@ async def create_pet(request: CreatePetRequest, current_user: Annotated[UserInfo
 
     Returns:
     - Created pet details with generated ID and ownership information
-
-    Example:
-    POST /pets
-    {
-        "name": "Buddy",
-        "pet_type": "dog",
-        "breed": "Golden Retriever",
-        "current_weight_kg": 25.5,
-        "target_weight_kg": 23.0
-    }
     """
     try:
         pet_details = await pet_service.create_pet(request, current_user.id)
@@ -82,23 +72,6 @@ async def get_accessible_pets(current_user: Annotated[UserInfo, Depends(get_curr
     - "creator": User is creator of pet's group (can view/record data)
     - "member": User is member of pet's group (can view/record data)
     - "viewer": User is viewer of pet's group (read-only access)
-
-    Example response:
-    {
-        "status": 1,
-        "data": [
-            {
-                "id": "pet123",
-                "name": "Buddy",
-                "pet_type": "dog",
-                "owner_name": "John Smith",
-                "current_group_name": "Smith Family Pets",
-                "user_permission": "owner",
-                "is_owned_by_user": true
-            }
-        ],
-        "message": "Found 3 accessible pets"
-    }
     """
     try:
         pets = await pet_service.get_accessible_pets(current_user.id)
@@ -138,13 +111,6 @@ async def update_pet_information(
 
     Returns:
     - Updated complete pet details
-
-    Example:
-    POST /pets/pet123/update
-    {
-        "current_weight_kg": 24.2,
-        "notes": "Lost 1.3kg this month, great progress!"
-    }
     """
     try:
         pet_details = await pet_service.update_pet(pet_id, request, current_user.id)
@@ -173,15 +139,6 @@ async def delete_pet(pet_id: str, current_user: Annotated[UserInfo, Depends(get_
 
     Returns:
     - Success confirmation with pet name
-
-    Example:
-    POST /pets/pet123/delete
-    Response:
-    {
-        "status": 1,
-        "data": {"message": "Pet 'Buddy' has been deleted successfully"},
-        "message": "Pet deleted successfully"
-    }
     """
     try:
         result = await pet_service.delete_pet(pet_id, current_user.id)
@@ -193,7 +150,7 @@ async def delete_pet(pet_id: str, current_user: Annotated[UserInfo, Depends(get_
 # ================== Group Assignment Management ==================
 
 
-@router.post("/{pet_id}/assign-group", response_model=dict)
+@router.post("/{pet_id}/assign_group", response_model=dict)
 async def assign_pet_to_group(
     pet_id: str, request: AssignPetToGroupRequest, current_user: Annotated[UserInfo, Depends(get_current_user)]
 ) -> dict:
@@ -216,17 +173,11 @@ async def assign_pet_to_group(
     - Updates assignment timestamps
 
     Body:
-    - target_group_id: ID of group to assign pet to (required)
+    - group_id: ID of group to assign pet to (required)
 
     Returns:
     - Updated group assignment information
     - Group details and user's role context
-
-    Example:
-    POST /pets/pet123/assign-group
-    {
-        "target_group_id": "grp456"
-    }
     """
     try:
         assignment_info = await pet_service.assign_pet_to_group(pet_id, request, current_user.id)
@@ -239,7 +190,7 @@ async def assign_pet_to_group(
         raise e
 
 
-@router.get("/{pet_id}/current-group", response_model=dict)
+@router.get("/{pet_id}/current_group", response_model=dict)
 async def get_pet_current_group(pet_id: str, current_user: Annotated[UserInfo, Depends(get_current_user)]) -> dict:
     """
     Provides information about the group where a pet is currently assigned.
@@ -261,19 +212,6 @@ async def get_pet_current_group(pet_id: str, current_user: Annotated[UserInfo, D
     - Group assignment details
     - User's role and permissions context
     - null values if pet not assigned to any group
-
-    Example response:
-    {
-        "status": 1,
-        "data": {
-            "pet_id": "pet123",
-            "pet_name": "Buddy",
-            "group_id": "grp456",
-            "current_group_name": "Smith Family Pets",
-            "member_count": 4,
-            "user_role_in_group": "member"
-        }
-    }
     """
     try:
         assignment_info = await pet_service.get_pet_current_group(pet_id, current_user.id)
@@ -315,8 +253,6 @@ async def get_pet_details(pet_id: str, current_user: Annotated[UserInfo, Depends
     - Complete pet profile with permission context
     - Calculated fields like age from birth date
     - User's relationship to pet (owner/member/viewer)
-
-    Example response shows comprehensive pet data with user context.
     """
     try:
         pet_details = await pet_service.get_pet_details(pet_id, current_user.id)
@@ -332,7 +268,7 @@ async def get_pet_details(pet_id: str, current_user: Annotated[UserInfo, Depends
 # ================== Photo Management ==================
 
 
-@router.post("/{pet_id}/photo", response_model=dict)
+@router.post("/{pet_id}/photo/upload", response_model=dict)
 async def upload_pet_photo(
     pet_id: str,
     current_user: Annotated[UserInfo, Depends(get_current_user)],
@@ -365,12 +301,6 @@ async def upload_pet_photo(
     - File metadata (size, type, upload timestamp)
     - Uploader information
 
-    Example:
-    POST /pets/pet123/photo
-    Content-Type: multipart/form-data
-    [file upload]
-
-    Response includes photo ID for use in GET /photos/{pet_id}
     """
     try:
         photo_info = await pet_service.upload_pet_photo(pet_id, file, current_user.id)
@@ -405,9 +335,6 @@ async def get_pet_photo(pet_id: str, current_user: Annotated[UserInfo, Depends(g
     - 404: Photo not found or user lacks pet access
     - 403: User doesn't have permission to view pet
 
-    Example:
-    GET /photos/photo123
-    Returns: Direct image file with appropriate headers
     """
     try:
         return await pet_service.get_pet_photo(pet_id, current_user.id)
@@ -438,22 +365,9 @@ async def delete_pet_photo(pet_id: str, current_user: Annotated[UserInfo, Depend
     - Success confirmation with pet context
     - Handles cases where no photo exists gracefully
 
-    Example:
-    POST /pets/pet123/photo/delete
-    Response:
-    {
-        "status": 1,
-        "data": {"message": "Photo for pet 'Buddy' has been deleted successfully"},
-        "message": "Photo deleted successfully"
-    }
     """
     try:
         result = await pet_service.delete_pet_photo(pet_id, current_user.id)
         return {"status": 1, "data": result, "message": "Photo deleted successfully"}
     except Exception as e:
         raise e
-
-
-# ================== Group-Based Pet Viewing ==================
-# Note: Group-based pet viewing is implemented in group_router.py as GET /groups/{group_id}/pets
-# This maintains proper REST resource organization and single-service dependency per router.

@@ -465,7 +465,7 @@ class PetService:
             )
 
         # Validate target group and user's creator role
-        target_group_dict = await self.db.find_one(group_collection, {"id": request.target_group_id, "is_active": True})
+        target_group_dict = await self.db.find_one(group_collection, {"id": request.group_id, "is_active": True})
 
         if not target_group_dict:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Target group not found")
@@ -480,13 +480,13 @@ class PetService:
         # Update pet's group assignment
         current_time = int(dt.now(tz.utc).timestamp())
         await self.db.update_one(
-            pet_collection, {"id": pet_id}, {"group_id": request.target_group_id, "updated_at": current_time}
+            pet_collection, {"id": pet_id}, {"group_id": request.group_id, "updated_at": current_time}
         )
 
         return GroupAssignmentInfo(
             pet_id=pet.id,
             pet_name=pet.name,
-            group_id=request.target_group_id,
+            group_id=request.group_id,
             current_group_name=target_group_dict["name"],
             member_count=len(target_group_dict.get("member_ids", [])),
             user_role_in_group="creator",
