@@ -1,9 +1,11 @@
 import logging
+import os
 from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from scalar_fastapi import get_scalar_api_reference
 
 from backend.core.environment import env_config, get_config
@@ -53,6 +55,9 @@ app.include_router(user_router)
 app.include_router(group_router)
 app.include_router(pet_router)
 app.include_router(food_router)
+
+storage_path = os.path.join(os.path.dirname(__file__), "storage")
+app.mount("/static", StaticFiles(directory=storage_path), name="static")
 
 
 # Add Scalar API documentation

@@ -27,6 +27,7 @@ from backend.models.group import (  # Collections; Models; Request Models; Respo
     group_invitation_collection,
     group_member_collection,
 )
+from backend.models.pet import pet_collection
 from backend.models.user import UserInfo, user_collection
 
 
@@ -526,9 +527,7 @@ class GroupService:
         user_role = "creator" if group_dict["creator_id"] == user_id else "member"
 
         # Get pets assigned to this group from pet collection
-        from backend.models.pet import pet_collection
-
-        pets = await self.db.db[pet_collection].find({"group_id": group_id, "is_active": True}).to_list(None)
+        pets = await self.db.find_many(pet_collection, {"group_id": group_id, "is_active": True})
 
         pet_infos = []
         for pet_dict in pets:

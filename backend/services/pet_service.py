@@ -208,8 +208,7 @@ class PetService:
         accessible_pets = []
 
         # Get user's own pets (including unassigned ones)
-        owned_pets = await self.db.db[pet_collection].find({"owner_id": user_id, "is_active": True}).to_list(None)
-
+        owned_pets = await self.db.find_many(pet_collection, {"owner_id": user_id, "is_active": True})
         for pet_dict in owned_pets:
             pet = Pet(**pet_dict)
 
@@ -251,17 +250,7 @@ class PetService:
                 continue
 
             # Find pets assigned to this group (excluding user's own pets)
-            group_pets = (
-                await self.db.db[pet_collection]
-                .find(
-                    {
-                        "group_id": group_info.id,
-                        "owner_id": {"$ne": user_id},  # Exclude own pets (already added above)
-                        "is_active": True,
-                    }
-                )
-                .to_list(None)
-            )
+            group_pets = await self.db.find_many(pet_collection, {"group_id": group_info.id, "is_active": True})
 
             for pet_dict in group_pets:
                 pet = Pet(**pet_dict)
@@ -564,10 +553,12 @@ class PetService:
         if file.size and file.size > 10 * 1024 * 1024:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File size must be less than 10MB")
 
-        # Generate unique photo ID and file path
+        # Generate unique photo ID and file path (secure random filename)
+        import secrets
+
         file_extension = Path(file.filename).suffix if file.filename else ".jpg"
-        filename = f"{pet_id}{file_extension}"
-        file_path = os.path.join(self.photo_storage_path, filename)
+        secure_filename = f"{secrets.token_urlsafe(16)}{file_extension}"
+        file_path = os.path.join(self.photo_storage_path, secure_filename)
 
         try:
             # Save file to storage
@@ -583,7 +574,7 @@ class PetService:
             # Create photo record
             photo = PetPhoto(
                 pet_id=pet_id,
-                filename=file.filename or f"pet_photo{file_extension}",
+                filename=secure_filename,  # Store the secure filename for URL generation
                 file_path=file_path,
                 file_size=file_size,
                 content_type=file.content_type,
@@ -602,14 +593,18 @@ class PetService:
             uploader_dict = await self.db.find_one(user_collection, {"id": user_id})
             uploader_name = uploader_dict["name"] if uploader_dict else "Unknown"
 
+            # Generate static URL for the photo
+            photo_url = f"/static/pet_photos/{secure_filename}"
+
             return PetPhotoInfo(
                 pet_id=photo.pet_id,
-                filename=photo.filename,
+                filename=secure_filename,  # Use secure filename consistently
                 file_size=photo.file_size,
                 content_type=photo.content_type,
                 uploaded_by=photo.uploaded_by,
                 uploaded_by_name=uploader_name,
                 uploaded_at=photo.uploaded_at,
+                photo_url=photo_url,
             )
 
         except Exception as e:
