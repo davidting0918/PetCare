@@ -6,14 +6,15 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from scalar_fastapi import get_scalar_api_reference
 
-from backend.routers.auth_router import router as auth_router
 from backend.core.environment import env_config, get_config
-from backend.routers.user_router import router as user_router
+from backend.routers.auth_router import router as auth_router
+from backend.routers.food_router import router as food_router
 from backend.routers.group_router import router as group_router
+from backend.routers.pet_router import router as pet_router
+from backend.routers.user_router import router as user_router
 
 logging.basicConfig(
-    level=getattr(logging, get_config("log_level")), 
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=getattr(logging, get_config("log_level")), format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,8 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(user_router)
 app.include_router(group_router)
+app.include_router(pet_router)
+app.include_router(food_router)
 
 
 # Add Scalar API documentation

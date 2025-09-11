@@ -6,9 +6,9 @@ from datetime import timezone as tz
 from typing import Optional
 
 from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 
-from backend.services.google_auth_provider import GoogleAuthProvider
 from backend.core.database import MongoAsyncClient
 from backend.models.auth import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
@@ -16,22 +16,22 @@ from backend.models.auth import (
     ALGORITHM,
     AccessToken,
     access_token_collection,
+    api_key_collection,
+    api_key_scheme,
     oauth2_scheme,
     pwd_context,
-    api_key_scheme,
-    api_key_collection,
 )
 from backend.models.user import User, UserInfo, user_collection
-from fastapi.security import HTTPAuthorizationCredentials
+from backend.services.google_auth_provider import GoogleAuthProvider
 
 _db = MongoAsyncClient()
+
 
 class AuthService:
     def __init__(self):
         self.db = _db
         self.google_provider = GoogleAuthProvider(
-            client_id=os.getenv("GOOGLE_CLIENT_ID"), 
-            client_secret=os.getenv("GOOGLE_CLIENT_SECRET")
+            client_id=os.getenv("GOOGLE_CLIENT_ID"), client_secret=os.getenv("GOOGLE_CLIENT_SECRET")
         )
         self.secret_key = ACCESS_TOKEN_SECRET_KEY
         self.algorithm = ALGORITHM
@@ -66,8 +66,7 @@ class AuthService:
         current_time = int(dt.now(tz.utc).timestamp())
 
         token_dict = await self.db.find_one(
-            access_token_collection, 
-            {"user_id": user_id, "expires_at": {"$gt": current_time}, "is_active": True}
+            access_token_collection, {"user_id": user_id, "expires_at": {"$gt": current_time}, "is_active": True}
         )
 
         if token_dict:
@@ -95,8 +94,7 @@ class AuthService:
         google_user_info = await self.google_provider.verify_authorization_code(authorization_code, redirect_uri)
 
         user_dict = await self.db.find_one(
-            user_collection, 
-            {"$or": [{"email": google_user_info.email}, {"google_id": google_user_info.id}]}
+            user_collection, {"$or": [{"email": google_user_info.email}, {"google_id": google_user_info.id}]}
         )
 
         if user_dict:
@@ -106,7 +104,11 @@ class AuthService:
                 await self.db.update_one(
                     user_collection,
                     {"id": user.id},
-                    {"google_id": google_user_info.id, "updated_at": int(dt.now(tz.utc).timestamp()), "picture": google_user_info.picture},
+                    {
+                        "google_id": google_user_info.id,
+                        "updated_at": int(dt.now(tz.utc).timestamp()),
+                        "picture": google_user_info.picture,
+                    },
                 )
                 user.google_id = google_user_info.id
 
@@ -149,6 +151,7 @@ class AuthService:
     async def verify_user(self, user_id: str) -> bool:
         return
 
+
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> UserInfo:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -181,7 +184,8 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> UserInfo:
         is_verified=user_dict["is_verified"],
         picture=user_dict["picture"],
     )
-    
+
+
 async def verify_api_key(credentials: HTTPAuthorizationCredentials = Depends(api_key_scheme)) -> dict:
     """
     Dependency function to verify API key and secret from request headers
