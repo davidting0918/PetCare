@@ -12,7 +12,7 @@ class User(BaseModel):
     picture: Optional[str] = ""
     hashed_pwd: str  # if login with google, then pwd default will be hashed google id
     name: str  # if login with google, then name default will be google name
-    personal_group_id: str
+    personal_group_id: Optional[str] = ""
     created_at: int
     updated_at: int
     source: str
