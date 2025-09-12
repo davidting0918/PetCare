@@ -82,11 +82,11 @@ async def get_my_groups(current_user: Annotated[UserInfo, Depends(get_current_us
     Returns basic information about each group.
 
     Returns:
-    - List of groups with member count and creator status
+    - List of groups which the user has a role in
     """
     try:
         groups = await group_service.get_user_groups(current_user.id)
-        return {"status": 1, "data": [group.model_dump() for group in groups], "message": f"Found {len(groups)} groups"}
+        return {"status": 1, "data": groups, "message": f"Found {len(groups)} groups"}
     except Exception as e:
         raise e
 
@@ -114,7 +114,7 @@ async def get_group_members(group_id: str, current_user: Annotated[UserInfo, Dep
 # ================== Permission Management Functions ==================
 
 
-@router.post("/{group_id}/members/update_role", response_model=dict)
+@router.post("/{group_id}/update_role", response_model=dict)
 async def update_member_role(
     group_id: str, request: UpdateMemberRoleRequest, current_user: Annotated[UserInfo, Depends(get_current_user)]
 ) -> dict:
@@ -141,9 +141,9 @@ async def update_member_role(
         raise e
 
 
-@router.post("/{group_id}/members/remove", response_model=dict)
+@router.post("/{group_id}/remove", response_model=dict)
 async def remove_member(
-    group_id: str, user_id: str, current_user: Annotated[UserInfo, Depends(get_current_user)]
+    group_id: str, request: RemoveMemberRequest, current_user: Annotated[UserInfo, Depends(get_current_user)]
 ) -> dict:
     """
     Remove a member from the group.
@@ -157,7 +157,7 @@ async def remove_member(
     - Cannot remove the group creator
     """
     try:
-        result = await group_service.remove_member(group_id, RemoveMemberRequest(user_id=user_id), current_user.id)
+        result = await group_service.remove_member(group_id, request, current_user.id)
         return {"status": 1, "data": result, "message": "Member removed successfully"}
     except Exception as e:
         raise e

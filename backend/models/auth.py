@@ -42,3 +42,11 @@ class AccessToken(BaseModel):
 class EmailAuthRequest(BaseModel):
     email: str
     pwd: str
+
+
+class APIKey(BaseModel):
+    api_key: str
+    api_secret: str
+    name: str
+    created_at: int
+    is_active: bool = True

@@ -4,3 +4,5 @@ __pycache__
 .env.local
 node_modules
 .pyc
+.vscode
+storage

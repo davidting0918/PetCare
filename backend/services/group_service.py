@@ -27,6 +27,7 @@ from backend.models.group import (  # Collections; Models; Request Models; Respo
     group_invitation_collection,
     group_member_collection,
 )
+from backend.models.pet import pet_collection
 from backend.models.user import UserInfo, user_collection
 
 
@@ -68,7 +69,7 @@ class GroupService:
             str: 8-character group ID (e.g., 'a5b2c9x1')
         """
         alphabet = string.ascii_lowercase + string.digits  # a-z, 0-9 (36 characters)
-        return "".join(secrets.choice(alphabet) for _ in range(6))
+        return "".join(secrets.choice(alphabet) for _ in range(8))
 
     async def _get_user_membership(self, group_id: str, user_id: str) -> Optional[GroupMember]:
         """Get user's membership info if they are a member of the group"""
@@ -162,18 +163,19 @@ class GroupService:
         if target_membership.role == GroupRole.CREATOR:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot change the creator's role")
 
+        current_time = int(dt.now(tz.utc).timestamp())
         # Update the member's role
         await self.db.update_one(
             group_member_collection,
             {"group_id": group_id, "user_id": request.user_id, "is_active": True},
-            {"role": request.new_role.value, "updated_at": int(dt.now(tz.utc).timestamp())},
+            {"role": request.new_role.value, "updated_at": current_time},
         )
 
         return {
-            "message": "Member role updated successfully",
             "user_id": request.user_id,
             "new_role": request.new_role.value,
             "updated_by": actor_user_id,
+            "updated_at": current_time,
         }
 
     async def remove_member(self, group_id: str, request: RemoveMemberRequest, actor_user_id: str) -> Dict[str, Any]:
@@ -208,6 +210,7 @@ class GroupService:
         if target_membership.role == GroupRole.CREATOR:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot remove the group creator")
 
+        current_timestamp = int(dt.now(tz.utc).timestamp())
         # Deactivate the membership
         await self.db.update_one(
             group_member_collection,
@@ -216,9 +219,10 @@ class GroupService:
         )
 
         return {
-            "message": "Member removed successfully",
+            "removed_group_id": group_id,
             "removed_user_id": request.user_id,
             "removed_by": actor_user_id,
+            "updated_at": current_timestamp,
         }
 
     # ================== Core Functions ==================
@@ -367,7 +371,6 @@ class GroupService:
             {"id": invitation_dict["id"]},
             {
                 "status": InvitationStatus.ACCEPTED.value,
-                "accepted_at": current_time,
                 "accepted_by": user_id,
                 "updated_at": current_time,
             },
@@ -395,7 +398,7 @@ class GroupService:
 
     # ================== Helper Functions ==================
 
-    async def get_user_groups(self, user_id: str) -> List[GroupInfo]:
+    async def get_user_groups(self, user_id: str) -> List[Dict[str, Any]]:
         """
         Get all groups where user is an active member.
         Uses efficient batch queries for optimal performance.
@@ -404,25 +407,27 @@ class GroupService:
             user_id: User ID to get groups for
 
         Returns:
-            List[GroupInfo]: User's group memberships with accurate member counts
+            List[Dict[str, Any]]
         """
         memberships = await self.db.find_many(group_member_collection, {"user_id": user_id, "is_active": True})
 
-        group_ids = [membership["group_id"] for membership in memberships]
-        groups = await self.db.find_many(group_collection, {"id": {"$in": group_ids}, "is_active": True})
-        return [
-            GroupInfo(
-                id=group["id"],
-                name=group["name"],
-                creator_id=group["creator_id"],
-                created_at=group["created_at"],
-                updated_at=group["updated_at"],
-                member_count=len(memberships),
-                is_creator=(user_id == group["creator_id"]),
-                is_active=group["is_active"],
+        output = []
+        for membership in memberships:
+            group = await self.db.find_one(group_collection, {"id": membership["group_id"], "is_active": True})
+            if not group:
+                continue
+            output.append(
+                {
+                    "id": group["id"],
+                    "name": group["name"],
+                    "creator_id": group["creator_id"],
+                    "created_at": group["created_at"],
+                    "updated_at": group["updated_at"],
+                    "role": membership["role"],
+                    "is_active": group["is_active"],
+                }
             )
-            for group in groups
-        ]
+        return output
 
     async def get_group_members(self, group_id: str, user_id: str) -> List[GroupMemberInfo]:
         """
@@ -527,9 +532,7 @@ class GroupService:
         user_role = "creator" if group_dict["creator_id"] == user_id else "member"
 
         # Get pets assigned to this group from pet collection
-        from backend.models.pet import pet_collection
-
-        pets = await self.db.db[pet_collection].find({"group_id": group_id, "is_active": True}).to_list(None)
+        pets = await self.db.find_many(pet_collection, {"group_id": group_id, "is_active": True})
 
         pet_infos = []
         for pet_dict in pets:

@@ -220,3 +220,4 @@ class PetPhotoInfo(BaseModel):
     uploaded_by: str
     uploaded_by_name: str
     uploaded_at: int
+    photo_url: str  # URL to access the photo via static mount

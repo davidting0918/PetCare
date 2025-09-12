@@ -1,0 +1,100 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ master, develop ]
+  pull_request:
+    branches: [ master, develop ]
+
+jobs:
+  pre-commit:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.13'
+
+    - name: Cache dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install pre-commit
+      run: |
+        python -m pip install pre-commit
+
+    - name: Run pre-commit
+      run: |
+        cd backend && pre-commit run --all-files
+
+  test-endpoints-function:
+    runs-on: ubuntu-latest
+    environment: ci/cd
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.13'
+
+    - name: Cache dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y python3-dev
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r backend/requirements.txt
+        pip install pytest-cov
+
+    - name: Run User and Auth Tests
+      env:
+        PYTEST_RUNNING: 1
+        APP_ENV: test
+        MONGO_URL: ${{ secrets.MONGO_URL }}
+        MONGO_TEST_DB_NAME: ${{ secrets.MONGO_TEST_DB_NAME }}
+        JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
+        GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+        GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      run: |
+        python -m pytest backend/tests/test_user_endpoints.py -v --tb=short --cov=. --cov-report=xml --cov-report=term-missing
+
+    - name: Run Group Tests
+      env:
+        PYTEST_RUNNING: 1
+        APP_ENV: test
+        MONGO_URL: ${{ secrets.MONGO_URL }}
+        MONGO_TEST_DB_NAME: ${{ secrets.MONGO_TEST_DB_NAME }}
+        JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
+        GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+        GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      run: |
+        python -m pytest backend/tests/test_group_endpoints.py -v --tb=short --cov=. --cov-report=xml --cov-report=term-missing
+
+    - name: Upload coverage report
+      uses: codecov/codecov-action@v5
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: true
+        token: ${{ secrets.CODECOV_TOKEN }}

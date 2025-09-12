@@ -255,7 +255,7 @@ class FoodService:
             query_filter["target_pet"] = target_pet.value
 
         # Get foods from database
-        foods = await self.db.db[food_collection].find(query_filter).to_list(None)
+        foods = await self.db.find_many(food_collection, query_filter)
 
         # Get group name for response
         group_dict = await self.db.find_one(group_collection, {"id": group_id})
@@ -480,7 +480,7 @@ class FoodService:
         query_filter["$or"] = [{"brand": keyword_regex}, {"product_name": keyword_regex}]
 
         # Get matching foods
-        foods = await self.db.db[food_collection].find(query_filter).to_list(None)
+        foods = await self.db.find_many(food_collection, query_filter)
 
         # Get group name for response
         group_dict = await self.db.find_one(group_collection, {"id": group_id})
