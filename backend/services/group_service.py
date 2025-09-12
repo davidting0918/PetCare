@@ -209,6 +209,7 @@ class GroupService:
         if target_membership.role == GroupRole.CREATOR:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot remove the group creator")
 
+        current_timestamp = int(dt.now(tz.utc).timestamp())
         # Deactivate the membership
         await self.db.update_one(
             group_member_collection,
@@ -217,9 +218,10 @@ class GroupService:
         )
 
         return {
-            "message": "Member removed successfully",
+            "removed_group_id": group_id,
             "removed_user_id": request.user_id,
             "removed_by": actor_user_id,
+            "updated_at": current_timestamp,
         }
 
     # ================== Core Functions ==================

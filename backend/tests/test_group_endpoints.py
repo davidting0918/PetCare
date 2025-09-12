@@ -174,7 +174,9 @@ class TestCompleteGroupWorkflow:
     """Test the complete group workflow from start to finish"""
 
     @pytest.mark.asyncio
-    async def test_complete_group_workflow(self, async_client: AsyncClient, auth_headers_user1, auth_headers_user2):
+    async def test_complete_group_workflow(
+        self, async_client: AsyncClient, auth_headers_user1, auth_headers_user2, test_user1, test_user2
+    ):
         """Test the complete typical group usage scenario"""
 
         print("=== Testing Complete Group Workflow ===")
@@ -232,5 +234,33 @@ class TestCompleteGroupWorkflow:
         assert "creator" in roles
         assert "member" in roles
         print(f"✓ Group has 2 members: Creator({roles['creator']}) and Member({roles['member']})")
+
+        # 6. Change the user2 to the viewer
+        print("Step 6: Changing user2 to viewer...")
+        change_role_response = await async_client.post(
+            f"/groups/{group_id}/update_role",
+            headers=auth_headers_user1,
+            json={"user_id": test_user2["id"], "new_role": "viewer"},
+        )
+        assert change_role_response.status_code == 200
+        change_role_data = change_role_response.json()["data"]
+        assert change_role_data["user_id"] == test_user2["id"]
+        assert change_role_data["new_role"] == "viewer"
+        assert change_role_data["updated_by"] == test_user1["id"]
+        print("✓ User2 changed to viewer")
+
+        # 7. Remove user2 from the group
+        print("Step 7: Removing user2 from the group...")
+        remove_response = await async_client.post(
+            f"/groups/{group_id}/remove", headers=auth_headers_user1, json={"user_id": test_user2["id"]}
+        )
+        assert remove_response.status_code == 200
+
+        remove_data = remove_response.json()["data"]
+        assert remove_data["removed_group_id"] == group_id
+        assert remove_data["removed_user_id"] == test_user2["id"]
+        assert remove_data["removed_by"] == test_user1["id"]
+        assert remove_data["updated_at"] is not None
+        print("✓ User2 removed from the group")
 
         print("=== Complete Workflow Test PASSED ===")

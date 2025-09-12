@@ -99,7 +99,7 @@ class UpdateMemberRoleRequest(BaseModel):
     """Request to update a member's role in the group"""
 
     user_id: str
-    new_role: GroupRole
+    new_role: GroupRole = GroupRole.VIEWER
 
 
 class RemoveMemberRequest(BaseModel):
