@@ -25,6 +25,7 @@ from backend.core.database import MongoAsyncClient
 from backend.main import app
 from backend.models.auth import access_token_collection, api_key_collection
 from backend.models.group import group_collection, group_invitation_collection, group_member_collection
+from backend.models.pet import pet_collection, pet_photo_collection
 from backend.models.user import user_collection
 
 
@@ -56,6 +57,8 @@ async def test_db() -> AsyncGenerator[MongoAsyncClient, None]:
         group_collection,
         group_invitation_collection,
         group_member_collection,
+        pet_collection,
+        pet_photo_collection,
     ]
     for collection in collections:
         await db.delete_many(collection, {})
@@ -79,6 +82,8 @@ async def clean_db(test_db: MongoAsyncClient):
         group_collection,
         group_invitation_collection,
         group_member_collection,
+        pet_collection,
+        pet_photo_collection,
     ]
     for collection in collections:
         await test_db.delete_many(collection, {})
@@ -93,6 +98,8 @@ async def clean_db(test_db: MongoAsyncClient):
         group_collection,
         group_invitation_collection,
         group_member_collection,
+        pet_collection,
+        pet_photo_collection,
     ]
     for collection in collections:
         await test_db.delete_many(collection, {})
@@ -226,6 +233,9 @@ class TestHelper:
     def assert_group_structure(group_data: dict):
         """
         Assert that group data contains required fields.
+
+        Args:
+            group_data: Group data dictionary
         """
         required_fields = [
             "id",
@@ -233,12 +243,33 @@ class TestHelper:
             "creator_id",
             "created_at",
             "updated_at",
-            "is_active",
-            "is_creator",
             "member_count",
+            "is_creator",
+            "is_active",
         ]
         for field in required_fields:
             assert field in group_data, f"Missing required field: {field}"
+
+    @staticmethod
+    def assert_pet_structure(pet_data: dict):
+        """
+        Assert that pet data contains required fields.
+
+        Args:
+            pet_data: Pet data dictionary
+        """
+        required_fields = [
+            "id",
+            "name",
+            "pet_type",
+            "owner_id",
+            "created_at",
+            "updated_at",
+            "is_active",
+            "is_owned_by_user",
+        ]
+        for field in required_fields:
+            assert field in pet_data, f"Missing required field: {field}"
 
 
 @pytest.fixture
