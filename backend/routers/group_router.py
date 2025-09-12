@@ -82,11 +82,11 @@ async def get_my_groups(current_user: Annotated[UserInfo, Depends(get_current_us
     Returns basic information about each group.
 
     Returns:
-    - List of groups with member count and creator status
+    - List of groups which the user has a role in
     """
     try:
         groups = await group_service.get_user_groups(current_user.id)
-        return {"status": 1, "data": [group.model_dump() for group in groups], "message": f"Found {len(groups)} groups"}
+        return {"status": 1, "data": groups, "message": f"Found {len(groups)} groups"}
     except Exception as e:
         raise e
 
