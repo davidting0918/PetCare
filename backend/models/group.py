@@ -79,8 +79,8 @@ class GroupInvitation(BaseModel):
     invited_by: str  # User ID who sent invitation
     invite_code: str  # Unique code for joining
     status: InvitationStatus = InvitationStatus.PENDING
-    created_at: int
-    expires_at: int  # Invitations expire after 7 days
+    created_at: dt
+    expires_at: dt  # Invitations expire after 7 days
     accepted_by: Optional[str] = None  # User ID who accepted
 
 

@@ -9,7 +9,6 @@ import asyncio
 import os
 import uuid
 from datetime import datetime as dt
-from datetime import timezone as tz
 from typing import AsyncGenerator, Dict
 
 import pytest
@@ -24,7 +23,7 @@ os.environ["APP_ENV"] = "test"
 from backend.core.db_manager import DatabaseManager, close_database, init_database
 from backend.main import app
 from backend.models.auth import access_token_table, api_key_table
-from backend.models.group import group_member_table  # PostgreSQL
+from backend.models.group import group_invitation_table, group_member_table, group_table
 from backend.models.user import user_table
 
 
