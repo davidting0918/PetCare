@@ -37,7 +37,7 @@ class TestGroupBasicFunctions:
         data = response.json()
         assert data["status"] == 1
         assert len(data["data"]) >= 1
-        assert any(group["name"] == "My Test Group" for group in data["data"])
+        assert any(group["group_name"] == "My Test Group" for group in data["data"])
 
     @pytest.mark.asyncio
     async def test_create_invitation_and_join(self, async_client: AsyncClient, auth_headers_user1, auth_headers_user2):

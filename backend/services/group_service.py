@@ -413,7 +413,6 @@ class GroupService:
     async def get_user_groups(self, user_id: str) -> List[Dict[str, Any]]:
         """
         Get all groups where user is an active member.
-        Uses efficient batch queries for optimal performance.
 
         Args:
             user_id: User ID to get groups for
@@ -422,27 +421,33 @@ class GroupService:
             List[Dict[str, Any]]
         """
         sql = f"""
-        select * from {group_member_table} where user_id = '{user_id}' and is_active = True
+        select
+            {group_member_table}.group_id,
+            {group_table}.name as group_name,
+            user_id,
+            {user_table}.name as user_name,
+            {user_table}.email as user_email,
+            {group_member_table}.role,
+            {group_member_table}.created_at,
+            {group_member_table}.updated_at,
+            {group_member_table}.invited_by,
+            u2.name as invited_by_name,
+            {group_member_table}.is_active
+        from
+            {group_member_table}
+        left join {group_table} on ({group_member_table}.group_id = {group_table}.id)
+        left join {user_table} on ({group_member_table}.user_id = {user_table}.id)
+        left join {user_table} u2 on ({group_member_table}.invited_by = {user_table}.id)
+        where
+            {group_member_table}.user_id = '{user_id}'
+            and {group_member_table}.is_active = true
+            and {group_table}.is_active = true
+            and {user_table}.is_active = true
         """
         memberships = await self.db.read(sql)
 
-        output = []
-        for membership in memberships:
-            group = await self.db.find_one(group_table, {"id": membership["group_id"], "is_active": True})
-            if not group:
-                continue
-            output.append(
-                {
-                    "id": group["id"],
-                    "name": group["name"],
-                    "creator_id": group["creator_id"],
-                    "created_at": group["created_at"],
-                    "updated_at": group["updated_at"],
-                    "role": membership["role"],
-                    "is_active": group["is_active"],
-                }
-            )
-        return output
+        members = [GroupMemberInfo(**membership) for membership in memberships]
+        return members
 
     async def get_group_members(self, group_id: str, user_id: str) -> List[GroupMemberInfo]:
         """

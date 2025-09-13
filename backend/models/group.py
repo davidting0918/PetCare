@@ -131,11 +131,14 @@ class GroupInfo(BaseModel):
 class GroupMemberInfo(BaseModel):
     """Enhanced group member information with user details and membership data"""
 
+    group_id: str
+    group_name: str
     user_id: str
     user_name: str
     user_email: str
     role: GroupRole
     created_at: dt  # When the user joined the group
+    updated_at: dt
     invited_by: Optional[str] = None  # Who invited this user (user_id)
     invited_by_name: Optional[str] = None  # Name of the person who invited (for display)
     is_active: bool = True
