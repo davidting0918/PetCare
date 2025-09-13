@@ -1,3 +1,4 @@
+from datetime import datetime as dt
 from enum import Enum
 from typing import Optional, Set
 
@@ -5,8 +6,11 @@ from pydantic import BaseModel, Field
 
 # Database collections
 group_collection = "groups"
+group_table = "groups"
 group_invitation_collection = "group_invitations"
+group_invitation_table = "group_invitations"
 group_member_collection = "group_members"
+group_member_table = "group_members"
 
 
 class GroupRole(str, Enum):
@@ -37,8 +41,8 @@ class GroupMember(BaseModel):
     group_id: str  # Group this membership belongs to
     user_id: str  # User who is a member
     role: GroupRole = GroupRole.MEMBER  # Member's role in the group
-    created_at: int
-    updated_at: int  # Timestamp when user joined the group
+    created_at: dt
+    updated_at: dt
     invited_by: Optional[str] = None  # User ID who invited this member
     is_active: bool = True  # Whether membership is active
 
@@ -60,8 +64,8 @@ class Group(BaseModel):
     id: str
     name: str = Field(..., min_length=1, max_length=50)
     creator_id: str
-    created_at: int
-    updated_at: int
+    created_at: dt
+    updated_at: dt
     is_active: bool = True
 
 
@@ -117,8 +121,8 @@ class GroupInfo(BaseModel):
     id: str
     name: str
     creator_id: str
-    created_at: int
-    updated_at: int
+    created_at: dt
+    updated_at: dt
     member_count: int
     is_creator: bool  # True if current user is the creator
     is_active: bool
@@ -131,7 +135,7 @@ class GroupMemberInfo(BaseModel):
     user_name: str
     user_email: str
     role: GroupRole
-    created_at: int  # When the user joined the group
+    created_at: dt  # When the user joined the group
     invited_by: Optional[str] = None  # Who invited this user (user_id)
     invited_by_name: Optional[str] = None  # Name of the person who invited (for display)
     is_active: bool = True

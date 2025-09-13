@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from scalar_fastapi import get_scalar_api_reference
 
+from backend.core.db_manager import close_database, init_database
 from backend.core.environment import env_config, get_config
 from backend.routers.auth_router import router as auth_router
 from backend.routers.food_router import router as food_router
@@ -25,7 +26,24 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Initialize application based on current environment on startup"""
     logger.info(f"🚀 Starting API in {env_config.environment.value} environment")
+
+    # Initialize database connection pool
+    try:
+        await init_database(env_config.environment.value)
+        logger.info("✅ Database connection pool initialized")
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize database: {e}")
+        raise
+
     yield
+
+    # Close database connections on shutdown
+    try:
+        await close_database()
+        logger.info("✅ Database connections closed")
+    except Exception as e:
+        logger.error(f"❌ Error closing database: {e}")
+
     logger.info("🛑 Shutting down API")
 
 
