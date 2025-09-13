@@ -8,8 +8,10 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException, status
 
-from backend.core.database import MongoAsyncClient
-from backend.models.group import (  # Collections; Models; Request Models; Response Models
+from backend.core.db_manager import get_db
+
+# MongoDB no longer needed - using PostgreSQL via db_manager
+from backend.models.group import (  # Collections; Models; Request Models; Response Models; PostgreSQL table names
     CreateGroupRequest,
     Group,
     GroupInfo,
@@ -23,12 +25,11 @@ from backend.models.group import (  # Collections; Models; Request Models; Respo
     JoinGroupRequest,
     RemoveMemberRequest,
     UpdateMemberRoleRequest,
-    group_collection,
-    group_invitation_collection,
-    group_member_collection,
+    group_invitation_table,
+    group_member_table,
+    group_table,
 )
-from backend.models.pet import pet_collection
-from backend.models.user import UserInfo, user_collection
+from backend.models.user import UserInfo, user_table
 
 
 class GroupService:
@@ -50,7 +51,13 @@ class GroupService:
     """
 
     def __init__(self):
-        self.db = MongoAsyncClient()
+        # No need to initialize database here - it's handled globally
+        pass
+
+    @property
+    def db(self):
+        """Get database client from global manager"""
+        return get_db()
 
     @staticmethod
     def _generate_invitation_id() -> str:
@@ -73,9 +80,9 @@ class GroupService:
 
     async def _get_user_membership(self, group_id: str, user_id: str) -> Optional[GroupMember]:
         """Get user's membership info if they are a member of the group"""
-        membership_dict = await self.db.find_one(
-            group_member_collection, {"group_id": group_id, "user_id": user_id, "is_active": True}
-        )
+
+        sql = f"""select * from {group_member_table} where group_id = '{group_id}' and user_id = '{user_id}' and is_active = True"""
+        membership_dict = await self.db.read_one(sql)
         return GroupMember(**membership_dict) if membership_dict else None
 
     async def _is_group_member(self, group_id: str, user_id: str) -> bool:
@@ -109,14 +116,14 @@ class GroupService:
             group_id=group_id,
             user_id=user_id,
             role=role,
-            created_at=int(dt.now(tz.utc).timestamp()),
-            updated_at=int(dt.now(tz.utc).timestamp()),
+            created_at=dt.now(),
+            updated_at=dt.now(),
             invited_by=invited_by,
             is_active=True,
         )
 
         # Insert membership record
-        await self.db.insert_one(group_member_collection, membership.model_dump())
+        await self.db.insert_one(group_member_table, membership.model_dump())
 
     # ================== Permission Management Functions (CREATOR Only) ==================
 
@@ -239,14 +246,15 @@ class GroupService:
             GroupInfo: Created group information
         """
         # first need to check if the user has created more than 10 groups
-        user_groups = await self.db.find_many(group_collection, {"creator_id": creator_id})
+        sql = f"""select * from {group_table} where creator_id = '{creator_id}'"""
+        user_groups = await self.db.read(sql)
         if len(user_groups) >= 10:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="You have reached the maximum number of groups"
             )
         # Generate unique group ID using secure random alphanumeric characters
         group_id = self._generate_group_id()
-        current_time = int(dt.now(tz.utc).timestamp())
+        current_time = dt.now()
 
         # Create group without members (they will be managed via GroupMember collection)
         group = Group(
@@ -259,7 +267,7 @@ class GroupService:
         )
 
         # Save group to database
-        await self.db.insert_one(group_collection, group.model_dump())
+        await self.db.insert_one(group_table, group.model_dump())
 
         # Add creator as first member with CREATOR role
         await self._add_user_to_group(group_id=group_id, user_id=creator_id, role=GroupRole.CREATOR)
@@ -311,7 +319,7 @@ class GroupService:
         await self.db.insert_one(group_invitation_collection, invitation.model_dump())
 
         # Get group and user info for response
-        group_dict = await self.db.find_one(group_collection, {"id": group_id})
+        group_dict = await self.db.find_one(group_table, {"id": group_id})
 
         return {
             "invitation": InvitationInfo(
@@ -377,10 +385,10 @@ class GroupService:
         )
 
         # Get updated group info
-        group_dict = await self.db.find_one(group_collection, {"id": group_id, "is_active": True})
+        group_dict = await self.db.find_one(group_table, {"id": group_id, "is_active": True})
         if not group_dict:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to join group")
-        await self.db.update_one(group_collection, {"id": group_id}, {"updated_at": current_time})
+        await self.db.update_one(group_table, {"id": group_id}, {"updated_at": current_time})
 
         # Calculate member count from GroupMember collection
         member_count = await self.db.count_documents(group_member_collection, {"group_id": group_id, "is_active": True})
@@ -413,7 +421,7 @@ class GroupService:
 
         output = []
         for membership in memberships:
-            group = await self.db.find_one(group_collection, {"id": membership["group_id"], "is_active": True})
+            group = await self.db.find_one(group_table, {"id": membership["group_id"], "is_active": True})
             if not group:
                 continue
             output.append(
@@ -448,7 +456,7 @@ class GroupService:
             )
 
         # Verify group exists
-        group_dict = await self.db.find_one(group_collection, {"id": group_id, "is_active": True})
+        group_dict = await self.db.find_one(group_table, {"id": group_id, "is_active": True})
         if not group_dict:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
 
@@ -462,7 +470,7 @@ class GroupService:
         member_user_ids = [membership["user_id"] for membership in memberships]
 
         # Get user information for all members
-        users = await self.db.find_many(user_collection, {"id": {"$in": member_user_ids}})
+        users = await self.db.find_many(user_table, {"id": {"$in": member_user_ids}})
 
         # Create lookup dictionary for user data
         user_lookup = {user["id"]: user for user in users}
@@ -519,7 +527,7 @@ class GroupService:
             List[Dict]: Pets assigned to the group with owner and permission context
         """
         # Check group membership
-        group_dict = await self.db.find_one(group_collection, {"id": group_id, "is_active": True})
+        group_dict = await self.db.find_one(group_table, {"id": group_id, "is_active": True})
         if not group_dict:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
 
@@ -532,12 +540,12 @@ class GroupService:
         user_role = "creator" if group_dict["creator_id"] == user_id else "member"
 
         # Get pets assigned to this group from pet collection
-        pets = await self.db.find_many(pet_collection, {"group_id": group_id, "is_active": True})
+        pets = await self.db.find_many(pet_collectionpet_table, {"group_id": group_id, "is_active": True})
 
         pet_infos = []
         for pet_dict in pets:
             # Get owner name
-            owner_dict = await self.db.find_one(user_collection, {"id": pet_dict["owner_id"]})
+            owner_dict = await self.db.find_one(user_table, {"id": pet_dict["owner_id"]})
             owner_name = owner_dict["name"] if owner_dict else "Unknown"
 
             # Build pet info response

@@ -1,4 +1,5 @@
 import os
+from datetime import datetime as dt
 
 from dotenv import load_dotenv
 from fastapi.security import HTTPBearer, OAuth2PasswordBearer
@@ -12,7 +13,9 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 
 access_token_collection = "tokens"
+access_token_table = "access_tokens"
 api_key_collection = "keys"
+api_key_table = "api_keys"
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/access_token")
 # API Key security scheme
@@ -34,8 +37,8 @@ class GoogleUserInfo(BaseModel):
 class AccessToken(BaseModel):
     token: str
     user_id: str
-    created_at: int
-    expires_at: int
+    created_at: dt
+    expires_at: dt
     is_active: bool = True
 
 

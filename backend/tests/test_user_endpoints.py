@@ -9,9 +9,8 @@ import pytest
 from fastapi import status
 from httpx import AsyncClient
 
-from backend.core.database import MongoAsyncClient
-from backend.models.auth import access_token_collection
-from backend.models.user import user_collection
+from backend.models.auth import access_token_table
+from backend.models.user import user_table
 
 
 class TestUserEndpointsIntegration:
@@ -21,7 +20,7 @@ class TestUserEndpointsIntegration:
     async def test_create_user_and_login_flow(
         self,
         async_client: AsyncClient,
-        test_db: MongoAsyncClient,
+        test_db,
         authenticated_headers: dict,
         test_user_data: dict,
         test_helper,
@@ -57,7 +56,8 @@ class TestUserEndpointsIntegration:
         assert user_data["is_verified"] is True
 
         # Verify user exists in database
-        db_user = await test_db.find_one(user_collection, {"email": test_user_data["email"]})
+        sql = f"SELECT * FROM {user_table} WHERE email = $1"
+        db_user = await test_db.read_one(sql, test_user_data["email"])
         assert db_user is not None
         assert db_user["id"] == user_data["id"]
 
@@ -93,7 +93,8 @@ class TestUserEndpointsIntegration:
         assert len(access_token) > 20  # JWT tokens are much longer
 
         # Verify token exists in database
-        db_token = await test_db.find_one(access_token_collection, {"user_id": user_data["id"]})
+        sql = f"SELECT * FROM {access_token_table} WHERE user_id = '{user_data['id']}'"
+        db_token = await test_db.read_one(sql)
         assert db_token is not None
         assert db_token["is_active"] is True
 
@@ -164,16 +165,19 @@ class TestUserEndpointsIntegration:
         assert "User already exists" in error_data["detail"]
 
     @pytest.mark.asyncio
-    async def test_database_cleanup_between_tests(self, test_db: MongoAsyncClient):
+    async def test_database_cleanup_between_tests(self, test_db):
         """
         Verify that database is properly cleaned between tests.
 
         This test should run with a clean database state.
         """
 
-        # Verify all test collections are empty
-        user_count = await test_db.count_documents(user_collection)
-        token_count = await test_db.count_documents(access_token_collection)
+        # Verify all test tables are empty
+        user_count_result = await test_db.read(f"SELECT COUNT(*) as count FROM {user_table}")
+        user_count = user_count_result[0]["count"] if user_count_result else 0
+
+        token_count_result = await test_db.read(f"SELECT COUNT(*) as count FROM {access_token_table}")
+        token_count = token_count_result[0]["count"] if token_count_result else 0
 
         assert user_count == 0, f"Expected 0 users, found {user_count}"
         assert token_count == 0, f"Expected 0 tokens, found {token_count}"

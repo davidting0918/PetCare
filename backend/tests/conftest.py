@@ -21,12 +21,11 @@ from httpx import AsyncClient
 os.environ["PYTEST_RUNNING"] = "1"
 os.environ["APP_ENV"] = "test"
 
-from backend.core.database import MongoAsyncClient
+from backend.core.db_manager import DatabaseManager, close_database, init_database
 from backend.main import app
-from backend.models.auth import access_token_collection, api_key_collection
-from backend.models.group import group_collection, group_invitation_collection, group_member_collection
-from backend.models.pet import pet_collection, pet_photo_collection
-from backend.models.user import user_collection
+from backend.models.auth import access_token_table, api_key_table
+from backend.models.group import group_member_table  # PostgreSQL
+from backend.models.user import user_table
 
 
 @pytest.fixture(scope="session")
@@ -38,36 +37,44 @@ def event_loop():
 
 
 @pytest_asyncio.fixture(scope="session")
-async def test_db() -> AsyncGenerator[MongoAsyncClient, None]:
+async def test_db():
     """
     Provide test database instance with automatic cleanup.
 
     This fixture creates a test database connection and ensures
-    all test collections are cleaned up after the test session.
+    all test tables are cleaned up after the test session.
     """
-    # Create test database instance
-    db = MongoAsyncClient(environment="test")
+    # Initialize test database
+    await init_database(environment="test")
+    db_manager = DatabaseManager()
+    db = db_manager.get_client()
 
     yield db
 
-    collections = [
-        user_collection,
-        api_key_collection,
-        access_token_collection,
-        group_collection,
-        group_invitation_collection,
-        group_member_collection,
-        pet_collection,
-        pet_photo_collection,
+    # Clean up all test tables
+    tables = [
+        user_table,
+        api_key_table,
+        access_token_table,
+        group_table,
+        group_invitation_table,
+        group_member_table,
+        # Add other tables as they get migrated
+        # pet_table,
+        # pet_photo_table,
     ]
-    for collection in collections:
-        await db.delete_many(collection, {})
 
-    await db.close()
+    try:
+        for table in tables:
+            await db.execute(f"DELETE FROM {table}")
+    except Exception as e:
+        print(f"Warning: Error cleaning up table {table}: {e}")
+
+    await close_database()
 
 
 @pytest_asyncio.fixture(autouse=True)
-async def clean_db(test_db: MongoAsyncClient):
+async def clean_db(test_db):
     """
     Automatically clean database before and after each test.
 
@@ -75,38 +82,36 @@ async def clean_db(test_db: MongoAsyncClient):
     and cleans up after the test completes.
     """
     # Clean before test
-    collections = [
-        user_collection,
-        api_key_collection,
-        access_token_collection,
-        group_collection,
-        group_invitation_collection,
-        group_member_collection,
-        pet_collection,
-        pet_photo_collection,
+    tables = [
+        user_table,
+        api_key_table,
+        access_token_table,
+        group_table,
+        group_invitation_table,
+        group_member_table,
+        # Add other tables as they get migrated
+        # pet_table,
+        # pet_photo_table,
     ]
-    for collection in collections:
-        await test_db.delete_many(collection, {})
+
+    for table in tables:
+        try:
+            await test_db.execute(f"DELETE FROM {table}")
+        except Exception as e:
+            print(f"Warning: Error cleaning table {table}: {e}")
 
     yield
 
     # Clean after test
-    collections = [
-        user_collection,
-        api_key_collection,
-        access_token_collection,
-        group_collection,
-        group_invitation_collection,
-        group_member_collection,
-        pet_collection,
-        pet_photo_collection,
-    ]
-    for collection in collections:
-        await test_db.delete_many(collection, {})
+    for table in tables:
+        try:
+            await test_db.execute(f"DELETE FROM {table}")
+        except Exception as e:
+            print(f"Warning: Error cleaning table {table}: {e}")
 
 
 @pytest_asyncio.fixture
-async def test_api_key(test_db: MongoAsyncClient) -> Dict[str, str]:
+async def test_api_key(test_db) -> Dict[str, str]:
     """
     Create and return a test API key for authentication.
 
@@ -117,15 +122,15 @@ async def test_api_key(test_db: MongoAsyncClient) -> Dict[str, str]:
     api_secret = f"test_secret_{str(uuid.uuid4())[:8]}"
 
     # Insert API key into database
-    api_key_doc = {
+    api_key_data = {
         "api_key": api_key,
         "api_secret": api_secret,
         "name": "test_client",
-        "created_at": int(dt.now(tz.utc).timestamp()),
+        "created_at": dt.now(),
         "is_active": True,
     }
 
-    await test_db.insert_one(api_key_collection, api_key_doc)
+    await test_db.insert_one(api_key_table, api_key_data)
 
     # Return key information for use in tests
     return {

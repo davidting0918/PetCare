@@ -1,8 +1,10 @@
+from datetime import datetime as dt
 from typing import Optional
 
 from pydantic import BaseModel, EmailStr
 
 user_collection = "users"
+user_table = "users"  # For PostgreSQL compatibility
 
 
 class User(BaseModel):
@@ -13,8 +15,8 @@ class User(BaseModel):
     hashed_pwd: str  # if login with google, then pwd default will be hashed google id
     name: str  # if login with google, then name default will be google name
     personal_group_id: Optional[str] = ""
-    created_at: int
-    updated_at: int
+    created_at: dt
+    updated_at: dt
     source: str
     is_active: bool = True
     is_verified: bool = True
@@ -26,8 +28,8 @@ class UserInfo(BaseModel):
     name: str
     picture: Optional[str] = ""
     personal_group_id: str
-    created_at: int
-    updated_at: int
+    created_at: dt
+    updated_at: dt
     source: str
     is_active: bool
     is_verified: bool
@@ -37,3 +39,13 @@ class CreateUserRequest(BaseModel):
     email: EmailStr
     name: str
     pwd: str
+
+
+class UpdateUserInfoRequest(BaseModel):
+    name: str
+    picture: Optional[str] = ""  # not supported yet
+
+
+class ResetPasswordRequest(BaseModel):
+    old_pwd: str
+    new_pwd: str
