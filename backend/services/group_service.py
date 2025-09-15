@@ -9,9 +9,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import HTTPException, status
 
 from backend.core.db_manager import get_db
-
-# MongoDB no longer needed - using PostgreSQL via db_manager
-from backend.models.group import (  # Collections; Models; Request Models; Response Models; PostgreSQL table names
+from backend.models.group import (
     CreateGroupRequest,
     Group,
     GroupInfo,
@@ -257,7 +255,6 @@ class GroupService:
         group_id = self._generate_group_id()
         current_time = dt.now()
 
-        # Create group without members (they will be managed via GroupMember collection)
         group = Group(
             id=group_id,
             name=request.name,
@@ -391,7 +388,6 @@ class GroupService:
         if not group_dict:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to join group")
 
-        # Calculate member count from GroupMember collection
         sql = f"""
         select count(*) from {group_member_table} where group_id = '{group_id}' and is_active = True
         """

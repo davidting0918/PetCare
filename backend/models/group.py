@@ -4,7 +4,6 @@ from typing import Optional, Set
 
 from pydantic import BaseModel, Field
 
-# Database collections
 group_table = "groups"
 group_invitation_table = "group_invitations"
 group_member_table = "group_members"
@@ -55,7 +54,6 @@ class GroupMember(BaseModel):
 class Group(BaseModel):
     """
     Enhanced Group model using dedicated GroupMember relationships.
-    Members are now managed through the GroupMember collection for better flexibility.
     """
 
     id: str

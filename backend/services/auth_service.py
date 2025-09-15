@@ -15,14 +15,13 @@ from backend.models.auth import (
     ACCESS_TOKEN_SECRET_KEY,
     ALGORITHM,
     AccessToken,
-    access_token_collection,
     access_token_table,
     api_key_scheme,
     api_key_table,
     oauth2_scheme,
     pwd_context,
 )
-from backend.models.user import User, UserInfo, user_collection, user_table
+from backend.models.user import User, UserInfo, user_table
 from backend.services.google_auth_provider import GoogleAuthProvider
 from backend.services.group_service import GroupService
 
@@ -67,7 +66,8 @@ class AuthService:
 
     async def find_valid_token(self, user_id: str) -> Optional[AccessToken]:
         sql = f"""
-        select * from {access_token_table} where user_id = '{user_id}' and expires_at > CURRENT_TIMESTAMP and is_active = True
+        select * from {access_token_table}
+        where user_id = '{user_id}' and expires_at > CURRENT_TIMESTAMP and is_active = True
         """
         token_dict = await self.db.read_one(sql)
 
