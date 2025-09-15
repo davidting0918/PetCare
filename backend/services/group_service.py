@@ -230,6 +230,7 @@ class GroupService:
             "removed_group_id": group_id,
             "removed_user_id": request.user_id,
             "removed_by": actor_user_id,
+            "updated_at": dt.now(),
         }
 
     # ================== Core Functions ==================
@@ -303,7 +304,7 @@ class GroupService:
         invitation_id = self._generate_invitation_id()  # Reuse the same secure ID generator
         invite_code = secrets.token_urlsafe(8)  # Shorter, user-friendly code
         current_time = dt.now()
-        expires_at = dt.now(tz.utc) + td(days=7)  # 7 days expiry
+        expires_at = dt.now() + td(days=7)  # 7 days expiry
 
         invitation = GroupInvitation(
             id=invitation_id,
@@ -355,7 +356,6 @@ class GroupService:
             invite_code = '{request.invite_code}'
             and status = '{InvitationStatus.PENDING.value}'
             and expires_at > '{current_time}'
-            and is_active = True
         """
         invitation_dict = await self.db.read_one(sql)
 
@@ -377,7 +377,7 @@ class GroupService:
 
         # Update invitation status
         sql = f"""
-        udpate
+        update
             {group_invitation_table}
         set status = '{InvitationStatus.ACCEPTED.value}', accepted_by = '{user_id}', updated_at = '{current_time}'
         where id = '{invitation_dict['id']}'
@@ -403,7 +403,7 @@ class GroupService:
             creator_id=group_dict["creator_id"],
             created_at=group_dict["created_at"],
             updated_at=group_dict["updated_at"],
-            member_count=member_count,
+            member_count=member_count["count"],
             is_creator=(user_id == group_dict["creator_id"]),
             is_active=group_dict["is_active"],
         )
@@ -471,13 +471,16 @@ class GroupService:
         select
             {group_member_table}.*,
             {user_table}.name as user_name,
-            {user_table}.email as user_email
+            {user_table}.email as user_email,
+            {group_table}.name as group_name
         from {group_member_table}
         left join {user_table} on ({group_member_table}.user_id = {user_table}.id)
+        left join {group_table} on ({group_member_table}.group_id = {group_table}.id)
         where
-            group_id = '{group_id}'
+            {group_member_table}.group_id = '{group_id}'
             and {group_member_table}.is_active = True
             and {user_table}.is_active = True
+            and {group_table}.is_active = True
         """
         members = await self.db.read(sql)
 

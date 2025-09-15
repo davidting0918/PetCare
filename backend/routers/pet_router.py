@@ -340,34 +340,3 @@ async def get_pet_photo(pet_id: str, current_user: Annotated[UserInfo, Depends(g
         return await pet_service.get_pet_photo(pet_id, current_user.id)
     except Exception as e:
         raise e
-
-
-@router.post("/{pet_id}/photo/delete", response_model=dict)
-async def delete_pet_photo(pet_id: str, current_user: Annotated[UserInfo, Depends(get_current_user)]) -> dict:
-    """
-    Removes the photo associated with a pet.
-
-    Authorization: Pet ownership required
-
-    The operation:
-    - Removes photo file from storage system
-    - Updates pet record to clear photo reference
-    - Marks photo record as inactive
-    - Handles cleanup gracefully if no photo exists
-
-    Cleanup:
-    - Physical file deletion from storage
-    - Database record deactivation
-    - Pet record photo reference removal
-    - System maintains cleanliness by removing unused files
-
-    Returns:
-    - Success confirmation with pet context
-    - Handles cases where no photo exists gracefully
-
-    """
-    try:
-        result = await pet_service.delete_pet_photo(pet_id, current_user.id)
-        return {"status": 1, "data": result, "message": "Photo deleted successfully"}
-    except Exception as e:
-        raise e

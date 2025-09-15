@@ -1,9 +1,9 @@
 import os
 from contextlib import asynccontextmanager
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 import asyncpg
-from asyncpg import Connection, Pool
+from asyncpg import Pool
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -53,7 +53,7 @@ class PostgresAsyncClient:
                 self._pool = await asyncpg.create_pool(
                     self.connection_string,
                     min_size=1,
-                    max_size=10,
+                    max_size=50,
                     command_timeout=60,
                 )
         finally:

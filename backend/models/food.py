@@ -3,9 +3,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-# Database collections
-food_collection = "foods"
-food_photo_collection = "food_photos"
+food_table = "foods"
 
 
 class FoodType(str, Enum):

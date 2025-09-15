@@ -5,11 +5,8 @@ from typing import Optional, Set
 from pydantic import BaseModel, Field
 
 # Database collections
-group_collection = "groups"
 group_table = "groups"
-group_invitation_collection = "group_invitations"
 group_invitation_table = "group_invitations"
-group_member_collection = "group_members"
 group_member_table = "group_members"
 
 
@@ -151,8 +148,8 @@ class InvitationInfo(BaseModel):
     group_name: str
     invited_by_name: str
     invite_code: str
-    created_at: int
-    expires_at: int
+    created_at: dt
+    expires_at: dt
 
 
 # ================== Permission Management ==================

@@ -3,8 +3,7 @@ from typing import Optional
 
 from pydantic import BaseModel, EmailStr
 
-user_collection = "users"
-user_table = "users"  # For PostgreSQL compatibility
+user_table = "users"
 
 
 class User(BaseModel):

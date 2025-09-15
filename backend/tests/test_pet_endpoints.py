@@ -190,30 +190,6 @@ class TestPetPhotoManagement:
         assert "photo_url" in photo_info
         assert photo_info["photo_url"].startswith("/static/pet_photos/")
 
-    @pytest.mark.asyncio
-    async def test_delete_pet_photo(self, async_client: AsyncClient, auth_headers_user1):
-        """Test deleting a pet photo"""
-        # Create a pet first
-        create_response = await async_client.post(
-            "/pets/create", headers=auth_headers_user1, json={"name": "Photo Delete Pet", "pet_type": "dog"}
-        )
-        pet_id = create_response.json()["data"]["id"]
-
-        # Upload a photo first
-        fake_image = io.BytesIO(b"fake image for deletion test")
-        await async_client.post(
-            f"/pets/{pet_id}/photo/upload",
-            headers={"Authorization": auth_headers_user1["Authorization"]},
-            files={"file": ("delete_test.jpg", fake_image, "image/jpeg")},
-        )
-
-        # Delete the photo
-        response = await async_client.post(f"/pets/{pet_id}/photo/delete", headers=auth_headers_user1)
-
-        assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == 1
-
 
 class TestPetErrorHandling:
     """Test error cases to ensure robustness"""
