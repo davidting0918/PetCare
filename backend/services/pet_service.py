@@ -150,7 +150,7 @@ class PetService:
             breed=pet.breed,
             gender=pet.gender,
             birth_date=pet.birth_date,
-            age_months=pet.age,
+            age=pet.age,
             current_weight_kg=pet.current_weight_kg,
             target_weight_kg=pet.target_weight_kg,
             height_cm=pet.height_cm,
@@ -163,8 +163,8 @@ class PetService:
             group_name=owner_dict["name"],
             created_at=pet.created_at,
             updated_at=pet.updated_at,
+            is_active=pet.is_active,
             notes=pet.notes,
-            is_owned_by_user=True,
             user_permission="owner",
         )
 
@@ -183,18 +183,40 @@ class PetService:
         sql = f"""
         select
             p.*,
-            gm.*,
-            g.name as group_name
+            g.name as group_name,
+            u.name as owner_name
         from group_members gm
         left join groups g on (gm.group_id = g.id)
         left join pets p using (group_id)
+        left join users u on (p.owner_id = u.id)
         where
             gm.user_id = '{user_id}'
-            and is_active = true
+            and gm.is_active = true
+            and p.is_active = true
+            and g.is_active = true
         """
         # get all accessible pets
         pets = await self.db.read(sql)
-        pets = [PetInfo(**pet) for pet in pets]
+        if not pets:
+            return []
+        pets = [
+            PetInfo(
+                id=pet["id"],
+                name=pet["name"],
+                pet_type=pet["pet_type"],
+                breed=pet["breed"],
+                gender=pet["gender"],
+                current_weight_kg=pet["current_weight_kg"],
+                owner_id=pet["owner_id"],
+                owner_name=pet["owner_name"],
+                group_id=pet["group_id"],
+                group_name=pet["group_name"],
+                created_at=pet["created_at"],
+                updated_at=pet["updated_at"],
+                is_active=pet["is_active"],
+            )
+            for pet in pets
+        ]
 
         # Sort by creation date (newest first)
         pets.sort(key=lambda p: p.created_at, reverse=True)
@@ -219,11 +241,20 @@ class PetService:
             )
 
         sql = f"""
-        select * from pets where id = '{pet_id}' and is_active = true
+        select
+            p.*,
+            u.name as owner_name,
+            g.name as group_name
+        from pets p
+        left join users u on (p.owner_id = u.id)
+        left join groups g on (p.group_id = g.id)
+        where
+            p.id = '{pet_id}' and p.is_active = true
         """
         pet = await self.db.read_one(sql)
         if not pet:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pet not found")
+        pet["age"] = None if not pet["birth_date"] else int((dt.now() - pet["birth_date"]).days / 365.25)
         return PetDetails(**pet)
 
     async def update_pet(self, pet_id: str, request: UpdatePetRequest, user_id: str) -> PetDetails:
@@ -309,19 +340,11 @@ class PetService:
             )
 
         sql = f"""
-        UPDATE pets
-        SET is_active = false,
-            group_id = NULL
-        WHERE id = '{pet_id}'
+        delete from pets where id = '{pet_id}'
         """
         await self.db.execute(sql)
 
-        sql = f"""
-        select name from pets where id = '{pet_id}' and is_active = true
-        """
-        pet_name = await self.db.read_one(sql)
-
-        return {"message": f"Pet '{pet_name['name']}' has been deleted successfully"}
+        return {"message": "Pet has been deleted successfully"}
 
     # ================== Group Assignment Management ==================
 

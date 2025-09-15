@@ -24,6 +24,7 @@ from backend.core.db_manager import DatabaseManager, close_database, get_db, ini
 from backend.main import app
 from backend.models.auth import access_token_table, api_key_table
 from backend.models.group import group_invitation_table, group_member_table, group_table
+from backend.models.pet import pet_table
 from backend.models.user import user_table
 
 
@@ -58,9 +59,7 @@ async def test_db():
         group_table,
         group_invitation_table,
         group_member_table,
-        # Add other tables as they get migrated
-        # pet_table,
-        # pet_photo_table,
+        pet_table,
     ]
 
     try:
@@ -72,24 +71,27 @@ async def test_db():
     await close_database()
 
 
-@pytest_asyncio.fixture(autouse=True)
-async def clean_db(test_db):
-    """
-    Intelligently clean database - preserve session users, clean test data.
+# ================== CLEANUP SYSTEM 1: PER-TEST CLEANING ==================
 
-    This approach balances test isolation with performance:
+
+@pytest_asyncio.fixture
+async def clean_db_per_test(test_db):
+    """
+    SYSTEM 1: Clean database between EACH test function.
+
+    Use this fixture explicitly in test classes that need full isolation:
     - Preserves session-scoped users and API keys
-    - Cleans test-specific data (groups, tokens) between tests
-    """
+    - Cleans test-specific data (groups, pets, tokens) between each test
+    - Provides maximum test isolation but slower performance
 
+    Usage: Add as dependency to test class or individual tests
+    """
     # Tables to clean BETWEEN tests (preserve session data)
     test_data_tables = [
         group_table,
         group_invitation_table,
         group_member_table,
-        # Add other test-specific tables
-        # pet_table,
-        # pet_photo_table,
+        pet_table,
     ]
 
     # Clean test data before test
@@ -120,24 +122,124 @@ async def clean_db(test_db):
             print(f"Warning: Error cleaning table {table}: {e}")
 
 
+@pytest_asyncio.fixture(autouse=True)
+async def auto_clean_per_test(request, test_db):
+    """
+    Auto-apply per-test cleaning for test classes marked with @pytest.mark.clean_per_test
+
+    Usage:
+    @pytest.mark.clean_per_test
+    class TestSomeFeature:
+        # Tests here will auto-clean between each test
+    """
+    # Check if the test is marked for per-test cleaning
+    if request.node.get_closest_marker("clean_per_test"):
+        # Apply the same logic as clean_db_per_test
+        test_data_tables = [
+            group_table,
+            group_invitation_table,
+            group_member_table,
+            pet_table,
+        ]
+
+        # Clean test data before test
+        for table in test_data_tables:
+            try:
+                await test_db.execute(f"DELETE FROM {table}")
+            except Exception as e:
+                print(f"Warning: Error cleaning table {table}: {e}")
+
+        # Clean expired access tokens
+        try:
+            await test_db.execute(
+                f"""
+                DELETE FROM {access_token_table}
+                WHERE expires_at < CURRENT_TIMESTAMP
+            """
+            )
+        except Exception as e:
+            print(f"Warning: Error cleaning expired tokens: {e}")
+
+        yield
+
+        # Clean test data after test
+        for table in test_data_tables:
+            try:
+                await test_db.execute(f"DELETE FROM {table}")
+            except Exception as e:
+                print(f"Warning: Error cleaning table {table}: {e}")
+    else:
+        # Just yield without cleaning
+        yield
+
+
+# ================== CLEANUP SYSTEM 2: SESSION-ONLY CLEANING ==================
+
+
+@pytest_asyncio.fixture(scope="session")
+async def clean_db_session_only():
+    """
+    SYSTEM 2: Clean database ONLY at session start and end.
+
+    Use this for test classes that want to preserve data across tests:
+    - Data persists between individual tests within the session
+    - Only cleans at the very beginning and end of the test session
+    - Faster performance but less test isolation
+    - Good for integration tests or related test sequences
+
+    Usage: This runs automatically at session scope
+    """
+    # Initialize database and clean at session start
+    await init_database(environment="test")
+    db = get_db()
+
+    session_tables = [
+        group_table,
+        group_invitation_table,
+        group_member_table,
+        pet_table,
+    ]
+
+    print("🧹 SESSION START: Cleaning test data tables...")
+    for table in session_tables:
+        try:
+            await db.execute(f"DELETE FROM {table}")
+            print(f"  ✅ Cleaned {table}")
+        except Exception as e:
+            print(f"  ⚠️  Error cleaning {table}: {e}")
+
+    yield
+
+    # Clean at session end
+    print("🧹 SESSION END: Cleaning test data tables...")
+    for table in session_tables:
+        try:
+            await db.execute(f"DELETE FROM {table}")
+            print(f"  ✅ Final cleanup {table}")
+        except Exception as e:
+            print(f"  ⚠️  Error in final cleanup {table}: {e}")
+
+
 @pytest_asyncio.fixture(scope="session", autouse=True)
 async def cleanup_session_data():
     """
     Clean up ALL data after the entire test session.
     This ensures a completely clean state for the next test run.
+    Note: This cleans user/auth data, while clean_db_session_only handles test data.
     """
     yield  # Let all tests run first
 
-    # After all tests complete, clean everything
+    # After all tests complete, clean everything including user data
     await init_database(environment="test")
     db = get_db()
     all_tables = [
-        user_table,
-        api_key_table,
-        access_token_table,
-        group_table,
+        user_table,  # Clean user data at session end
+        api_key_table,  # Clean API keys at session end
+        access_token_table,  # Clean all tokens at session end
+        group_table,  # Final cleanup (also done by clean_db_session_only)
         group_invitation_table,
         group_member_table,
+        pet_table,
     ]
 
     print("🧹 Performing final session cleanup...")
@@ -147,6 +249,43 @@ async def cleanup_session_data():
             print(f"  ✅ Cleaned {table}: {result}")
         except Exception as e:
             print(f"  ⚠️  Error cleaning {table}: {e}")
+
+
+# ================== USAGE EXAMPLES AND HELPERS ==================
+
+"""
+USAGE EXAMPLES:
+
+1. FOR TESTS THAT NEED FULL ISOLATION (each test starts fresh):
+
+   Method A - Using marker:
+   @pytest.mark.clean_per_test
+   class TestIsolatedFeature:
+       def test_something(self, async_client):
+           # This test starts with clean DB
+           pass
+
+   Method B - Using explicit fixture:
+   class TestIsolatedFeature:
+       def test_something(self, async_client, clean_db_per_test):
+           # This test starts with clean DB
+           pass
+
+2. FOR TESTS THAT SHARE DATA ACROSS THE SESSION (faster, data persists):
+
+   class TestIntegratedFeature:  # No marker, uses session-only cleaning
+       def test_step1(self, async_client):
+           # Create some data
+           pass
+
+       def test_step2(self, async_client):
+           # Data from test_step1 still exists
+           pass
+
+3. MIXED APPROACH:
+   - Mark specific test classes that need isolation
+   - Leave others unmarked for session-only cleaning
+"""
 
 
 @pytest_asyncio.fixture
@@ -310,7 +449,6 @@ class TestHelper:
             "created_at",
             "updated_at",
             "is_active",
-            "is_owned_by_user",
         ]
         for field in required_fields:
             assert field in pet_data, f"Missing required field: {field}"

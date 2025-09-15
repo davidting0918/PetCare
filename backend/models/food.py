@@ -1,9 +1,14 @@
+from datetime import datetime as dt
 from enum import Enum
 from typing import Optional
 
 from pydantic import BaseModel, Field
 
 food_table = "foods"
+food_photo_table = "food_photos"
+
+# ================== Table Definitions for PostgreSQL ==================
+# These replace MongoDB collection names for SQL database operations
 
 
 class FoodType(str, Enum):
@@ -39,35 +44,19 @@ class Food(BaseModel):
     product_name: str = Field(..., min_length=1, max_length=100)
     food_type: FoodType
     target_pet: TargetPet
-    unit_weight_g: float = Field(..., gt=0, le=5000)  # Weight in grams of one unit (can, cup, etc.)
+    unit_weight: float = Field(..., gt=0, le=5000)  # Weight in grams of one unit (can, cup, etc.)
 
     # Nutritional information (per 100g)
-    calories_per_100g: float = Field(..., ge=0, le=1000)
-    protein_percentage: float = Field(..., ge=0, le=100)
-    fat_percentage: float = Field(..., ge=0, le=100)
-    moisture_percentage: float = Field(..., ge=0, le=100)
-    carbohydrate_percentage: float = Field(..., ge=0, le=100)
+    calories: float = Field(..., ge=0, le=1000)  # in 100g
+    protein: float = Field(..., ge=0, le=100)  # in percentage
+    fat: float = Field(..., ge=0, le=100)  # in percentage
+    moisture: float = Field(..., ge=0, le=100)  # in percentage
+    carbohydrate: float = Field(..., ge=0, le=100)  # in percentage
 
-    created_at: int
-    updated_at: int
+    created_at: dt = Field(default_factory=dt.now)
+    updated_at: dt = Field(default_factory=dt.now)
     is_active: bool = True
-
-
-class FoodPhoto(BaseModel):
-    """
-    FoodPhoto stores metadata about a food's identification picture.
-    The actual file is stored locally using food_id as filename.
-    Uses food_id as the photo ID for simplified storage (1:1 relationship).
-    """
-
-    id: str  # Same as food_id for simplified 1:1 relationship
-    filename: str
-    file_path: str  # Local path to the stored file
-    file_size: int  # Size in bytes
-    content_type: str  # MIME type
-    uploaded_by: str  # User ID who uploaded the photo
-    uploaded_at: int
-    is_active: bool = True
+    photo_url: Optional[str] = ""
 
 
 # ================== Request Models ==================
@@ -80,14 +69,14 @@ class CreateFoodRequest(BaseModel):
     product_name: str = Field(..., min_length=1, max_length=100)
     food_type: FoodType
     target_pet: TargetPet
-    unit_weight_g: float = Field(..., gt=0, le=5000)
+    unit_weight: float = Field(..., gt=0, le=5000)
 
     # Nutritional information (per 100g)
-    calories_per_100g: float = Field(..., ge=0, le=1000)
-    protein_percentage: float = Field(..., ge=0, le=100)
-    fat_percentage: float = Field(..., ge=0, le=100)
-    moisture_percentage: float = Field(..., ge=0, le=100)
-    carbohydrate_percentage: float = Field(..., ge=0, le=100)
+    calories: float = Field(..., ge=0, le=1000)
+    protein: float = Field(..., ge=0, le=100)
+    fat: float = Field(..., ge=0, le=100)
+    moisture: float = Field(..., ge=0, le=100)
+    carbohydrate: float = Field(..., ge=0, le=100)
 
 
 class UpdateFoodRequest(BaseModel):
@@ -97,14 +86,14 @@ class UpdateFoodRequest(BaseModel):
     product_name: Optional[str] = Field(None, min_length=1, max_length=100)
     food_type: Optional[FoodType] = None
     target_pet: Optional[TargetPet] = None
-    unit_weight_g: Optional[float] = Field(None, gt=0, le=5000)
+    unit_weight: Optional[float] = Field(None, gt=0, le=5000)
 
     # Nutritional information (per 100g) - all optional
-    calories_per_100g: Optional[float] = Field(None, ge=0, le=1000)
-    protein_percentage: Optional[float] = Field(None, ge=0, le=100)
-    fat_percentage: Optional[float] = Field(None, ge=0, le=100)
-    moisture_percentage: Optional[float] = Field(None, ge=0, le=100)
-    carbohydrate_percentage: Optional[float] = Field(None, ge=0, le=100)
+    calories: Optional[float] = Field(None, ge=0, le=1000)
+    protein: Optional[float] = Field(None, ge=0, le=100)
+    fat: Optional[float] = Field(None, ge=0, le=100)
+    moisture: Optional[float] = Field(None, ge=0, le=100)
+    carbohydrate: Optional[float] = Field(None, ge=0, le=100)
 
 
 # ================== Response Models ==================
@@ -118,12 +107,15 @@ class FoodInfo(BaseModel):
     product_name: str
     food_type: FoodType
     target_pet: TargetPet
-    unit_weight_g: float
-    calories_per_100g: float
-    protein_percentage: float
-    fat_percentage: float
+    unit_weight: float
+    calories: float
+    protein: float
+    fat: float
+    moisture: float
+    carbohydrate: float
     has_photo: bool
-    created_at: int
+    created_at: dt
+    updated_at: dt
     group_id: str
     group_name: str
 
@@ -136,36 +128,26 @@ class FoodDetails(BaseModel):
     product_name: str
     food_type: FoodType
     target_pet: TargetPet
-    unit_weight_g: float
+    unit_weight: float
 
     # Complete nutritional breakdown
-    calories_per_100g: float
-    protein_percentage: float
-    fat_percentage: float
-    moisture_percentage: float
-    carbohydrate_percentage: float
+    calories: float
+    protein: float
+    fat: float
+    moisture: float
+    carbohydrate: float
 
     # Meta information
-    created_at: int
-    updated_at: int
+    created_at: dt
+    updated_at: dt
     group_id: str
     group_name: str
     has_photo: bool
+    creator_id: str
+    creator_name: str
 
     # Calculated convenience fields
     calories_per_unit: float  # Calories in one unit based on unit weight
-
-
-class FoodPhotoInfo(BaseModel):
-    """Metadata about a food's identification photo"""
-
-    id: str  # Same as food_id (1:1 relationship)
-    filename: str
-    file_size: int
-    content_type: str
-    uploaded_by: str
-    uploaded_by_name: str
-    uploaded_at: int
 
 
 class FoodSearchResult(BaseModel):
@@ -176,9 +158,8 @@ class FoodSearchResult(BaseModel):
     product_name: str
     food_type: FoodType
     target_pet: TargetPet
-    unit_weight_g: float
-    calories_per_100g: float
+    unit_weight: float
+    calories: float
     has_photo: bool
     group_id: str
     group_name: str
-    # Could add relevance_score in the future for search ranking

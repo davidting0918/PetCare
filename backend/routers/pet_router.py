@@ -77,7 +77,7 @@ async def get_accessible_pets(current_user: Annotated[UserInfo, Depends(get_curr
         pets = await pet_service.get_accessible_pets(current_user.id)
         return {
             "status": 1,
-            "data": [pet.model_dump() for pet in pets],
+            "data": [pet.model_dump() for pet in pets] if pets else [],
             "message": f"Found {len(pets)} accessible pets",
         }
     except Exception as e:

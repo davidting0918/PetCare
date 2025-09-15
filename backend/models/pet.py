@@ -92,7 +92,7 @@ class CreatePetRequest(BaseModel):
     current_weight_kg: Optional[float] = Field(None, ge=0.1, le=200)
     target_weight_kg: Optional[float] = Field(None, ge=0.1, le=200)
     height_cm: Optional[float] = Field(None, ge=1, le=200)
-    is_spayed: Optional[bool] = None
+    is_spayed: Optional[bool] = False
     microchip_id: Optional[str] = Field(None, max_length=50)
     daily_calorie_target: Optional[int] = Field(None, ge=50, le=5000)
     notes: Optional[str] = Field(None, max_length=1000)
@@ -137,8 +137,8 @@ class PetInfo(BaseModel):
     group_id: Optional[str]
     group_name: Optional[str]
     created_at: dt
-    is_owned_by_user: bool  # True if current user is the owner
-    user_permission: str  # "owner", "member", "viewer"
+    updated_at: dt
+    is_active: bool
 
 
 class PetDetails(BaseModel):
@@ -174,11 +174,8 @@ class PetDetails(BaseModel):
     # Metadata
     created_at: dt
     updated_at: dt
+    is_active: bool
     notes: Optional[str]
-
-    # User Context
-    is_owned_by_user: bool
-    user_permission: str  # "owner", "member", "viewer"
 
 
 class GroupAssignmentInfo(BaseModel):
