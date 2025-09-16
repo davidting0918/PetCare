@@ -590,10 +590,6 @@ async def session_auth_headers_user2(session_user2: Dict[str, str]) -> Dict[str,
     return {"Authorization": f"Bearer {session_user2['access_token']}", "Content-Type": "application/json"}
 
 
-# ================== BACKWARD COMPATIBILITY (DEPRECATED) ==================
-# Keep old fixtures for existing tests, but they now use session users
-
-
 @pytest_asyncio.fixture
 async def test_user1(session_user1: Dict[str, str]) -> Dict[str, str]:
     """DEPRECATED: Use session_user1 for better performance"""
@@ -604,15 +600,3 @@ async def test_user1(session_user1: Dict[str, str]) -> Dict[str, str]:
 async def test_user2(session_user2: Dict[str, str]) -> Dict[str, str]:
     """DEPRECATED: Use session_user2 for better performance"""
     return session_user2
-
-
-@pytest_asyncio.fixture
-async def auth_headers_user1(test_user1: Dict[str, str]) -> Dict[str, str]:
-    """Provide authenticated headers for test user 1"""
-    return {"Authorization": f"Bearer {test_user1['access_token']}", "Content-Type": "application/json"}
-
-
-@pytest_asyncio.fixture
-async def auth_headers_user2(test_user2: Dict[str, str]) -> Dict[str, str]:
-    """Provide authenticated headers for test user 2"""
-    return {"Authorization": f"Bearer {test_user2['access_token']}", "Content-Type": "application/json"}

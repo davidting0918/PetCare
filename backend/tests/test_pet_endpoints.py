@@ -41,7 +41,7 @@ class TestPetBasicFunctions:
         },
     }
 
-    PETs_ID = {
+    PETS_ID = {
         "pet1": None,
         "pet2": None,
     }
@@ -55,7 +55,7 @@ class TestPetBasicFunctions:
 
         assert response.status_code == 200
         data = response.json()
-        self.PETs_ID["pet1"] = data["data"]["id"]
+        self.PETS_ID["pet1"] = data["data"]["id"]
         test_helper.assert_response_structure(data, expected_status=1)
 
         pet_details = data["data"]
@@ -73,7 +73,7 @@ class TestPetBasicFunctions:
         # First create a pet
         pets2_data = self.PETS_INFO["pet2"]
         response = await async_client.post("/pets/create", headers=session_auth_headers_user1, json=pets2_data)
-        self.PETs_ID["pet2"] = response.json()["data"]["id"]
+        self.PETS_ID["pet2"] = response.json()["data"]["id"]
 
         # Then get accessible pets
         response = await async_client.get("/pets/accessible", headers=session_auth_headers_user1)
@@ -86,14 +86,16 @@ class TestPetBasicFunctions:
         assert any(pet["name"] == pets2_data["name"] for pet in data["data"])
 
     @pytest.mark.asyncio
-    async def test_update_pet_information(self, async_client: AsyncClient, auth_headers_user1):
+    async def test_update_pet_information(self, async_client: AsyncClient, session_auth_headers_user1):
         """Test updating pet information"""
 
         # Update pet information
         update_data = self.PETS_INFO["updated_pet1"]
-        pet_id = self.PETs_ID["pet1"]
+        pet_id = self.PETS_ID["pet1"]
 
-        response = await async_client.post(f"/pets/{pet_id}/update", headers=auth_headers_user1, json=update_data)
+        response = await async_client.post(
+            f"/pets/{pet_id}/update", headers=session_auth_headers_user1, json=update_data
+        )
 
         assert response.status_code == 200
         data = response.json()
@@ -105,13 +107,13 @@ class TestPetBasicFunctions:
         assert "Weight increased after training" in updated_pet["notes"]
 
     @pytest.mark.asyncio
-    async def test_get_pet_details(self, async_client: AsyncClient, auth_headers_user1):
+    async def test_get_pet_details(self, async_client: AsyncClient, session_auth_headers_user1):
         """Test getting detailed pet information"""
 
         # Get pet details
         pet_data = self.PETS_INFO["pet2"]
-        pet_id = self.PETs_ID["pet2"]
-        response = await async_client.get(f"/pets/{pet_id}/details", headers=auth_headers_user1)
+        pet_id = self.PETS_ID["pet2"]
+        response = await async_client.get(f"/pets/{pet_id}/details", headers=session_auth_headers_user1)
 
         assert response.status_code == 200
         data = response.json()
@@ -123,142 +125,118 @@ class TestPetBasicFunctions:
         assert pet_details["breed"] == pet_data["breed"]
 
     @pytest.mark.asyncio
-    async def test_delete_pet(self, async_client: AsyncClient, auth_headers_user1):
+    async def test_delete_pet(self, async_client: AsyncClient, session_auth_headers_user1):
         """Test soft deleting a pet"""
-        pet_id = self.PETs_ID["pet1"]
+        pet_id = self.PETS_ID["pet1"]
         # Delete the pet
-        response = await async_client.post(f"/pets/{pet_id}/delete", headers=auth_headers_user1)
+        response = await async_client.post(f"/pets/{pet_id}/delete", headers=session_auth_headers_user1)
 
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == 1
 
 
-# class TestPetGroupAssignment:
-#     """Test pet group assignment functionality"""
+class TestPetGroupAssignment:
+    """Test pet group assignment functionality"""
 
-#     @pytest.mark.asyncio
-#     async def test_assign_pet_to_group_workflow(self, async_client: AsyncClient, auth_headers_user1):
-#         """Test complete pet group assignment workflow"""
-#         # Step 1: Create a group
-#         group_response = await async_client.post(
-#             "/groups/create", headers=auth_headers_user1, json={"name": "Pet Family Group"}
-#         )
-#         group_id = group_response.json()["data"]["id"]
+    @pytest.mark.asyncio
+    async def test_assign_pet_to_group_workflow(self, async_client: AsyncClient, session_auth_headers_user1):
+        """Test complete pet group assignment workflow"""
+        # Step 1: Create a group
+        group_response = await async_client.post(
+            "/groups/create", headers=session_auth_headers_user1, json={"name": "Pet Family Group"}
+        )
+        group_id = group_response.json()["data"]["id"]
 
-#         # Step 2: Create a pet
-#         pet_response = await async_client.post(
-#             "/pets/create", headers=auth_headers_user1, json={"name": "Group Pet", "pet_type": "dog"}
-#         )
-#         pet_id = pet_response.json()["data"]["id"]
+        # Step 2: Create a pet
+        pet_response = await async_client.post(
+            "/pets/create", headers=session_auth_headers_user1, json={"name": "Group Pet", "pet_type": "dog"}
+        )
+        pet_id = pet_response.json()["data"]["id"]
 
-#         # Step 3: Assign pet to group
-#         assign_response = await async_client.post(
-#             f"/pets/{pet_id}/assign_group", headers=auth_headers_user1, json={"group_id": group_id}
-#         )
+        # Step 3: Assign pet to group
+        assign_response = await async_client.post(
+            f"/pets/{pet_id}/assign_group", headers=session_auth_headers_user1, json={"group_id": group_id}
+        )
 
-#         assert assign_response.status_code == 200
-#         assign_data = assign_response.json()["data"]
-#         assert assign_data["group_id"] == group_id
-#         assert assign_data["pet_name"] == "Group Pet"
-#         assert assign_data["group_name"] == "Pet Family Group"
+        assert assign_response.status_code == 200
+        assign_data = assign_response.json()["data"]
+        assert assign_data["group_id"] == group_id
+        assert assign_data["pet_name"] == "Group Pet"
+        assert assign_data["group_name"] == "Pet Family Group"
 
-#         # Step 4: Check current group assignment
-#         current_group_response = await async_client.get(f"/pets/{pet_id}/current_group", headers=auth_headers_user1)
+        # Step 4: Check current group assignment
+        current_group_response = await async_client.get(
+            f"/pets/{pet_id}/current_group", headers=session_auth_headers_user1
+        )
 
-#         assert current_group_response.status_code == 200
-#         current_group_data = current_group_response.json()["data"]
-#         assert current_group_data["group_id"] == group_id
-#         assert current_group_data["group_name"] == "Pet Family Group"
-
-
-# class TestPetPhotoManagement:
-#     """Test pet photo upload and management"""
-
-#     @pytest.mark.asyncio
-#     async def test_upload_pet_photo(self, async_client: AsyncClient, auth_headers_user1):
-#         """Test uploading a pet photo"""
-#         # Create a pet first
-#         create_response = await async_client.post(
-#             "/pets/create", headers=auth_headers_user1, json={"name": "Photo Pet", "pet_type": "cat"}
-#         )
-#         pet_id = create_response.json()["data"]["id"]
-
-#         # Create a fake image file
-#         fake_image = io.BytesIO(b"fake image content for testing")
-#         fake_image.name = "test_pet.jpg"
-
-#         # Upload photo
-#         response = await async_client.post(
-#             f"/pets/{pet_id}/photo/upload",
-#             headers={"Authorization": auth_headers_user1["Authorization"]},
-#             files={"file": ("test_pet.jpg", fake_image, "image/jpeg")},
-#         )
-
-#         assert response.status_code == 200
-#         data = response.json()
-#         assert data["status"] == 1
-
-#         photo_info = data["data"]
-#         assert photo_info["pet_id"] == pet_id
-#         assert photo_info["content_type"] == "image/jpeg"
-#         assert "photo_url" in photo_info
-#         assert photo_info["photo_url"].startswith("/static/pet_photos/")
+        assert current_group_response.status_code == 200
+        current_group_data = current_group_response.json()["data"]
+        assert current_group_data["group_id"] == group_id
+        assert current_group_data["group_name"] == "Pet Family Group"
 
 
-# class TestPetErrorHandling:
-#     """Test error cases to ensure robustness"""
+class TestPetErrorHandling:
+    """Test error cases to ensure robustness"""
 
-#     @pytest.mark.asyncio
-#     async def test_create_pet_with_invalid_data(self, async_client: AsyncClient, auth_headers_user1):
-#         """Test creating pet with invalid data"""
-#         response = await async_client.post(
-#             "/pets/create", headers=auth_headers_user1, json={"name": "", "pet_type": "invalid_type"}
-#         )
+    PETS_INFO = {
+        "invalid_pet": {
+            "name": "",
+            "pet_type": "invalid_type",
+        },
+    }
 
-#         assert response.status_code == 422  # Validation error
+    @pytest.mark.asyncio
+    async def test_create_pet_with_invalid_data(self, async_client: AsyncClient, session_auth_headers_user1):
+        """Test creating pet with invalid data"""
+        invalid_pet_data = self.PETS_INFO["invalid_pet"]
+        response = await async_client.post("/pets/create", headers=session_auth_headers_user1, json=invalid_pet_data)
 
-#     @pytest.mark.asyncio
-#     async def test_update_non_owned_pet(self, async_client: AsyncClient, auth_headers_user1, auth_headers_user2):
-#         """Test that user cannot update pet they don't own"""
-#         # User1 creates a pet
-#         create_response = await async_client.post(
-#             "/pets/create", headers=auth_headers_user1, json={"name": "User1 Pet", "pet_type": "dog"}
-#         )
-#         pet_id = create_response.json()["data"]["id"]
+        assert response.status_code == 422  # Validation error
 
-#         # User2 tries to update User1's pet
-#         response = await async_client.post(
-#             f"/pets/{pet_id}/update", headers=auth_headers_user2, json={"name": "Hacked Pet"}
-#         )
+    @pytest.mark.asyncio
+    async def test_update_non_owned_pet(
+        self, async_client: AsyncClient, session_auth_headers_user1, session_auth_headers_user2
+    ):
+        """Test that user cannot update pet they don't own"""
+        # User1 creates a pet
+        create_response = await async_client.post(
+            "/pets/create", headers=session_auth_headers_user1, json={"name": "User1 Pet", "pet_type": "dog"}
+        )
+        pet_id = create_response.json()["data"]["id"]
 
-#         assert response.status_code == 403
-#         assert "permission" in response.json()["detail"].lower()
+        # User2 tries to update User1's pet
+        response = await async_client.post(
+            f"/pets/{pet_id}/update", headers=session_auth_headers_user2, json={"name": "Hacked Pet"}
+        )
 
-#     @pytest.mark.asyncio
-#     async def test_get_nonexistent_pet_details(self, async_client: AsyncClient, auth_headers_user1):
-#         """Test getting details of non-existent pet"""
-#         response = await async_client.get("/pets/nonexistent123/details", headers=auth_headers_user1)
+        assert response.status_code == 403
+        assert "permission" in response.json()["detail"].lower()
 
-#         assert response.status_code == 404
-#         assert "not found" in response.json()["detail"].lower()
+    @pytest.mark.asyncio
+    async def test_get_nonexistent_pet_details(self, async_client: AsyncClient, session_auth_headers_user1):
+        """Test getting details of non-existent pet"""
+        response = await async_client.get("/pets/nonexistent123/details", headers=session_auth_headers_user1)
 
-#     @pytest.mark.asyncio
-#     async def test_assign_pet_to_nonexistent_group(self, async_client: AsyncClient, auth_headers_user1):
-#         """Test assigning pet to non-existent group"""
-#         # Create a pet first
-#         create_response = await async_client.post(
-#             "/pets/create", headers=auth_headers_user1, json={"name": "Lost Pet", "pet_type": "cat"}
-#         )
-#         pet_id = create_response.json()["data"]["id"]
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"].lower()
 
-#         # Try to assign to non-existent group
-#         response = await async_client.post(
-#             f"/pets/{pet_id}/assign_group", headers=auth_headers_user1, json={"group_id": "nonexistent123"}
-#         )
+    @pytest.mark.asyncio
+    async def test_assign_pet_to_nonexistent_group(self, async_client: AsyncClient, session_auth_headers_user1):
+        """Test assigning pet to non-existent group"""
+        # Create a pet first
+        create_response = await async_client.post(
+            "/pets/create", headers=session_auth_headers_user1, json={"name": "Lost Pet", "pet_type": "cat"}
+        )
+        pet_id = create_response.json()["data"]["id"]
 
-#         assert response.status_code == 404
-#         assert "not found" in response.json()["detail"].lower()
+        # Try to assign to non-existent group
+        response = await async_client.post(
+            f"/pets/{pet_id}/assign_group", headers=session_auth_headers_user1, json={"group_id": "nonexistent123"}
+        )
+
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"].lower()
 
 
 # class TestCompletePetWorkflow:

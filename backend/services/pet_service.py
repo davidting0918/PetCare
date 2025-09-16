@@ -63,6 +63,14 @@ class PetService:
             HTTPException: If pet not found or user has no access
         """
 
+        # first check if pet exists
+        sql = f"""
+        select * from pets where id = '{pet_id}' and is_active = true
+        """
+        pet = await self.db.read_one(sql)
+        if not pet:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pet not found")
+
         sql = f"""
         select
             case
@@ -77,8 +85,13 @@ class PetService:
             gm.user_id = '{user_id}'
             and p.id = '{pet_id}'
             and p.is_active = true
+            and gm.is_active = true
         """
         permission = await self.db.read_one(sql)
+        if not permission:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="User doesn't have permission to this pet"
+            )
         return permission["user_permission"]
 
     async def _is_owner(self, pet_id: str, user_id: str) -> bool:
@@ -379,7 +392,10 @@ class PetService:
         """
         group_role = await self.db.read_one(sql)
 
-        if not group_role or group_role["role"] != "creator":
+        if not group_role:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
+
+        if group_role["role"] != "creator":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have permission to assign this pet to this group",
@@ -388,7 +404,7 @@ class PetService:
         # Update pet's group assignment
         sql = f"""
         UPDATE pets
-        SET group_id = '{request.group_id}''
+        SET group_id = '{request.group_id}'
         WHERE id = '{pet_id}'
         """
         await self.db.execute(sql)
@@ -405,11 +421,10 @@ class PetService:
         left join groups g on (p.group_id = g.id)
         where
             p.id = '{pet_id}'
-            and is_active = true
+            and p.is_active = true
         """
         info = await self.db.read_one(sql)
         info["user_role_in_group"] = group_role["role"]
-        info["assigned_at"] = dt.now()
         return GroupAssignmentInfo(**info)
 
     async def get_pet_current_group(self, pet_id: str, user_id: str) -> GroupAssignmentInfo:
@@ -443,7 +458,8 @@ class PetService:
         where
             p.id = '{pet_id}'
             and gm.user_id = '{user_id}'
-            and is_active = true
+            and p.is_active = true
+            and gm.is_active = true
         """
         info = await self.db.read_one(sql)
         return GroupAssignmentInfo(**info)

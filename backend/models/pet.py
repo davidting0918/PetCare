@@ -186,4 +186,3 @@ class GroupAssignmentInfo(BaseModel):
     group_id: Optional[str]
     group_name: Optional[str]
     user_role_in_group: Optional[str]  # "creator", "member", "viewer"
-    assigned_at: Optional[dt]
