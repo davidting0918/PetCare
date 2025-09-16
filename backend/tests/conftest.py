@@ -9,7 +9,6 @@ import asyncio
 import os
 import uuid
 from datetime import datetime as dt
-from datetime import timezone as tz
 from typing import AsyncGenerator, Dict
 
 import pytest
@@ -21,10 +20,11 @@ from httpx import AsyncClient
 os.environ["PYTEST_RUNNING"] = "1"
 os.environ["APP_ENV"] = "test"
 
-from backend.core.db_manager import DatabaseManager, close_database, init_database
+from backend.core.db_manager import DatabaseManager, close_database, get_db, init_database
 from backend.main import app
 from backend.models.auth import access_token_table, api_key_table
-from backend.models.group import group_member_table  # PostgreSQL
+from backend.models.group import group_invitation_table, group_member_table, group_table
+from backend.models.pet import pet_table
 from backend.models.user import user_table
 
 
@@ -59,9 +59,7 @@ async def test_db():
         group_table,
         group_invitation_table,
         group_member_table,
-        # Add other tables as they get migrated
-        # pet_table,
-        # pet_photo_table,
+        pet_table,
     ]
 
     try:
@@ -73,41 +71,221 @@ async def test_db():
     await close_database()
 
 
-@pytest_asyncio.fixture(autouse=True)
-async def clean_db(test_db):
-    """
-    Automatically clean database before and after each test.
+# ================== CLEANUP SYSTEM 1: PER-TEST CLEANING ==================
 
-    This fixture ensures each test starts with a clean database state
-    and cleans up after the test completes.
+
+@pytest_asyncio.fixture
+async def clean_db_per_test(test_db):
     """
-    # Clean before test
-    tables = [
-        user_table,
-        api_key_table,
-        access_token_table,
+    SYSTEM 1: Clean database between EACH test function.
+
+    Use this fixture explicitly in test classes that need full isolation:
+    - Preserves session-scoped users and API keys
+    - Cleans test-specific data (groups, pets, tokens) between each test
+    - Provides maximum test isolation but slower performance
+
+    Usage: Add as dependency to test class or individual tests
+    """
+    # Tables to clean BETWEEN tests (preserve session data)
+    test_data_tables = [
         group_table,
         group_invitation_table,
         group_member_table,
-        # Add other tables as they get migrated
-        # pet_table,
-        # pet_photo_table,
+        pet_table,
     ]
 
-    for table in tables:
+    # Clean test data before test
+    for table in test_data_tables:
         try:
             await test_db.execute(f"DELETE FROM {table}")
         except Exception as e:
             print(f"Warning: Error cleaning table {table}: {e}")
+
+    # Clean expired access tokens (but preserve session tokens)
+    try:
+        await test_db.execute(
+            f"""
+            DELETE FROM {access_token_table}
+            WHERE expires_at < CURRENT_TIMESTAMP
+        """
+        )
+    except Exception as e:
+        print(f"Warning: Error cleaning expired tokens: {e}")
 
     yield
 
-    # Clean after test
-    for table in tables:
+    # Clean test data after test (same as before)
+    for table in test_data_tables:
         try:
             await test_db.execute(f"DELETE FROM {table}")
         except Exception as e:
             print(f"Warning: Error cleaning table {table}: {e}")
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def auto_clean_per_test(request, test_db):
+    """
+    Auto-apply per-test cleaning for test classes marked with @pytest.mark.clean_per_test
+
+    Usage:
+    @pytest.mark.clean_per_test
+    class TestSomeFeature:
+        # Tests here will auto-clean between each test
+    """
+    # Check if the test is marked for per-test cleaning
+    if request.node.get_closest_marker("clean_per_test"):
+        # Apply the same logic as clean_db_per_test
+        test_data_tables = [
+            group_table,
+            group_invitation_table,
+            group_member_table,
+            pet_table,
+        ]
+
+        # Clean test data before test
+        for table in test_data_tables:
+            try:
+                await test_db.execute(f"DELETE FROM {table}")
+            except Exception as e:
+                print(f"Warning: Error cleaning table {table}: {e}")
+
+        # Clean expired access tokens
+        try:
+            await test_db.execute(
+                f"""
+                DELETE FROM {access_token_table}
+                WHERE expires_at < CURRENT_TIMESTAMP
+            """
+            )
+        except Exception as e:
+            print(f"Warning: Error cleaning expired tokens: {e}")
+
+        yield
+
+        # Clean test data after test
+        for table in test_data_tables:
+            try:
+                await test_db.execute(f"DELETE FROM {table}")
+            except Exception as e:
+                print(f"Warning: Error cleaning table {table}: {e}")
+    else:
+        # Just yield without cleaning
+        yield
+
+
+# ================== CLEANUP SYSTEM 2: SESSION-ONLY CLEANING ==================
+
+
+@pytest_asyncio.fixture(scope="session")
+async def clean_db_session_only():
+    """
+    SYSTEM 2: Clean database ONLY at session start and end.
+
+    Use this for test classes that want to preserve data across tests:
+    - Data persists between individual tests within the session
+    - Only cleans at the very beginning and end of the test session
+    - Faster performance but less test isolation
+    - Good for integration tests or related test sequences
+
+    Usage: This runs automatically at session scope
+    """
+    # Initialize database and clean at session start
+    await init_database(environment="test")
+    db = get_db()
+
+    session_tables = [
+        group_table,
+        group_invitation_table,
+        group_member_table,
+        pet_table,
+    ]
+
+    print("🧹 SESSION START: Cleaning test data tables...")
+    for table in session_tables:
+        try:
+            await db.execute(f"DELETE FROM {table}")
+            print(f"  ✅ Cleaned {table}")
+        except Exception as e:
+            print(f"  ⚠️  Error cleaning {table}: {e}")
+
+    yield
+
+    # Clean at session end
+    print("🧹 SESSION END: Cleaning test data tables...")
+    for table in session_tables:
+        try:
+            await db.execute(f"DELETE FROM {table}")
+            print(f"  ✅ Final cleanup {table}")
+        except Exception as e:
+            print(f"  ⚠️  Error in final cleanup {table}: {e}")
+
+
+@pytest_asyncio.fixture(scope="session", autouse=True)
+async def cleanup_session_data():
+    """
+    Clean up ALL data after the entire test session.
+    This ensures a completely clean state for the next test run.
+    Note: This cleans user/auth data, while clean_db_session_only handles test data.
+    """
+    yield  # Let all tests run first
+
+    # After all tests complete, clean everything including user data
+    await init_database(environment="test")
+    db = get_db()
+    all_tables = [
+        user_table,  # Clean user data at session end
+        api_key_table,  # Clean API keys at session end
+        access_token_table,  # Clean all tokens at session end
+        group_table,  # Final cleanup (also done by clean_db_session_only)
+        group_invitation_table,
+        group_member_table,
+        pet_table,
+    ]
+
+    print("🧹 Performing final session cleanup...")
+    for table in all_tables:
+        try:
+            result = await db.execute(f"DELETE FROM {table}")
+            print(f"  ✅ Cleaned {table}: {result}")
+        except Exception as e:
+            print(f"  ⚠️  Error cleaning {table}: {e}")
+
+
+# ================== USAGE EXAMPLES AND HELPERS ==================
+
+"""
+USAGE EXAMPLES:
+
+1. FOR TESTS THAT NEED FULL ISOLATION (each test starts fresh):
+
+   Method A - Using marker:
+   @pytest.mark.clean_per_test
+   class TestIsolatedFeature:
+       def test_something(self, async_client):
+           # This test starts with clean DB
+           pass
+
+   Method B - Using explicit fixture:
+   class TestIsolatedFeature:
+       def test_something(self, async_client, clean_db_per_test):
+           # This test starts with clean DB
+           pass
+
+2. FOR TESTS THAT SHARE DATA ACROSS THE SESSION (faster, data persists):
+
+   class TestIntegratedFeature:  # No marker, uses session-only cleaning
+       def test_step1(self, async_client):
+           # Create some data
+           pass
+
+       def test_step2(self, async_client):
+           # Data from test_step1 still exists
+           pass
+
+3. MIXED APPROACH:
+   - Mark specific test classes that need isolation
+   - Leave others unmarked for session-only cleaning
+"""
 
 
 @pytest_asyncio.fixture
@@ -271,7 +449,6 @@ class TestHelper:
             "created_at",
             "updated_at",
             "is_active",
-            "is_owned_by_user",
         ]
         for field in required_fields:
             assert field in pet_data, f"Missing required field: {field}"
@@ -283,72 +460,197 @@ def test_helper() -> TestHelper:
     return TestHelper()
 
 
-# User Authentication Fixtures for Group Testing
-@pytest_asyncio.fixture
-async def test_user1(test_api_key: Dict[str, str], async_client: AsyncClient) -> Dict[str, str]:
-    """Create test user 1 and return user info with JWT token"""
-    user_data = {"email": "testuser1@example.com", "name": "Test User 1", "pwd": "TestPassword123!"}
+# ================== SESSION-SCOPED TEST USERS (PERFORMANCE OPTIMIZED) ==================
 
-    # Create user
-    create_response = await async_client.post(
-        "/user/create",
-        headers={"Authorization": f"Bearer {test_api_key['auth_header']}", "Content-Type": "application/json"},
-        json=user_data,
-    )
-    assert create_response.status_code == 200
-    created_user = create_response.json()["data"]
 
-    # Login to get JWT token
-    login_response = await async_client.post(
-        "/auth/email/login", json={"email": user_data["email"], "pwd": user_data["pwd"]}
-    )
-    assert login_response.status_code == 200
-    token_data = login_response.json()["data"]
+@pytest_asyncio.fixture(scope="session")
+async def session_api_key() -> Dict[str, str]:
+    """
+    Create a session-wide API key that persists across all tests.
+    This reduces API key creation overhead.
+    """
 
-    return {
-        "id": created_user["id"],
-        "email": user_data["email"],
-        "name": user_data["name"],
-        "access_token": token_data["access_token"],
+    await init_database(environment="test")
+    db = get_db()
+    api_key = f"session_key_{str(uuid.uuid4())[:8]}"
+    api_secret = f"session_secret_{str(uuid.uuid4())[:8]}"
+
+    api_key_data = {
+        "api_key": api_key,
+        "api_secret": api_secret,
+        "name": "session_test_client",
+        "created_at": dt.now(),
+        "is_active": True,
     }
 
+    await db.insert_one(api_key_table, api_key_data)
+    print(f"✅ Session API key created: {api_key}")
 
-@pytest_asyncio.fixture
-async def test_user2(test_api_key: Dict[str, str], async_client: AsyncClient) -> Dict[str, str]:
-    """Create test user 2 and return user info with JWT token"""
-    user_data = {"email": "testuser2@example.com", "name": "Test User 2", "pwd": "TestPassword123!"}
-
-    # Create user
-    create_response = await async_client.post(
-        "/user/create",
-        headers={"Authorization": f"Bearer {test_api_key['auth_header']}", "Content-Type": "application/json"},
-        json=user_data,
-    )
-    assert create_response.status_code == 200
-    created_user = create_response.json()["data"]
-
-    # Login to get JWT token
-    login_response = await async_client.post(
-        "/auth/email/login", json={"email": user_data["email"], "pwd": user_data["pwd"]}
-    )
-    assert login_response.status_code == 200
-    token_data = login_response.json()["data"]
-
-    return {
-        "id": created_user["id"],
-        "email": user_data["email"],
-        "name": user_data["name"],
-        "access_token": token_data["access_token"],
+    yield {
+        "api_key": api_key,
+        "api_secret": api_secret,
+        "auth_header": f"{api_key}:{api_secret}",
+        "name": "session_test_client",
     }
 
+    # Cleanup after all tests
+    try:
+        await db.execute(f"DELETE FROM {api_key_table} WHERE api_key = '{api_key}'")
+        print(f"🧹 Session API key cleaned up: {api_key}")
+    except Exception as e:
+        print(f"⚠️  Failed to cleanup session API key: {e}")
+
+
+@pytest_asyncio.fixture(scope="session")
+async def session_users(session_api_key: Dict[str, str]) -> Dict[str, Dict[str, str]]:
+    """
+    Create session-wide test users that persist across all tests.
+    This dramatically improves test performance by avoiding repeated user creation.
+
+    Returns:
+        Dict with 'user1' and 'user2' keys containing user info and tokens
+    """
+    from httpx import AsyncClient
+
+    users_data = [
+        {"email": "session.user1@example.com", "name": "Session User 1", "pwd": "TestPassword123!", "key": "user1"},
+        {"email": "session.user2@example.com", "name": "Session User 2", "pwd": "TestPassword123!", "key": "user2"},
+        {"email": "session.user3@example.com", "name": "Session User 3", "pwd": "TestPassword123!", "key": "user3"},
+    ]
+
+    created_users = {}
+
+    async with AsyncClient(app=app, base_url="http://testserver") as client:
+        for user_data in users_data:
+            print(f"🏗️  Creating session user: {user_data['name']}")
+
+            # Create user
+            create_response = await client.post(
+                "/user/create",
+                headers={
+                    "Authorization": f"Bearer {session_api_key['auth_header']}",
+                    "Content-Type": "application/json",
+                },
+                json={"email": user_data["email"], "name": user_data["name"], "pwd": user_data["pwd"]},
+            )
+
+            if create_response.status_code != 200:
+                print(f"❌ Failed to create user: {create_response.text}")
+                continue
+
+            created_user = create_response.json()["data"]
+
+            # Login to get JWT token
+            login_response = await client.post(
+                "/auth/email/login", json={"email": user_data["email"], "pwd": user_data["pwd"]}
+            )
+
+            if login_response.status_code != 200:
+                print(f"❌ Failed to login user: {login_response.text}")
+                continue
+
+            token_data = login_response.json()["data"]
+
+            created_users[user_data["key"]] = {
+                "id": created_user["id"],
+                "email": user_data["email"],
+                "name": user_data["name"],
+                "pwd": user_data["pwd"],
+                "access_token": token_data["access_token"],
+            }
+
+            print(f"✅ Session user created: {user_data['name']} (ID: {created_user['id']})")
+
+    yield created_users
+
+    # Cleanup after all tests (optional - database cleanup handles this)
+    print("🧹 Session users will be cleaned up by database cleanup")
+
+
+@pytest_asyncio.fixture(scope="session")
+async def session_test_group(
+    session_auth_headers_user1, session_auth_headers_user2, session_auth_headers_user3, session_user3
+):
+    """user1 creates a group for pet sharing, user2 join as member, user3 join as viewer"""
+
+    async with AsyncClient(app=app, base_url="http://testserver") as client:
+        group_response = await client.post(
+            "/groups/create", headers=session_auth_headers_user1, json={"name": "Pet Care Team"}
+        )
+        assert group_response.status_code == 200
+        group_id = group_response.json()["data"]["id"]
+
+        invite_response = await client.post(f"/groups/{group_id}/invite", headers=session_auth_headers_user1)
+        assert invite_response.status_code == 200
+        invite_code = invite_response.json()["data"]["invite_code"]
+
+        join_response = await client.post(
+            "/groups/join", headers=session_auth_headers_user2, json={"invite_code": invite_code}
+        )
+        assert join_response.status_code == 200
+
+        invite_response = await client.post(f"/groups/{group_id}/invite", headers=session_auth_headers_user1)
+        assert invite_response.status_code == 200
+        invite_code = invite_response.json()["data"]["invite_code"]
+
+        join_response = await client.post(
+            "/groups/join", headers=session_auth_headers_user3, json={"invite_code": invite_code}
+        )
+        assert join_response.status_code == 200
+
+        # update user3 to viewer
+        update_response = await client.post(
+            f"/groups/{group_id}/update_role",
+            headers=session_auth_headers_user1,
+            json={"user_id": session_user3["id"], "new_role": "viewer"},
+        )
+        assert update_response.status_code == 200
+        return group_id
+
+
+@pytest_asyncio.fixture(scope="session")
+async def session_user1(session_users: Dict[str, Dict[str, str]]) -> Dict[str, str]:
+    """Get session user 1 info"""
+    return session_users["user1"]
+
+
+@pytest_asyncio.fixture(scope="session")
+async def session_user2(session_users: Dict[str, Dict[str, str]]) -> Dict[str, str]:
+    """Get session user 2 info"""
+    return session_users["user2"]
+
+
+@pytest_asyncio.fixture(scope="session")
+async def session_user3(session_users: Dict[str, Dict[str, str]]) -> Dict[str, str]:
+    """Get session user 3 info"""
+    return session_users["user3"]
+
+
+@pytest_asyncio.fixture(scope="session")
+async def session_auth_headers_user1(session_user1: Dict[str, str]) -> Dict[str, str]:
+    """Get auth headers for session user 1"""
+    return {"Authorization": f"Bearer {session_user1['access_token']}", "Content-Type": "application/json"}
+
+
+@pytest_asyncio.fixture(scope="session")
+async def session_auth_headers_user2(session_user2: Dict[str, str]) -> Dict[str, str]:
+    """Get auth headers for session user 2"""
+    return {"Authorization": f"Bearer {session_user2['access_token']}", "Content-Type": "application/json"}
+
+
+@pytest_asyncio.fixture(scope="session")
+async def session_auth_headers_user3(session_user3: Dict[str, str]) -> Dict[str, str]:
+    """Get auth headers for session user 3"""
+    return {"Authorization": f"Bearer {session_user3['access_token']}", "Content-Type": "application/json"}
+
 
 @pytest_asyncio.fixture
-async def auth_headers_user1(test_user1: Dict[str, str]) -> Dict[str, str]:
-    """Provide authenticated headers for test user 1"""
-    return {"Authorization": f"Bearer {test_user1['access_token']}", "Content-Type": "application/json"}
+async def test_user1(session_user1: Dict[str, str]) -> Dict[str, str]:
+    """DEPRECATED: Use session_user1 for better performance"""
+    return session_user1
 
 
 @pytest_asyncio.fixture
-async def auth_headers_user2(test_user2: Dict[str, str]) -> Dict[str, str]:
-    """Provide authenticated headers for test user 2"""
-    return {"Authorization": f"Bearer {test_user2['access_token']}", "Content-Type": "application/json"}
+async def test_user2(session_user2: Dict[str, str]) -> Dict[str, str]:
+    """DEPRECATED: Use session_user2 for better performance"""
+    return session_user2

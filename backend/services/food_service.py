@@ -1,31 +1,27 @@
+import base64
 import os
-import uuid
 from datetime import datetime as dt
 from datetime import timezone as tz
-from pathlib import Path
+
+# from pathlib import Path
 from typing import List, Optional
 
-import aiofiles
+# import aiofiles
 from fastapi import HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 
-from backend.core.database import MongoAsyncClient
-from backend.models.food import (  # Collections; Models; Enums; Request Models; Response Models
+from backend.core.db_manager import get_db
+from backend.models.food import (  # Tables; Models; Enums; Request Models; Response Models
     CreateFoodRequest,
     Food,
     FoodDetails,
     FoodInfo,
-    FoodPhoto,
-    FoodPhotoInfo,
     FoodSearchResult,
     FoodType,
     TargetPet,
     UpdateFoodRequest,
-    food_collection,
-    food_photo_collection,
+    food_table,
 )
-from backend.models.group import group_collection
-from backend.models.user import user_collection
 
 
 class FoodService:
@@ -41,11 +37,15 @@ class FoodService:
     """
 
     def __init__(self):
-        self.db = MongoAsyncClient()
         self.photo_storage_path = "backend/storage/food_photos"
 
         # Ensure photo storage directory exists
         os.makedirs(self.photo_storage_path, exist_ok=True)
+
+    @property
+    def db(self):
+        """Get database client from global manager"""
+        return get_db()
 
     # ================== Permission Helpers ==================
 
@@ -63,38 +63,29 @@ class FoodService:
         Raises:
             HTTPException: If group not found or user not a member
         """
-        group_dict = await self.db.find_one(group_collection, {"id": group_id, "is_active": True})
-        if not group_dict:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
-
-        # Check if user is in group's member list
-        if user_id not in group_dict.get("member_ids", []):
+        sql = f"""
+        select
+            gm.role
+        from group_members gm
+        where gm.group_id = '{group_id}' and gm.user_id = '{user_id}' and gm.is_active = true
+        """
+        role = await self.db.read_one(sql)
+        if not role:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You must be a member of this group to access its food database",
             )
-
-        # Determine role within group
-        if group_dict["creator_id"] == user_id:
-            return "creator"
-        else:
-            return "member"
+        return role["role"]
 
     async def _can_view_food(self, group_id: str, user_id: str) -> bool:
         """Check if user can view foods in the group (all roles can view)"""
-        try:
-            await self._get_user_group_role(group_id, user_id)
-            return True
-        except HTTPException:
-            return False
+        role = await self._get_user_group_role(group_id, user_id)
+        return role in ["creator", "member", "viewer"]
 
     async def _can_manage_food(self, group_id: str, user_id: str) -> bool:
         """Check if user can modify foods in the group (creator and member only)"""
-        try:
-            role = await self._get_user_group_role(group_id, user_id)
-            return role in ["creator", "member"]
-        except HTTPException:
-            return False
+        role = await self._get_user_group_role(group_id, user_id)
+        return role in ["creator", "member"]
 
     async def _get_food_with_permission_check(
         self, food_id: str, user_id: str, require_manage: bool = False
@@ -113,7 +104,8 @@ class FoodService:
         Raises:
             HTTPException: If food not found or user lacks permissions
         """
-        food_dict = await self.db.find_one(food_collection, {"id": food_id, "is_active": True})
+        query = "SELECT * FROM foods WHERE id = $1 AND is_active = TRUE"
+        food_dict = await self.db.read_one(query, food_id)
         if not food_dict:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Food not found")
 
@@ -158,21 +150,15 @@ class FoodService:
             )
 
         # Validate nutritional percentages sum (allowing for some tolerance)
-        total_percentage = (
-            request.protein_percentage
-            + request.fat_percentage
-            + request.moisture_percentage
-            + request.carbohydrate_percentage
-        )
+        total_percentage = request.protein + request.fat + request.moisture + request.carbohydrate
         if total_percentage > 105:  # Allow 5% tolerance for measurement variations
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Nutritional percentages cannot exceed 100% (total: {:.1f}%)".format(total_percentage),
             )
 
-        # Generate food ID and timestamps
-        food_id = str(uuid.uuid4())[:8]
-        current_time = int(dt.now(tz.utc).timestamp())
+        # Generate food ID using a short, URL-safe base64 encoding of random bytes (8 chars)
+        food_id = base64.urlsafe_b64encode(os.urandom(6)).decode("utf-8").rstrip("=")
 
         # Create food
         food = Food(
@@ -182,22 +168,24 @@ class FoodService:
             product_name=request.product_name,
             food_type=request.food_type,
             target_pet=request.target_pet,
-            unit_weight_g=request.unit_weight_g,
-            calories_per_100g=request.calories_per_100g,
-            protein_percentage=request.protein_percentage,
-            fat_percentage=request.fat_percentage,
-            moisture_percentage=request.moisture_percentage,
-            carbohydrate_percentage=request.carbohydrate_percentage,
-            created_at=current_time,
-            updated_at=current_time,
+            unit_weight=request.unit_weight,
+            calories=request.calories,
+            protein=request.protein,
+            fat=request.fat,
+            moisture=request.moisture,
+            carbohydrate=request.carbohydrate,
+            created_at=dt.now(),
+            updated_at=dt.now(),
+            photo_url="",
             is_active=True,
         )
 
         # Save to database
-        await self.db.insert_one(food_collection, food.model_dump())
+        await self.db.insert_one(food_table, food.model_dump())
 
         # Get group info for response
-        group_dict = await self.db.find_one(group_collection, {"id": group_id})
+        sql = f"""select * from groups where id = '{group_id}'"""
+        group_dict = await self.db.read_one(sql)
         group_name = group_dict["name"] if group_dict else "Unknown Group"
 
         # Calculate calories per unit for convenience
@@ -209,17 +197,18 @@ class FoodService:
             product_name=food.product_name,
             food_type=food.food_type,
             target_pet=food.target_pet,
-            unit_weight_g=food.unit_weight_g,
-            calories_per_100g=food.calories_per_100g,
-            protein_percentage=food.protein_percentage,
-            fat_percentage=food.fat_percentage,
-            moisture_percentage=food.moisture_percentage,
-            carbohydrate_percentage=food.carbohydrate_percentage,
+            unit_weight=food.unit_weight,
+            calories=food.calories,
+            protein=food.protein,
+            fat=food.fat,
+            moisture=food.moisture,
+            carbohydrate=food.carbohydrate,
             created_at=food.created_at,
             updated_at=food.updated_at,
+            photo_url=food.photo_url,
             group_id=food.group_id,
             group_name=group_name,
-            has_photo=False,
+            has_photo=food.photo_url is not None,
             calories_per_unit=calories_per_unit,
         )
 
@@ -246,45 +235,21 @@ class FoodService:
                 detail="You don't have permission to view this group's food database",
             )
 
-        # Build query filter
-        query_filter = {"group_id": group_id, "is_active": True}
+        sql = f"""
+        select
+            *
+        from foods f
+        join groups g on f.group_id = g.id
+        where
+            f.group_id = '{group_id}'
+            and f.is_active = true
+            and g.is_active = true
+            {f'and f.food_type = {food_type.value}' if food_type else ''}
+            {f'and f.target_pet = {target_pet.value}' if target_pet else ''}
+        """
+        food_records = await self.db.read(sql)
 
-        if food_type:
-            query_filter["food_type"] = food_type.value
-        if target_pet:
-            query_filter["target_pet"] = target_pet.value
-
-        # Get foods from database
-        foods = await self.db.find_many(food_collection, query_filter)
-
-        # Get group name for response
-        group_dict = await self.db.find_one(group_collection, {"id": group_id})
-        group_name = group_dict["name"] if group_dict else "Unknown Group"
-
-        food_infos = []
-        for food_dict in foods:
-            food = Food(**food_dict)
-
-            # Check if photo exists
-            photo_exists = await self.db.find_one(food_photo_collection, {"id": food.id, "is_active": True}) is not None
-
-            food_infos.append(
-                FoodInfo(
-                    id=food.id,
-                    brand=food.brand,
-                    product_name=food.product_name,
-                    food_type=food.food_type,
-                    target_pet=food.target_pet,
-                    unit_weight_g=food.unit_weight_g,
-                    calories_per_100g=food.calories_per_100g,
-                    protein_percentage=food.protein_percentage,
-                    fat_percentage=food.fat_percentage,
-                    has_photo=photo_exists,
-                    created_at=food.created_at,
-                    group_id=food.group_id,
-                    group_name=group_name,
-                )
-            )
+        food_infos = [FoodInfo(**food_dict) for food_dict in food_records]
 
         # Sort by brand and product name
         food_infos.sort(key=lambda f: (f.brand.lower(), f.product_name.lower()))
@@ -303,38 +268,28 @@ class FoodService:
         Returns:
             FoodDetails: Comprehensive food information
         """
-        # Check permissions and get food
-        food, role = await self._get_food_with_permission_check(food_id, user_id, require_manage=False)
 
-        # Get group information
-        group_dict = await self.db.find_one(group_collection, {"id": food.group_id})
-        group_name = group_dict["name"] if group_dict else "Unknown Group"
-
-        # Check if photo exists
-        photo_exists = await self.db.find_one(food_photo_collection, {"id": food.id, "is_active": True}) is not None
+        sql = f"""
+        select
+            f.*,
+            g.name as group_name,
+        from foods f
+        join group_members gm using (group_id)
+        join groups g on (g.id = f.group_id)
+        where
+            f.id = '{food_id}'
+            and f.is_active = true
+            and gm.user_id = '{user_id}'
+            and g.is_active = true
+        """
+        food_details = await self.db.read_one(sql)
+        if not food_details:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Food not found")
 
         # Calculate calories per unit
-        calories_per_unit = (food.calories_per_100g * food.unit_weight_g) / 100
-
-        return FoodDetails(
-            id=food.id,
-            brand=food.brand,
-            product_name=food.product_name,
-            food_type=food.food_type,
-            target_pet=food.target_pet,
-            unit_weight_g=food.unit_weight_g,
-            calories_per_100g=food.calories_per_100g,
-            protein_percentage=food.protein_percentage,
-            fat_percentage=food.fat_percentage,
-            moisture_percentage=food.moisture_percentage,
-            carbohydrate_percentage=food.carbohydrate_percentage,
-            created_at=food.created_at,
-            updated_at=food.updated_at,
-            group_id=food.group_id,
-            group_name=group_name,
-            has_photo=photo_exists,
-            calories_per_unit=calories_per_unit,
-        )
+        calories_per_unit = (food_details["calories"] * food_details["unit_weight"]) / 100
+        food_details["calories_per_unit"] = calories_per_unit
+        return FoodDetails(**food_details)
 
     async def update_food(self, food_id: str, request: UpdateFoodRequest, user_id: str) -> FoodDetails:
         """
@@ -408,8 +363,22 @@ class FoodService:
                     ),
                 )
 
-        # Update food
-        await self.db.update_one(food_collection, {"id": food_id}, update_data)
+        # Update food in PostgreSQL
+        if update_data:  # Only update if there are changes
+            set_clauses = []
+            params = []
+            param_count = 0
+
+            for field, value in update_data.items():
+                param_count += 1
+                set_clauses.append(f"{field} = ${param_count}")
+                params.append(value)
+
+            param_count += 1
+            update_query = f"UPDATE foods SET {', '.join(set_clauses)} WHERE id = ${param_count}"
+            params.append(food_id)
+
+            await self.db.execute(update_query, *params)
 
         # Return updated food details
         return await self.get_food_details(food_id, user_id)
@@ -430,9 +399,9 @@ class FoodService:
         food, role = await self._get_food_with_permission_check(food_id, user_id, require_manage=True)
 
         # Soft delete food
-        await self.db.update_one(
-            food_collection, {"id": food_id}, {"is_active": False, "updated_at": int(dt.now(tz.utc).timestamp())}
-        )
+        current_time = int(dt.now(tz.utc).timestamp())
+        delete_query = "UPDATE foods SET is_active = FALSE, updated_at = $1 WHERE id = $2"
+        await self.db.execute(delete_query, current_time, food_id)
 
         return {"message": f"Food '{food.brand} - {food.product_name}' has been removed from the group database"}
 
@@ -467,31 +436,38 @@ class FoodService:
                 detail="You don't have permission to search this group's food database",
             )
 
-        # Build query filter
-        query_filter = {"group_id": group_id, "is_active": True}
+        # Build PostgreSQL query with text search and optional filters
+        conditions = ["group_id = $1", "is_active = TRUE"]
+        params = [group_id]
+        param_count = 1
+
+        # Add text search condition (case-insensitive LIKE search)
+        param_count += 1
+        keyword_search = f"%{keyword.lower()}%"
+        conditions.append(f"(LOWER(brand) LIKE ${param_count} OR LOWER(product_name) LIKE ${param_count})")
+        params.append(keyword_search)
 
         if food_type:
-            query_filter["food_type"] = food_type.value
+            param_count += 1
+            conditions.append(f"food_type = ${param_count}")
+            params.append(food_type.value)
+
         if target_pet:
-            query_filter["target_pet"] = target_pet.value
+            param_count += 1
+            conditions.append(f"target_pet = ${param_count}")
+            params.append(target_pet.value)
 
-        # Add text search using MongoDB regex (case-insensitive)
-        keyword_regex = {"$regex": keyword, "$options": "i"}
-        query_filter["$or"] = [{"brand": keyword_regex}, {"product_name": keyword_regex}]
-
-        # Get matching foods
-        foods = await self.db.find_many(food_collection, query_filter)
+        query = f"SELECT * FROM foods WHERE {' AND '.join(conditions)}"
+        food_records = await self.db.read(query, *params)
 
         # Get group name for response
-        group_dict = await self.db.find_one(group_collection, {"id": group_id})
+        group_query = "SELECT name FROM groups WHERE id = $1"
+        group_dict = await self.db.read_one(group_query, group_id)
         group_name = group_dict["name"] if group_dict else "Unknown Group"
 
         search_results = []
-        for food_dict in foods:
+        for food_dict in food_records:
             food = Food(**food_dict)
-
-            # Check if photo exists
-            photo_exists = await self.db.find_one(food_photo_collection, {"id": food.id, "is_active": True}) is not None
 
             search_results.append(
                 FoodSearchResult(
@@ -500,9 +476,9 @@ class FoodService:
                     product_name=food.product_name,
                     food_type=food.food_type,
                     target_pet=food.target_pet,
-                    unit_weight_g=food.unit_weight_g,
-                    calories_per_100g=food.calories_per_100g,
-                    has_photo=photo_exists,
+                    unit_weight=food.unit_weight,
+                    calories=food.calories,
+                    has_photo=food.photo_url is not None,
                     group_id=food.group_id,
                     group_name=group_name,
                 )
@@ -520,7 +496,7 @@ class FoodService:
 
     # ================== Photo Management ==================
 
-    async def upload_food_photo(self, food_id: str, file: UploadFile, user_id: str) -> FoodPhotoInfo:
+    async def upload_food_photo(self, food_id: str, file: UploadFile, user_id: str) -> dict:
         """
         Upload or update a photo for a food item.
         Only creators and members can upload photos.
@@ -533,70 +509,72 @@ class FoodService:
         Returns:
             FoodPhotoInfo: Photo information
         """
+        return
         # Check permissions and get food
-        food, role = await self._get_food_with_permission_check(food_id, user_id, require_manage=True)
+        # food, role = await self._get_food_with_permission_check(food_id, user_id, require_manage=True)
 
-        # Validate file type
-        if not file.content_type or not file.content_type.startswith("image/"):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only image files are allowed")
+        # # Validate file type
+        # if not file.content_type or not file.content_type.startswith("image/"):
+        #     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only image files are allowed")
 
-        # Validate file size (max 5MB for food photos)
-        if file.size and file.size > 5 * 1024 * 1024:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File size must be less than 5MB")
+        # # Validate file size (max 5MB for food photos)
+        # if file.size and file.size > 5 * 1024 * 1024:
+        #     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File size must be less than 5MB")
 
-        # Generate file path using food_id as filename for simplified storage
-        file_extension = Path(file.filename).suffix if file.filename else ".jpg"
-        filename = f"{food_id}{file_extension}"
-        file_path = os.path.join(self.photo_storage_path, filename)
+        # # Generate file path using food_id as filename for simplified storage
+        # file_extension = Path(file.filename).suffix if file.filename else ".jpg"
+        # filename = f"{food_id}{file_extension}"
+        # file_path = os.path.join(self.photo_storage_path, filename)
 
-        try:
-            # Save file to storage
-            async with aiofiles.open(file_path, "wb") as f:
-                content = await file.read()
-                await f.write(content)
+        # try:
+        #     # Save file to storage
+        #     async with aiofiles.open(file_path, "wb") as f:
+        #         content = await file.read()
+        #         await f.write(content)
 
-            # Get file size
-            file_size = len(content)
+        #     # Get file size
+        #     file_size = len(content)
 
-            # Remove old photo if exists
-            await self._remove_old_photo(food_id)
+        #     # Remove old photo if exists
+        #     await self._remove_old_photo(food_id)
 
-            # Create photo record
-            photo = FoodPhoto(
-                id=food_id,  # Use food_id as photo_id for simplified 1:1 relationship
-                filename=file.filename or f"food_photo{file_extension}",
-                file_path=file_path,
-                file_size=file_size,
-                content_type=file.content_type,
-                uploaded_by=user_id,
-                uploaded_at=int(dt.now(tz.utc).timestamp()),
-                is_active=True,
-            )
+        #     # Create photo record
+        #     photo = FoodPhoto(
+        #         id=food_id,  # Use food_id as photo_id for simplified 1:1 relationship
+        #         filename=file.filename or f"food_photo{file_extension}",
+        #         file_path=file_path,
+        #         file_size=file_size,
+        #         content_type=file.content_type,
+        #         uploaded_by=user_id,
+        #         uploaded_at=int(dt.now(tz.utc).timestamp()),
+        #         is_active=True,
+        #     )
 
-            # Save photo record
-            await self.db.insert_one(food_photo_collection, photo.model_dump())
+        #     # Save photo record
+        #     await self.db.insert_one(food_photo_table, photo.model_dump())
 
-            # Get uploader name
-            uploader_dict = await self.db.find_one(user_collection, {"id": user_id})
-            uploader_name = uploader_dict["name"] if uploader_dict else "Unknown"
+        #     # Get uploader name
+        #     uploader_query = "SELECT name FROM users WHERE id = $1"
+        #     uploader_dict = await self.db.read_one(uploader_query, user_id)
+        #     uploader_name = uploader_dict["name"] if uploader_dict else "Unknown"
 
-            return FoodPhotoInfo(
-                id=photo.id,  # Same as food_id
-                filename=photo.filename,
-                file_size=photo.file_size,
-                content_type=photo.content_type,
-                uploaded_by=photo.uploaded_by,
-                uploaded_by_name=uploader_name,
-                uploaded_at=photo.uploaded_at,
-            )
+        #     return FoodPhotoInfo(
+        #         id=photo.id,  # Same as food_id
+        #         filename=photo.filename,
+        #         file_size=photo.file_size,
+        #         content_type=photo.content_type,
+        #         uploaded_by=photo.uploaded_by,
+        #         uploaded_by_name=uploader_name,
+        #         uploaded_at=photo.uploaded_at,
+        #     )
 
-        except Exception as e:
-            # Clean up file if database operation fails
-            if os.path.exists(file_path):
-                os.remove(file_path)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to upload photo: {str(e)}"
-            )
+        # except Exception as e:
+        #     # Clean up file if database operation fails
+        #     if os.path.exists(file_path):
+        #         os.remove(file_path)
+        #     raise HTTPException(
+        #         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to upload photo: {str(e)}"
+        #     )
 
     async def get_food_photo(self, food_id: str, user_id: str) -> FileResponse:
         """
@@ -609,26 +587,28 @@ class FoodService:
         Returns:
             FileResponse: Photo file response
         """
+        return
         # Get photo record
-        photo_dict = await self.db.find_one(food_photo_collection, {"id": food_id, "is_active": True})
-        if not photo_dict:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo not found")
+        # photo_query = "SELECT * FROM food_photos WHERE id = $1 AND is_active = TRUE"
+        # photo_dict = await self.db.read_one(photo_query, food_id)
+        # if not photo_dict:
+        #     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo not found")
 
-        photo = FoodPhoto(**photo_dict)
+        # photo = FoodPhoto(**photo_dict)
 
-        # Check food access permissions (photo.id is the food_id)
-        await self._get_food_with_permission_check(photo.id, user_id, require_manage=False)
+        # # Check food access permissions (photo.id is the food_id)
+        # await self._get_food_with_permission_check(photo.id, user_id, require_manage=False)
 
-        # Check if file exists
-        if not os.path.exists(photo.file_path):
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo file not found")
+        # # Check if file exists
+        # if not os.path.exists(photo.file_path):
+        #     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo file not found")
 
-        return FileResponse(
-            path=photo.file_path,
-            media_type=photo.content_type,
-            filename=photo.filename,
-            headers={"Cache-Control": "public, max-age=3600"},  # 1 hour cache
-        )
+        # return FileResponse(
+        #     path=photo.file_path,
+        #     media_type=photo.content_type,
+        #     filename=photo.filename,
+        #     headers={"Cache-Control": "public, max-age=3600"},  # 1 hour cache
+        # )
 
     async def delete_food_photo(self, food_id: str, user_id: str) -> dict:
         """
@@ -641,28 +621,31 @@ class FoodService:
         Returns:
             dict: Success confirmation
         """
+        return
         # Check permissions and get food
-        food, role = await self._get_food_with_permission_check(food_id, user_id, require_manage=True)
+        # food, role = await self._get_food_with_permission_check(food_id, user_id, require_manage=True)
 
-        # Remove photo
-        await self._remove_old_photo(food_id)
+    #     # Remove photo
+    #     await self._remove_old_photo(food_id)
 
-        return {"message": f"Photo for food '{food.brand} - {food.product_name}' has been deleted successfully"}
+    #     return {"message": f"Photo for food '{food.brand} - {food.product_name}' has been deleted successfully"}
 
-    async def _remove_old_photo(self, food_id: str):
-        """Helper method to remove old photo files and records"""
-        try:
-            # Get photo record
-            photo_dict = await self.db.find_one(food_photo_collection, {"id": food_id})
-            if photo_dict:
-                photo = FoodPhoto(**photo_dict)
+    # async def _remove_old_photo(self, food_id: str):
+    #     """Helper method to remove old photo files and records"""
+    #     try:
+    #         # Get photo record
+    #         photo_query = "SELECT * FROM food_photos WHERE id = $1"
+    #         photo_dict = await self.db.read_one(photo_query, food_id)
+    #         if photo_dict:
+    #             photo = FoodPhoto(**photo_dict)
 
-                # Remove file if exists
-                if os.path.exists(photo.file_path):
-                    os.remove(photo.file_path)
+    #             # Remove file if exists
+    #             if os.path.exists(photo.file_path):
+    #                 os.remove(photo.file_path)
 
-                # Delete photo record
-                await self.db.delete_one(food_photo_collection, {"id": food_id})
-        except Exception:
-            # Don't fail the main operation if cleanup fails
-            pass
+    #             # Delete photo record
+    #             delete_query = "DELETE FROM food_photos WHERE id = $1"
+    #             await self.db.execute(delete_query, food_id)
+    #     except Exception:
+    #         # Don't fail the main operation if cleanup fails
+    #         pass

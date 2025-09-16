@@ -3,13 +3,12 @@ from typing import Optional
 
 from pydantic import BaseModel, EmailStr
 
-user_collection = "users"
-user_table = "users"  # For PostgreSQL compatibility
+user_table = "users"
 
 
 class User(BaseModel):
     id: str
-    google_id: Optional[str] = ""
+    google_id: Optional[str] = None
     email: EmailStr
     picture: Optional[str] = ""
     hashed_pwd: str  # if login with google, then pwd default will be hashed google id

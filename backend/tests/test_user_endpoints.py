@@ -163,23 +163,3 @@ class TestUserEndpointsIntegration:
         assert duplicate_response.status_code == status.HTTP_400_BAD_REQUEST
         error_data = duplicate_response.json()
         assert "User already exists" in error_data["detail"]
-
-    @pytest.mark.asyncio
-    async def test_database_cleanup_between_tests(self, test_db):
-        """
-        Verify that database is properly cleaned between tests.
-
-        This test should run with a clean database state.
-        """
-
-        # Verify all test tables are empty
-        user_count_result = await test_db.read(f"SELECT COUNT(*) as count FROM {user_table}")
-        user_count = user_count_result[0]["count"] if user_count_result else 0
-
-        token_count_result = await test_db.read(f"SELECT COUNT(*) as count FROM {access_token_table}")
-        token_count = token_count_result[0]["count"] if token_count_result else 0
-
-        assert user_count == 0, f"Expected 0 users, found {user_count}"
-        assert token_count == 0, f"Expected 0 tokens, found {token_count}"
-
-        print("✅ Database cleanup verification passed")

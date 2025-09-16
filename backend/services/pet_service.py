@@ -1,7 +1,6 @@
 import os
 import uuid
 from datetime import datetime as dt
-from datetime import timezone as tz
 from pathlib import Path
 from typing import List
 
@@ -9,22 +8,18 @@ import aiofiles
 from fastapi import HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 
-from backend.core.database import MongoAsyncClient
-from backend.models.group import group_collection
-from backend.models.pet import (  # Collections; Models; Request Models; Response Models
+from backend.core.db_manager import get_db
+from backend.models.pet import (  # Tables; Models; Request Models; Response Models
     AssignPetToGroupRequest,
     CreatePetRequest,
     GroupAssignmentInfo,
     Pet,
     PetDetails,
     PetInfo,
-    PetPhoto,
-    PetPhotoInfo,
     UpdatePetRequest,
-    pet_collection,
-    pet_photo_collection,
+    pet_table,
 )
-from backend.models.user import user_collection
+from backend.models.user import user_table
 from backend.services.group_service import GroupService
 
 
@@ -40,16 +35,20 @@ class PetService:
     """
 
     def __init__(self):
-        self.db = MongoAsyncClient()
         self.group_service = GroupService()
         self.photo_storage_path = "backend/storage/pet_photos"
 
         # Ensure photo storage directory exists
         os.makedirs(self.photo_storage_path, exist_ok=True)
 
+    @property
+    def db(self):
+        """Get database client from global manager"""
+        return get_db()
+
     # ================== Permission Helpers ==================
 
-    async def _get_user_pet_permission(self, pet_id: str, user_id: str) -> tuple[Pet, str]:
+    async def _get_user_pet_permission(self, pet_id: str, user_id: str) -> str:
         """
         Determine user's permission level for a specific pet.
 
@@ -63,56 +62,48 @@ class PetService:
         Raises:
             HTTPException: If pet not found or user has no access
         """
-        # Get pet information
-        pet_dict = await self.db.find_one(pet_collection, {"id": pet_id, "is_active": True})
-        if not pet_dict:
+
+        # first check if pet exists
+        sql = f"""
+        select * from pets where id = '{pet_id}' and is_active = true
+        """
+        pet = await self.db.read_one(sql)
+        if not pet:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pet not found")
 
-        pet = Pet(**pet_dict)
-
-        # Owner has full permissions
-        if pet.owner_id == user_id:
-            return pet, "owner"
-
-        # If pet not assigned to any group, only owner can access
-        if not pet.group_id:
+        sql = f"""
+        select
+            case
+                when p.owner_id = '{user_id}' then 'owner'
+                else gm.role
+            end as user_permission
+        from
+            pets p
+        left join group_members gm
+                using (group_id)
+        where
+            gm.user_id = '{user_id}'
+            and p.id = '{pet_id}'
+            and p.is_active = true
+            and gm.is_active = true
+        """
+        permission = await self.db.read_one(sql)
+        if not permission:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="You don't have permission to access this pet"
+                status_code=status.HTTP_403_FORBIDDEN, detail="User doesn't have permission to this pet"
             )
+        return permission["user_permission"]
 
-        # Check group membership and role
-        try:
-            group_dict = await self.db.find_one(group_collection, {"id": pet.group_id, "is_active": True})
-            if not group_dict:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pet's group not found")
+    async def _is_owner(self, pet_id: str, user_id: str) -> bool:
+        permission = await self._get_user_pet_permission(pet_id, user_id)
+        return permission in ["owner"]
 
-            # Check if user is in group's member list
-            if user_id not in group_dict.get("member_ids", []):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN, detail="You don't have permission to access this pet"
-                )
+    async def _can_modify_pet(self, pet_id: str, user_id: str) -> bool:
+        permission = await self._get_user_pet_permission(pet_id, user_id)
+        return permission in ["owner", "creator", "member"]
 
-            # Determine role within group
-            if group_dict["creator_id"] == user_id:
-                return pet, "creator"
-            else:
-                # For now, all non-creator members have "member" permission
-                # Future: could add viewer role logic here
-                return pet, "member"
-
-        except HTTPException:
-            raise
-        except Exception:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error checking pet permissions"
-            )
-
-    async def _can_modify_pet(self, pet: Pet, user_id: str, permission: str) -> bool:
-        """Check if user can modify pet based on ownership and permission level"""
-        return pet.owner_id == user_id or permission in ["owner", "creator"]
-
-    async def _can_view_pet(self, permission: str) -> bool:
-        """Check if user can view pet based on permission level"""
+    async def _can_view_pet(self, pet_id: str, user_id: str) -> bool:
+        permission = await self._get_user_pet_permission(pet_id, user_id)
         return permission in ["owner", "creator", "member", "viewer"]
 
     # ================== Core Pet Management ==================
@@ -131,7 +122,15 @@ class PetService:
         """
         # Generate pet ID and timestamps
         pet_id = str(uuid.uuid4())[:8]
-        current_time = int(dt.now(tz.utc).timestamp())
+        current_time = dt.now()
+
+        # get user info
+        sql = f"""
+        select * from {user_table} where id = '{owner_id}'
+        """
+        owner_dict = await self.db.read_one(sql)
+        if not owner_dict:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Owner not found")
 
         # Create pet
         pet = Pet(
@@ -148,7 +147,7 @@ class PetService:
             microchip_id=request.microchip_id,
             daily_calorie_target=request.daily_calorie_target,
             owner_id=owner_id,
-            group_id=None,  # Initially not assigned to any group
+            group_id=owner_dict["personal_group_id"],
             created_at=current_time,
             updated_at=current_time,
             is_active=True,
@@ -156,19 +155,7 @@ class PetService:
         )
 
         # Save to database
-        await self.db.insert_one(pet_collection, pet.model_dump())
-
-        # Get owner info for response
-        owner_dict = await self.db.find_one(user_collection, {"id": owner_id})
-        owner_name = owner_dict["name"] if owner_dict else "Unknown"
-
-        # Calculate age if birth date provided
-        age_months = None
-        if pet.birth_date:
-            birth_dt = dt.fromtimestamp(pet.birth_date, tz.utc)
-            current_dt = dt.now(tz.utc)
-            age_months = int((current_dt - birth_dt).days / 30.44)  # Average days per month
-
+        await self.db.insert_one(pet_table, pet.model_dump())
         return PetDetails(
             id=pet.id,
             name=pet.name,
@@ -176,7 +163,7 @@ class PetService:
             breed=pet.breed,
             gender=pet.gender,
             birth_date=pet.birth_date,
-            age_months=age_months,
+            age=pet.age,
             current_weight_kg=pet.current_weight_kg,
             target_weight_kg=pet.target_weight_kg,
             height_cm=pet.height_cm,
@@ -184,13 +171,13 @@ class PetService:
             microchip_id=pet.microchip_id,
             daily_calorie_target=pet.daily_calorie_target,
             owner_id=pet.owner_id,
-            owner_name=owner_name,
+            owner_name=owner_dict["name"],
             group_id=pet.group_id,
-            group_name=None,
+            group_name=owner_dict["name"],
             created_at=pet.created_at,
             updated_at=pet.updated_at,
+            is_active=pet.is_active,
             notes=pet.notes,
-            is_owned_by_user=True,
             user_permission="owner",
         )
 
@@ -205,85 +192,33 @@ class PetService:
         Returns:
             List[PetInfo]: List of accessible pets with permission context
         """
-        accessible_pets = []
 
-        # Get user's own pets (including unassigned ones)
-        owned_pets = await self.db.find_many(pet_collection, {"owner_id": user_id, "is_active": True})
-        for pet_dict in owned_pets:
-            pet = Pet(**pet_dict)
-
-            # Get group info if assigned
-            group_name = None
-            if pet.group_id:
-                group_dict = await self.db.find_one(group_collection, {"id": pet.group_id})
-                group_name = group_dict["name"] if group_dict else None
-
-            # Get owner name
-            owner_dict = await self.db.find_one(user_collection, {"id": pet.owner_id})
-            owner_name = owner_dict["name"] if owner_dict else "Unknown"
-
-            accessible_pets.append(
-                PetInfo(
-                    id=pet.id,
-                    name=pet.name,
-                    pet_type=pet.pet_type,
-                    breed=pet.breed,
-                    gender=pet.gender,
-                    current_weight_kg=pet.current_weight_kg,
-                    owner_id=pet.owner_id,
-                    owner_name=owner_name,
-                    group_id=pet.group_id,
-                    group_name=group_name,
-                    created_at=pet.created_at,
-                    is_owned_by_user=True,
-                    user_permission="owner",
-                )
-            )
-
-        # Get pets from groups user belongs to (excluding own pets)
-        user_groups = await self.group_service.get_user_groups(user_id)
-
-        for group_info in user_groups:
-            # Get group details to find member pets
-            group_dict = await self.db.find_one(group_collection, {"id": group_info.id})
-            if not group_dict:
-                continue
-
-            # Find pets assigned to this group (excluding user's own pets)
-            group_pets = await self.db.find_many(pet_collection, {"group_id": group_info.id, "is_active": True})
-
-            for pet_dict in group_pets:
-                pet = Pet(**pet_dict)
-
-                # Get owner name
-                owner_dict = await self.db.find_one(user_collection, {"id": pet.owner_id})
-                owner_name = owner_dict["name"] if owner_dict else "Unknown"
-
-                # Determine permission level
-                permission = "creator" if group_dict["creator_id"] == user_id else "member"
-
-                accessible_pets.append(
-                    PetInfo(
-                        id=pet.id,
-                        name=pet.name,
-                        pet_type=pet.pet_type,
-                        breed=pet.breed,
-                        gender=pet.gender,
-                        current_weight_kg=pet.current_weight_kg,
-                        owner_id=pet.owner_id,
-                        owner_name=owner_name,
-                        group_id=pet.group_id,
-                        group_name=group_info.name,
-                        created_at=pet.created_at,
-                        is_owned_by_user=False,
-                        user_permission=permission,
-                    )
-                )
+        sql = f"""
+        select
+            p.*,
+            g.name as group_name,
+            u.name as owner_name,
+            gm.role as user_permission
+        from group_members gm
+        left join groups g on (gm.group_id = g.id)
+        left join pets p using (group_id)
+        left join users u on (p.owner_id = u.id)
+        where
+            gm.user_id = '{user_id}'
+            and gm.is_active = true
+            and p.is_active = true
+            and g.is_active = true
+        """
+        # get all accessible pets
+        pets = await self.db.read(sql)
+        if not pets:
+            return []
+        pets = [PetInfo(**pet) for pet in pets]
 
         # Sort by creation date (newest first)
-        accessible_pets.sort(key=lambda p: p.created_at, reverse=True)
+        pets.sort(key=lambda p: p.created_at, reverse=True)
 
-        return accessible_pets
+        return pets
 
     async def get_pet_details(self, pet_id: str, user_id: str) -> PetDetails:
         """
@@ -297,53 +232,27 @@ class PetService:
             PetDetails: Comprehensive pet information
         """
         # Check permissions and get pet
-        pet, permission = await self._get_user_pet_permission(pet_id, user_id)
-
-        if not await self._can_view_pet(permission):
+        if not await self._can_view_pet(pet_id, user_id):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="You don't have permission to view this pet"
             )
 
-        # Get owner and group information
-        owner_dict = await self.db.find_one(user_collection, {"id": pet.owner_id})
-        owner_name = owner_dict["name"] if owner_dict else "Unknown"
-
-        group_name = None
-        if pet.group_id:
-            group_dict = await self.db.find_one(group_collection, {"id": pet.group_id})
-            group_name = group_dict["name"] if group_dict else None
-
-        # Calculate age if birth date provided
-        age_months = None
-        if pet.birth_date:
-            birth_dt = dt.fromtimestamp(pet.birth_date, tz.utc)
-            current_dt = dt.now(tz.utc)
-            age_months = int((current_dt - birth_dt).days / 30.44)
-
-        return PetDetails(
-            id=pet.id,
-            name=pet.name,
-            pet_type=pet.pet_type,
-            breed=pet.breed,
-            gender=pet.gender,
-            birth_date=pet.birth_date,
-            age_months=age_months,
-            current_weight_kg=pet.current_weight_kg,
-            target_weight_kg=pet.target_weight_kg,
-            height_cm=pet.height_cm,
-            is_spayed=pet.is_spayed,
-            microchip_id=pet.microchip_id,
-            daily_calorie_target=pet.daily_calorie_target,
-            owner_id=pet.owner_id,
-            owner_name=owner_name,
-            group_id=pet.group_id,
-            group_name=group_name,
-            created_at=pet.created_at,
-            updated_at=pet.updated_at,
-            notes=pet.notes,
-            is_owned_by_user=(pet.owner_id == user_id),
-            user_permission=permission,
-        )
+        sql = f"""
+        select
+            p.*,
+            u.name as owner_name,
+            g.name as group_name
+        from pets p
+        left join users u on (p.owner_id = u.id)
+        left join groups g on (p.group_id = g.id)
+        where
+            p.id = '{pet_id}' and p.is_active = true
+        """
+        pet = await self.db.read_one(sql)
+        if not pet:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pet not found")
+        pet["age"] = None if not pet["birth_date"] else int((dt.now() - pet["birth_date"]).days / 365.25)
+        return PetDetails(**pet)
 
     async def update_pet(self, pet_id: str, request: UpdatePetRequest, user_id: str) -> PetDetails:
         """
@@ -358,15 +267,13 @@ class PetService:
             PetDetails: Updated pet information
         """
         # Check permissions and get pet
-        pet, permission = await self._get_user_pet_permission(pet_id, user_id)
-
-        if not await self._can_modify_pet(pet, user_id, permission):
+        if not await self._can_modify_pet(pet_id, user_id):
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="Only pet owners can modify pet information"
+                status_code=status.HTTP_403_FORBIDDEN, detail="You don't have permission to modify this pet"
             )
 
         # Prepare update data
-        update_data = {"updated_at": int(dt.now(tz.utc).timestamp())}
+        update_data = {}
 
         # Update only provided fields
         if request.name is not None:
@@ -393,7 +300,21 @@ class PetService:
             update_data["notes"] = request.notes
 
         # Update pet
-        await self.db.update_one(pet_collection, {"id": pet_id}, update_data)
+        # Build SQL update query using direct value assignment (no param index)
+        update_fields = []
+        for key, value in update_data.items():
+            # For string values, add single quotes; for others, use as is
+            if isinstance(value, str):
+                update_fields.append(f"{key} = '{value}'")
+            else:
+                update_fields.append(f"{key} = {value}")
+
+        sql = f"""
+        UPDATE pets
+        SET {', '.join(update_fields)}
+        WHERE id = '{pet_id}'
+        """
+        await self.db.execute(sql)
 
         # Return updated pet details
         return await self.get_pet_details(pet_id, user_id)
@@ -409,24 +330,18 @@ class PetService:
         Returns:
             dict: Success confirmation
         """
-        # Check permissions and get pet
-        pet, permission = await self._get_user_pet_permission(pet_id, user_id)
+        # only owner can delete
+        if not await self._is_owner(pet_id, user_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="You don't have permission to delete this pet"
+            )
 
-        if pet.owner_id != user_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only pet owners can delete their pets")
+        sql = f"""
+        delete from pets where id = '{pet_id}'
+        """
+        await self.db.execute(sql)
 
-        # Soft delete pet
-        await self.db.update_one(
-            pet_collection,
-            {"id": pet_id},
-            {
-                "is_active": False,
-                "updated_at": int(dt.now(tz.utc).timestamp()),
-                "group_id": None,  # Remove from group assignment
-            },
-        )
-
-        return {"message": f"Pet '{pet.name}' has been deleted successfully"}
+        return {"message": "Pet has been deleted successfully"}
 
     # ================== Group Assignment Management ==================
 
@@ -446,41 +361,55 @@ class PetService:
             GroupAssignmentInfo: Updated assignment information
         """
         # Check pet ownership
-        pet, permission = await self._get_user_pet_permission(pet_id, user_id)
-
-        if pet.owner_id != user_id:
+        if not await self._is_owner(pet_id, user_id):
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="Only pet owners can assign pets to groups"
+                status_code=status.HTTP_403_FORBIDDEN, detail="You don't have permission to assign this pet to a group"
             )
 
-        # Validate target group and user's creator role
-        target_group_dict = await self.db.find_one(group_collection, {"id": request.group_id, "is_active": True})
+        # Check the group's creator is the user_id
+        sql = f"""
+        select
+            gm.group_id,
+            gm.role
+        from group_members gm
+        where group_id = '{request.group_id}' and user_id = '{user_id}' and is_active = true
+        """
+        group_role = await self.db.read_one(sql)
 
-        if not target_group_dict:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Target group not found")
+        if not group_role:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
 
-        # Check if user is creator of target group
-        if target_group_dict["creator_id"] != user_id:
+        if group_role["role"] != "creator":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="You must be the creator of the target group to assign pets to it",
+                detail="You don't have permission to assign this pet to this group",
             )
 
         # Update pet's group assignment
-        current_time = int(dt.now(tz.utc).timestamp())
-        await self.db.update_one(
-            pet_collection, {"id": pet_id}, {"group_id": request.group_id, "updated_at": current_time}
-        )
+        sql = f"""
+        UPDATE pets
+        SET group_id = '{request.group_id}'
+        WHERE id = '{pet_id}'
+        """
+        await self.db.execute(sql)
 
-        return GroupAssignmentInfo(
-            pet_id=pet.id,
-            pet_name=pet.name,
-            group_id=request.group_id,
-            group_name=target_group_dict["name"],
-            member_count=len(target_group_dict.get("member_ids", [])),
-            user_role_in_group="creator",
-            assigned_at=current_time,
-        )
+        # get pet info
+        sql = f"""
+        select
+            p.id as pet_id,
+            p.name as pet_name,
+            g.id as group_id,
+            g.name as group_name
+        from
+            pets p
+        left join groups g on (p.group_id = g.id)
+        where
+            p.id = '{pet_id}'
+            and p.is_active = true
+        """
+        info = await self.db.read_one(sql)
+        info["user_role_in_group"] = group_role["role"]
+        return GroupAssignmentInfo(**info)
 
     async def get_pet_current_group(self, pet_id: str, user_id: str) -> GroupAssignmentInfo:
         """
@@ -494,40 +423,36 @@ class PetService:
             GroupAssignmentInfo: Current assignment information
         """
         # Check permissions and get pet
-        pet, permission = await self._get_user_pet_permission(pet_id, user_id)
-
-        if not await self._can_view_pet(permission):
+        if not await self._can_view_pet(pet_id, user_id):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="You don't have permission to view this pet"
             )
 
-        # Get group information if assigned
-        group_name = None
-        member_count = None
-        user_role = None
-
-        if pet.group_id:
-            group_dict = await self.db.find_one(group_collection, {"id": pet.group_id})
-            if group_dict:
-                group_name = group_dict["name"]
-                member_count = len(group_dict.get("member_ids", []))
-                user_role = "creator" if group_dict["creator_id"] == user_id else "member"
-
-        return GroupAssignmentInfo(
-            pet_id=pet.id,
-            pet_name=pet.name,
-            group_id=pet.group_id,
-            group_name=group_name,
-            member_count=member_count,
-            user_role_in_group=user_role,
-            assigned_at=None,  # Would need to track assignment history to provide this
-        )
+        sql = f"""
+        select
+            p.id as pet_id,
+            p.name as pet_name,
+            g.id as group_id,
+            g.name as group_name,
+            gm.role as user_role_in_group
+        from
+            pets p
+        left join groups g on (p.group_id = g.id)
+        left join group_members gm on (p.group_id = gm.group_id)
+        where
+            p.id = '{pet_id}'
+            and gm.user_id = '{user_id}'
+            and p.is_active = true
+            and gm.is_active = true
+        """
+        info = await self.db.read_one(sql)
+        return GroupAssignmentInfo(**info)
 
     # ================== Group-Based Pet Viewing ==================
 
     # ================== Photo Management ==================
 
-    async def upload_pet_photo(self, pet_id: str, file: UploadFile, user_id: str) -> PetPhotoInfo:
+    async def upload_pet_photo(self, pet_id: str, file: UploadFile, user_id: str) -> bool:
         """
         Upload or update a photo for a pet. Only owners can upload photos.
 
@@ -537,12 +462,10 @@ class PetService:
             user_id: User uploading the photo
 
         Returns:
-            PetPhotoInfo: Photo information
+            bool: True if photo uploaded successfully
         """
         # Check permissions and get pet
-        pet, permission = await self._get_user_pet_permission(pet_id, user_id)
-
-        if pet.owner_id != user_id:
+        if not await self._is_owner(pet_id, user_id):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only pet owners can upload photos")
 
         # Validate file type
@@ -554,11 +477,11 @@ class PetService:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File size must be less than 10MB")
 
         # Generate unique photo ID and file path (secure random filename)
-        import secrets
 
         file_extension = Path(file.filename).suffix if file.filename else ".jpg"
-        secure_filename = f"{secrets.token_urlsafe(16)}{file_extension}"
-        file_path = os.path.join(self.photo_storage_path, secure_filename)
+        file_name = f"{pet_id}{file_extension}"
+        file_path = os.path.join(self.photo_storage_path, file_name)
+        photo_url = f"/static/pet_photos/{file_name}"
 
         try:
             # Save file to storage
@@ -566,46 +489,20 @@ class PetService:
                 content = await file.read()
                 await f.write(content)
 
-            # Get file size
-            file_size = len(content)
+            sql = f"""
+            UPDATE pets
+            SET photo_url = '{photo_url}'
+            WHERE id = '{pet_id}'
+            """
+            await self.db.execute(sql)
 
-            await self._remove_old_photo(pet.id)
-
-            # Create photo record
-            photo = PetPhoto(
-                pet_id=pet_id,
-                filename=secure_filename,  # Store the secure filename for URL generation
-                file_path=file_path,
-                file_size=file_size,
-                content_type=file.content_type,
-                uploaded_by=user_id,
-                uploaded_at=int(dt.now(tz.utc).timestamp()),
-                is_active=True,
-            )
-
-            # Save photo record
-            await self.db.insert_one(pet_photo_collection, photo.model_dump())
-
-            # Update pet with photo reference
-            await self.db.update_one(pet_collection, {"id": pet_id}, {"updated_at": int(dt.now(tz.utc).timestamp())})
-
-            # Get uploader name
-            uploader_dict = await self.db.find_one(user_collection, {"id": user_id})
-            uploader_name = uploader_dict["name"] if uploader_dict else "Unknown"
-
-            # Generate static URL for the photo
-            photo_url = f"/static/pet_photos/{secure_filename}"
-
-            return PetPhotoInfo(
-                pet_id=photo.pet_id,
-                filename=secure_filename,  # Use secure filename consistently
-                file_size=photo.file_size,
-                content_type=photo.content_type,
-                uploaded_by=photo.uploaded_by,
-                uploaded_by_name=uploader_name,
-                uploaded_at=photo.uploaded_at,
-                photo_url=photo_url,
-            )
+            return {
+                "photo_url": photo_url,
+                "photo_name": file_name,
+                "photo_size": file.size,
+                "photo_type": file.content_type,
+                "photo_uploaded_at": int(dt.now().timestamp()),
+            }
 
         except Exception as e:
             # Clean up file if database operation fails
@@ -626,74 +523,26 @@ class PetService:
         Returns:
             FileResponse: Photo file response
         """
-        # Get photo record
-        photo_dict = await self.db.find_one(pet_photo_collection, {"id": pet_id, "is_active": True})
-        if not photo_dict:
+        if await self._can_view_pet(pet_id, user_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="You don't have permission to view this photo"
+            )
+
+        # get photo url
+        sql = f"""
+        select photo_url from pets where id = '{pet_id}' and is_active = true
+        """
+        photo_url = await self.db.read_one(sql)
+        if not photo_url:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo not found")
 
-        photo = PetPhoto(**photo_dict)
-
-        # Check pet access permissions
-        try:
-            pet, permission = await self._get_user_pet_permission(photo.pet_id, user_id)
-
-            if not await self._can_view_pet(permission):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN, detail="You don't have permission to view this photo"
-                )
-        except HTTPException:
-            raise
-
         # Check if file exists
-        if not os.path.exists(photo.file_path):
+        if not os.path.exists(photo_url):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo file not found")
 
         return FileResponse(
-            path=photo.file_path,
-            media_type=photo.content_type,
-            filename=photo.filename,
+            path=photo_url,
+            media_type=photo_url.split(".")[-1],
+            filename=photo_url.split("/")[-1].split(".")[0],
             headers={"Cache-Control": "public, max-age=3600"},  # 1 hour cache
         )
-
-    async def delete_pet_photo(self, pet_id: str, user_id: str) -> dict:
-        """
-        Delete pet photo. Only owners can delete photos.
-
-        Args:
-            pet_id: Pet to delete photo from
-            user_id: User requesting the deletion
-
-        Returns:
-            dict: Success confirmation
-        """
-        # Check permissions and get pet
-        pet, permission = await self._get_user_pet_permission(pet_id, user_id)
-
-        if pet.owner_id != user_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only pet owners can delete photos")
-
-        # Remove photo
-        await self._remove_old_photo(pet.id)
-
-        # Update pet to remove photo reference
-        await self.db.update_one(pet_collection, {"id": pet_id}, {"updated_at": int(dt.now(tz.utc).timestamp())})
-
-        return {"message": f"Photo for pet '{pet.name}' has been deleted successfully"}
-
-    async def _remove_old_photo(self, pet_id: str):
-        """Helper method to remove old photo files and records"""
-        try:
-            # Get photo record
-            photo_dict = await self.db.find_one(pet_photo_collection, {"id": pet_id})
-            if photo_dict:
-                photo = PetPhoto(**photo_dict)
-
-                # Remove file if exists
-                if os.path.exists(photo.file_path):
-                    os.remove(photo.file_path)
-
-                # Mark photo as inactive
-                await self.db.delete_one(pet_photo_collection, {"id": pet_id})
-        except Exception:
-            # Don't fail the main operation if cleanup fails
-            pass

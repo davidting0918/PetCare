@@ -9,9 +9,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import HTTPException, status
 
 from backend.core.db_manager import get_db
-
-# MongoDB no longer needed - using PostgreSQL via db_manager
-from backend.models.group import (  # Collections; Models; Request Models; Response Models; PostgreSQL table names
+from backend.models.group import (
     CreateGroupRequest,
     Group,
     GroupInfo,
@@ -81,7 +79,9 @@ class GroupService:
     async def _get_user_membership(self, group_id: str, user_id: str) -> Optional[GroupMember]:
         """Get user's membership info if they are a member of the group"""
 
-        sql = f"""select * from {group_member_table} where group_id = '{group_id}' and user_id = '{user_id}' and is_active = True"""
+        sql = f"""
+        select * from {group_member_table}
+        where group_id = '{group_id}' and user_id = '{user_id}' and is_active = True"""
         membership_dict = await self.db.read_one(sql)
         return GroupMember(**membership_dict) if membership_dict else None
 
@@ -170,19 +170,18 @@ class GroupService:
         if target_membership.role == GroupRole.CREATOR:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot change the creator's role")
 
-        current_time = int(dt.now(tz.utc).timestamp())
         # Update the member's role
-        await self.db.update_one(
-            group_member_collection,
-            {"group_id": group_id, "user_id": request.user_id, "is_active": True},
-            {"role": request.new_role.value, "updated_at": current_time},
-        )
+        sql = f"""
+        update {group_member_table}
+        set role = '{request.new_role.value}'
+        where group_id = '{group_id}' and user_id = '{request.user_id}'
+        """
+        await self.db.execute(sql)
 
         return {
             "user_id": request.user_id,
             "new_role": request.new_role.value,
             "updated_by": actor_user_id,
-            "updated_at": current_time,
         }
 
     async def remove_member(self, group_id: str, request: RemoveMemberRequest, actor_user_id: str) -> Dict[str, Any]:
@@ -217,19 +216,19 @@ class GroupService:
         if target_membership.role == GroupRole.CREATOR:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot remove the group creator")
 
-        current_timestamp = int(dt.now(tz.utc).timestamp())
         # Deactivate the membership
-        await self.db.update_one(
-            group_member_collection,
-            {"group_id": group_id, "user_id": request.user_id, "is_active": True},
-            {"is_active": False, "updated_at": int(dt.now(tz.utc).timestamp())},
-        )
+        sql = f"""
+        update {group_member_table}
+        set is_active = False
+        where group_id = '{group_id}' and user_id = '{request.user_id}'
+        """
+        await self.db.execute(sql)
 
         return {
             "removed_group_id": group_id,
             "removed_user_id": request.user_id,
             "removed_by": actor_user_id,
-            "updated_at": current_timestamp,
+            "updated_at": dt.now(),
         }
 
     # ================== Core Functions ==================
@@ -256,7 +255,6 @@ class GroupService:
         group_id = self._generate_group_id()
         current_time = dt.now()
 
-        # Create group without members (they will be managed via GroupMember collection)
         group = Group(
             id=group_id,
             name=request.name,
@@ -302,8 +300,8 @@ class GroupService:
         # Generate invitation ID
         invitation_id = self._generate_invitation_id()  # Reuse the same secure ID generator
         invite_code = secrets.token_urlsafe(8)  # Shorter, user-friendly code
-        current_time = int(dt.now(tz.utc).timestamp())
-        expires_at = int((dt.now(tz.utc) + td(days=7)).timestamp())  # 7 days expiry
+        current_time = dt.now()
+        expires_at = dt.now() + td(days=7)  # 7 days expiry
 
         invitation = GroupInvitation(
             id=invitation_id,
@@ -316,10 +314,11 @@ class GroupService:
         )
 
         # Save invitation
-        await self.db.insert_one(group_invitation_collection, invitation.model_dump())
+        await self.db.insert_one(group_invitation_table, invitation.model_dump())
 
         # Get group and user info for response
-        group_dict = await self.db.find_one(group_table, {"id": group_id})
+        sql = f"""select * from {group_table} where id = '{group_id}'"""
+        group_dict = await self.db.read_one(sql)
 
         return {
             "invitation": InvitationInfo(
@@ -345,17 +344,17 @@ class GroupService:
         Returns:
             GroupInfo: Information about the joined group
         """
-        current_time = int(dt.now(tz.utc).timestamp())
+        current_time = dt.now()
 
         # Find valid invitation
-        invitation_dict = await self.db.find_one(
-            group_invitation_collection,
-            {
-                "invite_code": request.invite_code,
-                "status": InvitationStatus.PENDING.value,
-                "expires_at": {"$gt": current_time},
-            },
-        )
+        sql = f"""
+        select * from {group_invitation_table}
+        where
+            invite_code = '{request.invite_code}'
+            and status = '{InvitationStatus.PENDING.value}'
+            and expires_at > '{current_time}'
+        """
+        invitation_dict = await self.db.read_one(sql)
 
         if not invitation_dict:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invalid or expired invitation code")
@@ -374,24 +373,25 @@ class GroupService:
         await self._add_user_to_group(group_id=group_id, user_id=user_id, role=GroupRole.MEMBER, invited_by=invited_by)
 
         # Update invitation status
-        await self.db.update_one(
-            group_invitation_collection,
-            {"id": invitation_dict["id"]},
-            {
-                "status": InvitationStatus.ACCEPTED.value,
-                "accepted_by": user_id,
-                "updated_at": current_time,
-            },
-        )
+        sql = f"""
+        update
+            {group_invitation_table}
+        set status = '{InvitationStatus.ACCEPTED.value}', accepted_by = '{user_id}', updated_at = '{current_time}'
+        where id = '{invitation_dict['id']}'
+        """
+        await self.db.execute(sql)
 
         # Get updated group info
-        group_dict = await self.db.find_one(group_table, {"id": group_id, "is_active": True})
+        sql = f"""select * from {group_table} where id = '{group_id}' and is_active = True"""
+        group_dict = await self.db.read_one(sql)
+
         if not group_dict:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to join group")
-        await self.db.update_one(group_table, {"id": group_id}, {"updated_at": current_time})
 
-        # Calculate member count from GroupMember collection
-        member_count = await self.db.count_documents(group_member_collection, {"group_id": group_id, "is_active": True})
+        sql = f"""
+        select count(*) from {group_member_table} where group_id = '{group_id}' and is_active = True
+        """
+        member_count = await self.db.read_one(sql)
 
         return GroupInfo(
             id=group_dict["id"],
@@ -399,7 +399,7 @@ class GroupService:
             creator_id=group_dict["creator_id"],
             created_at=group_dict["created_at"],
             updated_at=group_dict["updated_at"],
-            member_count=member_count,
+            member_count=member_count["count"],
             is_creator=(user_id == group_dict["creator_id"]),
             is_active=group_dict["is_active"],
         )
@@ -409,7 +409,6 @@ class GroupService:
     async def get_user_groups(self, user_id: str) -> List[Dict[str, Any]]:
         """
         Get all groups where user is an active member.
-        Uses efficient batch queries for optimal performance.
 
         Args:
             user_id: User ID to get groups for
@@ -417,25 +416,34 @@ class GroupService:
         Returns:
             List[Dict[str, Any]]
         """
-        memberships = await self.db.find_many(group_member_collection, {"user_id": user_id, "is_active": True})
+        sql = f"""
+        select
+            {group_member_table}.group_id,
+            {group_table}.name as group_name,
+            user_id,
+            {user_table}.name as user_name,
+            {user_table}.email as user_email,
+            {group_member_table}.role,
+            {group_member_table}.created_at,
+            {group_member_table}.updated_at,
+            {group_member_table}.invited_by,
+            u2.name as invited_by_name,
+            {group_member_table}.is_active
+        from
+            {group_member_table}
+        left join {group_table} on ({group_member_table}.group_id = {group_table}.id)
+        left join {user_table} on ({group_member_table}.user_id = {user_table}.id)
+        left join {user_table} u2 on ({group_member_table}.invited_by = {user_table}.id)
+        where
+            {group_member_table}.user_id = '{user_id}'
+            and {group_member_table}.is_active = true
+            and {group_table}.is_active = true
+            and {user_table}.is_active = true
+        """
+        memberships = await self.db.read(sql)
 
-        output = []
-        for membership in memberships:
-            group = await self.db.find_one(group_table, {"id": membership["group_id"], "is_active": True})
-            if not group:
-                continue
-            output.append(
-                {
-                    "id": group["id"],
-                    "name": group["name"],
-                    "creator_id": group["creator_id"],
-                    "created_at": group["created_at"],
-                    "updated_at": group["updated_at"],
-                    "role": membership["role"],
-                    "is_active": group["is_active"],
-                }
-            )
-        return output
+        members = [GroupMemberInfo(**membership) for membership in memberships]
+        return members
 
     async def get_group_members(self, group_id: str, user_id: str) -> List[GroupMemberInfo]:
         """
@@ -455,52 +463,24 @@ class GroupService:
                 status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to view group members"
             )
 
-        # Verify group exists
-        group_dict = await self.db.find_one(group_table, {"id": group_id, "is_active": True})
-        if not group_dict:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
+        sql = f"""
+        select
+            {group_member_table}.*,
+            {user_table}.name as user_name,
+            {user_table}.email as user_email,
+            {group_table}.name as group_name
+        from {group_member_table}
+        left join {user_table} on ({group_member_table}.user_id = {user_table}.id)
+        left join {group_table} on ({group_member_table}.group_id = {group_table}.id)
+        where
+            {group_member_table}.group_id = '{group_id}'
+            and {group_member_table}.is_active = True
+            and {user_table}.is_active = True
+            and {group_table}.is_active = True
+        """
+        members = await self.db.read(sql)
 
-        # Get all active memberships for this group
-        memberships = await self.db.find_many(group_member_collection, {"group_id": group_id, "is_active": True})
-
-        if not memberships:
-            return []
-
-        # Extract user IDs from memberships
-        member_user_ids = [membership["user_id"] for membership in memberships]
-
-        # Get user information for all members
-        users = await self.db.find_many(user_table, {"id": {"$in": member_user_ids}})
-
-        # Create lookup dictionary for user data
-        user_lookup = {user["id"]: user for user in users}
-
-        # Build member info list with enhanced data
-        members = []
-        for membership in memberships:
-            user_data = user_lookup.get(membership["user_id"])
-            if not user_data:  # Skip if user not found or inactive
-                continue
-
-            # Get inviter name if available
-            invited_by_name = None
-            if membership.get("invited_by"):
-                inviter = user_lookup.get(membership["invited_by"])
-                invited_by_name = inviter["name"] if inviter else None
-
-            members.append(
-                GroupMemberInfo(
-                    user_id=user_data["id"],
-                    user_name=user_data["name"],
-                    user_email=user_data["email"],
-                    role=GroupRole(membership["role"]),
-                    created_at=membership["created_at"],
-                    updated_at=membership["updated_at"],
-                    invited_by=membership.get("invited_by"),
-                    invited_by_name=invited_by_name,
-                    is_active=membership["is_active"],
-                )
-            )
+        members = [GroupMemberInfo(**member) for member in members]
 
         # Sort members: CREATOR first, then by join date
         members.sort(
@@ -526,47 +506,4 @@ class GroupService:
         Returns:
             List[Dict]: Pets assigned to the group with owner and permission context
         """
-        # Check group membership
-        group_dict = await self.db.find_one(group_table, {"id": group_id, "is_active": True})
-        if not group_dict:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
-
-        if user_id not in group_dict.get("member_ids", []):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="You must be a member of this group to view its pets"
-            )
-
-        # Determine user's role in group
-        user_role = "creator" if group_dict["creator_id"] == user_id else "member"
-
-        # Get pets assigned to this group from pet collection
-        pets = await self.db.find_many(pet_collectionpet_table, {"group_id": group_id, "is_active": True})
-
-        pet_infos = []
-        for pet_dict in pets:
-            # Get owner name
-            owner_dict = await self.db.find_one(user_table, {"id": pet_dict["owner_id"]})
-            owner_name = owner_dict["name"] if owner_dict else "Unknown"
-
-            # Build pet info response
-            pet_info = {
-                "id": pet_dict["id"],
-                "name": pet_dict["name"],
-                "pet_type": pet_dict["pet_type"],
-                "breed": pet_dict.get("breed"),
-                "gender": pet_dict["gender"],
-                "current_weight_kg": pet_dict.get("current_weight_kg"),
-                "owner_id": pet_dict["owner_id"],
-                "owner_name": owner_name,
-                "group_id": pet_dict["group_id"],
-                "group_name": group_dict["name"],
-                "created_at": pet_dict["created_at"],
-                "is_owned_by_user": (pet_dict["owner_id"] == user_id),
-                "user_permission": "owner" if pet_dict["owner_id"] == user_id else user_role,
-            }
-            pet_infos.append(pet_info)
-
-        # Sort by pet name
-        pet_infos.sort(key=lambda p: p["name"].lower())
-
-        return pet_infos
+        return

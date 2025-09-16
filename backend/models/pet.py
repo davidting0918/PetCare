@@ -1,13 +1,11 @@
 from datetime import datetime as dt
-from datetime import timezone as tz
 from enum import Enum
 from typing import Optional
 
 from pydantic import BaseModel, Field
 
-# Database collections
-pet_collection = "pets"
-pet_photo_collection = "pet_photos"
+pet_table = "pets"
+pet_photo_table = "pet_photos"
 
 
 class PetType(str, Enum):
@@ -64,9 +62,10 @@ class Pet(BaseModel):
     group_id: Optional[str] = None  # Group currently assigned to
 
     # Metadata
-    created_at: int
-    updated_at: int
+    created_at: dt
+    updated_at: dt
     is_active: bool = True
+    photo_url: Optional[str] = ""
     notes: Optional[str] = Field(None, max_length=1000)
 
     @property
@@ -74,25 +73,9 @@ class Pet(BaseModel):
         if not self.birth_date:
             return None
 
-        birth_dt = dt.fromtimestamp(self.birth_date, tz.utc)
-        current_dt = dt.now(tz.utc)
+        birth_dt = self.birth_date
+        current_dt = dt.now()
         return int((current_dt - birth_dt).days / 365.25)
-
-
-class PetPhoto(BaseModel):
-    """
-    Pet photo information and metadata.
-    Stores reference information for pet photos in local storage.
-    """
-
-    pet_id: str
-    filename: str  # Original filename for user reference
-    file_path: str  # Path to file in local storage
-    file_size: int  # Size in bytes
-    content_type: str  # MIME type (image/jpeg, image/png, etc.)
-    uploaded_by: str  # User who uploaded the photo
-    uploaded_at: int
-    is_active: bool = True
 
 
 # ================== Request Models ==================
@@ -109,7 +92,7 @@ class CreatePetRequest(BaseModel):
     current_weight_kg: Optional[float] = Field(None, ge=0.1, le=200)
     target_weight_kg: Optional[float] = Field(None, ge=0.1, le=200)
     height_cm: Optional[float] = Field(None, ge=1, le=200)
-    is_spayed: Optional[bool] = None
+    is_spayed: Optional[bool] = False
     microchip_id: Optional[str] = Field(None, max_length=50)
     daily_calorie_target: Optional[int] = Field(None, ge=50, le=5000)
     notes: Optional[str] = Field(None, max_length=1000)
@@ -153,9 +136,10 @@ class PetInfo(BaseModel):
     owner_name: str
     group_id: Optional[str]
     group_name: Optional[str]
-    created_at: int
-    is_owned_by_user: bool  # True if current user is the owner
-    user_permission: str  # "owner", "member", "viewer"
+    created_at: dt
+    updated_at: dt
+    is_active: bool
+    user_permission: Optional[str] = None
 
 
 class PetDetails(BaseModel):
@@ -170,7 +154,7 @@ class PetDetails(BaseModel):
 
     # Physical Characteristics
     birth_date: Optional[int]
-    age_months: Optional[int]  # Calculated from birth_date
+    age: Optional[float]
     current_weight_kg: Optional[float]
     target_weight_kg: Optional[float]
     height_cm: Optional[float]
@@ -189,13 +173,10 @@ class PetDetails(BaseModel):
     group_name: Optional[str]
 
     # Metadata
-    created_at: int
-    updated_at: int
+    created_at: dt
+    updated_at: dt
+    is_active: bool
     notes: Optional[str]
-
-    # User Context
-    is_owned_by_user: bool
-    user_permission: str  # "owner", "member", "viewer"
 
 
 class GroupAssignmentInfo(BaseModel):
@@ -205,19 +186,4 @@ class GroupAssignmentInfo(BaseModel):
     pet_name: str
     group_id: Optional[str]
     group_name: Optional[str]
-    member_count: Optional[int]
     user_role_in_group: Optional[str]  # "creator", "member", "viewer"
-    assigned_at: Optional[int]
-
-
-class PetPhotoInfo(BaseModel):
-    """Pet photo metadata information"""
-
-    pet_id: str
-    filename: str
-    file_size: int
-    content_type: str
-    uploaded_by: str
-    uploaded_by_name: str
-    uploaded_at: int
-    photo_url: str  # URL to access the photo via static mount

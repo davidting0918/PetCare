@@ -70,11 +70,10 @@ jobs:
       env:
         PYTEST_RUNNING: 1
         APP_ENV: test
-        MONGO_URL: ${{ secrets.MONGO_URL }}
-        MONGO_TEST_DB_NAME: ${{ secrets.MONGO_TEST_DB_NAME }}
         JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
         GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
         GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+        POSTGRES_TEST: ${{ secrets.POSTGRES_TEST }}
       run: |
         python -m pytest backend/tests/test_user_endpoints.py -v --tb=short --cov=. --cov-report=xml --cov-report=term-missing
 
@@ -82,13 +81,23 @@ jobs:
       env:
         PYTEST_RUNNING: 1
         APP_ENV: test
-        MONGO_URL: ${{ secrets.MONGO_URL }}
-        MONGO_TEST_DB_NAME: ${{ secrets.MONGO_TEST_DB_NAME }}
         JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
         GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
         GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+        POSTGRES_TEST: ${{ secrets.POSTGRES_TEST }}
       run: |
         python -m pytest backend/tests/test_group_endpoints.py -v --tb=short --cov=. --cov-report=xml --cov-report=term-missing
+
+    - name: Run Pet Tests
+      env:
+        PYTEST_RUNNING: 1
+        APP_ENV: test
+        JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
+        GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+        GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+        POSTGRES_TEST: ${{ secrets.POSTGRES_TEST }}
+      run: |
+        python -m pytest backend/tests/test_pet_endpoints.py -v --tb=short --cov=. --cov-report=xml --cov-report=term-missing
 
     - name: Upload coverage report
       uses: codecov/codecov-action@v5

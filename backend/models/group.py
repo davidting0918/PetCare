@@ -4,12 +4,8 @@ from typing import Optional, Set
 
 from pydantic import BaseModel, Field
 
-# Database collections
-group_collection = "groups"
 group_table = "groups"
-group_invitation_collection = "group_invitations"
 group_invitation_table = "group_invitations"
-group_member_collection = "group_members"
 group_member_table = "group_members"
 
 
@@ -58,7 +54,6 @@ class GroupMember(BaseModel):
 class Group(BaseModel):
     """
     Enhanced Group model using dedicated GroupMember relationships.
-    Members are now managed through the GroupMember collection for better flexibility.
     """
 
     id: str
@@ -79,8 +74,8 @@ class GroupInvitation(BaseModel):
     invited_by: str  # User ID who sent invitation
     invite_code: str  # Unique code for joining
     status: InvitationStatus = InvitationStatus.PENDING
-    created_at: int
-    expires_at: int  # Invitations expire after 7 days
+    created_at: dt
+    expires_at: dt  # Invitations expire after 7 days
     accepted_by: Optional[str] = None  # User ID who accepted
 
 
@@ -131,11 +126,14 @@ class GroupInfo(BaseModel):
 class GroupMemberInfo(BaseModel):
     """Enhanced group member information with user details and membership data"""
 
+    group_id: str
+    group_name: str
     user_id: str
     user_name: str
     user_email: str
     role: GroupRole
     created_at: dt  # When the user joined the group
+    updated_at: dt
     invited_by: Optional[str] = None  # Who invited this user (user_id)
     invited_by_name: Optional[str] = None  # Name of the person who invited (for display)
     is_active: bool = True
@@ -148,8 +146,8 @@ class InvitationInfo(BaseModel):
     group_name: str
     invited_by_name: str
     invite_code: str
-    created_at: int
-    expires_at: int
+    created_at: dt
+    expires_at: dt
 
 
 # ================== Permission Management ==================
