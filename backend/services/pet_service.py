@@ -197,7 +197,8 @@ class PetService:
         select
             p.*,
             g.name as group_name,
-            u.name as owner_name
+            u.name as owner_name,
+            gm.role as user_permission
         from group_members gm
         left join groups g on (gm.group_id = g.id)
         left join pets p using (group_id)
@@ -212,24 +213,7 @@ class PetService:
         pets = await self.db.read(sql)
         if not pets:
             return []
-        pets = [
-            PetInfo(
-                id=pet["id"],
-                name=pet["name"],
-                pet_type=pet["pet_type"],
-                breed=pet["breed"],
-                gender=pet["gender"],
-                current_weight_kg=pet["current_weight_kg"],
-                owner_id=pet["owner_id"],
-                owner_name=pet["owner_name"],
-                group_id=pet["group_id"],
-                group_name=pet["group_name"],
-                created_at=pet["created_at"],
-                updated_at=pet["updated_at"],
-                is_active=pet["is_active"],
-            )
-            for pet in pets
-        ]
+        pets = [PetInfo(**pet) for pet in pets]
 
         # Sort by creation date (newest first)
         pets.sort(key=lambda p: p.created_at, reverse=True)
@@ -512,7 +496,13 @@ class PetService:
             """
             await self.db.execute(sql)
 
-            return True
+            return {
+                "photo_url": photo_url,
+                "photo_name": file_name,
+                "photo_size": file.size,
+                "photo_type": file.content_type,
+                "photo_uploaded_at": int(dt.now().timestamp()),
+            }
 
         except Exception as e:
             # Clean up file if database operation fails

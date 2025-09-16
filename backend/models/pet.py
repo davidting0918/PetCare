@@ -139,6 +139,7 @@ class PetInfo(BaseModel):
     created_at: dt
     updated_at: dt
     is_active: bool
+    user_permission: Optional[str] = None
 
 
 class PetDetails(BaseModel):

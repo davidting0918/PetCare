@@ -515,6 +515,7 @@ async def session_users(session_api_key: Dict[str, str]) -> Dict[str, Dict[str, 
     users_data = [
         {"email": "session.user1@example.com", "name": "Session User 1", "pwd": "TestPassword123!", "key": "user1"},
         {"email": "session.user2@example.com", "name": "Session User 2", "pwd": "TestPassword123!", "key": "user2"},
+        {"email": "session.user3@example.com", "name": "Session User 3", "pwd": "TestPassword123!", "key": "user3"},
     ]
 
     created_users = {}
@@ -567,6 +568,47 @@ async def session_users(session_api_key: Dict[str, str]) -> Dict[str, Dict[str, 
 
 
 @pytest_asyncio.fixture(scope="session")
+async def session_test_group(
+    session_auth_headers_user1, session_auth_headers_user2, session_auth_headers_user3, session_user3
+):
+    """user1 creates a group for pet sharing, user2 join as member, user3 join as viewer"""
+
+    async with AsyncClient(app=app, base_url="http://testserver") as client:
+        group_response = await client.post(
+            "/groups/create", headers=session_auth_headers_user1, json={"name": "Pet Care Team"}
+        )
+        assert group_response.status_code == 200
+        group_id = group_response.json()["data"]["id"]
+
+        invite_response = await client.post(f"/groups/{group_id}/invite", headers=session_auth_headers_user1)
+        assert invite_response.status_code == 200
+        invite_code = invite_response.json()["data"]["invite_code"]
+
+        join_response = await client.post(
+            "/groups/join", headers=session_auth_headers_user2, json={"invite_code": invite_code}
+        )
+        assert join_response.status_code == 200
+
+        invite_response = await client.post(f"/groups/{group_id}/invite", headers=session_auth_headers_user1)
+        assert invite_response.status_code == 200
+        invite_code = invite_response.json()["data"]["invite_code"]
+
+        join_response = await client.post(
+            "/groups/join", headers=session_auth_headers_user3, json={"invite_code": invite_code}
+        )
+        assert join_response.status_code == 200
+
+        # update user3 to viewer
+        update_response = await client.post(
+            f"/groups/{group_id}/update_role",
+            headers=session_auth_headers_user1,
+            json={"user_id": session_user3["id"], "new_role": "viewer"},
+        )
+        assert update_response.status_code == 200
+        return group_id
+
+
+@pytest_asyncio.fixture(scope="session")
 async def session_user1(session_users: Dict[str, Dict[str, str]]) -> Dict[str, str]:
     """Get session user 1 info"""
     return session_users["user1"]
@@ -579,6 +621,12 @@ async def session_user2(session_users: Dict[str, Dict[str, str]]) -> Dict[str, s
 
 
 @pytest_asyncio.fixture(scope="session")
+async def session_user3(session_users: Dict[str, Dict[str, str]]) -> Dict[str, str]:
+    """Get session user 3 info"""
+    return session_users["user3"]
+
+
+@pytest_asyncio.fixture(scope="session")
 async def session_auth_headers_user1(session_user1: Dict[str, str]) -> Dict[str, str]:
     """Get auth headers for session user 1"""
     return {"Authorization": f"Bearer {session_user1['access_token']}", "Content-Type": "application/json"}
@@ -588,6 +636,12 @@ async def session_auth_headers_user1(session_user1: Dict[str, str]) -> Dict[str,
 async def session_auth_headers_user2(session_user2: Dict[str, str]) -> Dict[str, str]:
     """Get auth headers for session user 2"""
     return {"Authorization": f"Bearer {session_user2['access_token']}", "Content-Type": "application/json"}
+
+
+@pytest_asyncio.fixture(scope="session")
+async def session_auth_headers_user3(session_user3: Dict[str, str]) -> Dict[str, str]:
+    """Get auth headers for session user 3"""
+    return {"Authorization": f"Bearer {session_user3['access_token']}", "Content-Type": "application/json"}
 
 
 @pytest_asyncio.fixture

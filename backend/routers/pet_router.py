@@ -303,8 +303,8 @@ async def upload_pet_photo(
 
     """
     try:
-        photo_info = await pet_service.upload_pet_photo(pet_id, file, current_user.id)
-        return {"status": 1, "data": photo_info.model_dump(), "message": "Photo uploaded successfully for pet"}
+        upload_info = await pet_service.upload_pet_photo(pet_id, file, current_user.id)
+        return {"status": 1, "data": upload_info, "message": "Photo uploaded successfully for pet"}
     except Exception as e:
         raise e
 
