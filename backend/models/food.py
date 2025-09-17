@@ -39,6 +39,7 @@ class Food(BaseModel):
     """
 
     id: str
+    creator_id: str
     group_id: str  # ID of the group this food belongs to
     brand: str = Field(..., min_length=1, max_length=100)
     product_name: str = Field(..., min_length=1, max_length=100)
@@ -117,7 +118,7 @@ class FoodInfo(BaseModel):
     created_at: dt
     updated_at: dt
     group_id: str
-    group_name: str
+    creator_id: str
 
 
 class FoodDetails(BaseModel):
