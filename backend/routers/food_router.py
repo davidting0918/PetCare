@@ -176,7 +176,7 @@ async def create_food(
     - Group context information for collaborative database management
     """
     try:
-        food_details = await food_service.create_food(group_id, request, current_user.id)
+        food_details = await food_service.create_food(group_id, request, current_user)
         return {
             "status": 1,
             "data": food_details.model_dump(),

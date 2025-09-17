@@ -1,7 +1,6 @@
 import base64
 import os
 from datetime import datetime as dt
-from datetime import timezone as tz
 
 # from pathlib import Path
 from typing import List, Optional
@@ -77,59 +76,39 @@ class FoodService:
             )
         return role["role"]
 
-    async def _can_view_food(self, group_id: str, user_id: str) -> bool:
+    async def _get_user_food_role(self, user_id: str, food_id: str) -> str:
+        """Get food's current group"""
+        sql = f"""
+        select group_id from foods where id = '{food_id}' and is_active = true
+        """
+        food = await self.db.read_one(sql)
+        if not food:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Food not found")
+        group_id = food["group_id"]
+        return await self._get_user_group_role(group_id, user_id)
+
+    async def _can_view_food(self, user_id: str, food_id: str = None, group_id: str = None) -> bool:
         """Check if user can view foods in the group (all roles can view)"""
-        role = await self._get_user_group_role(group_id, user_id)
+
+        if food_id:
+            role = await self._get_user_food_role(user_id, food_id)
+        if group_id:
+            role = await self._get_user_group_role(group_id, user_id)
+
         return role in ["creator", "member", "viewer"]
 
-    async def _can_manage_food(self, group_id: str, user_id: str) -> bool:
+    async def _can_manage_food(self, user_id: str, food_id: str = None, group_id: str = None) -> bool:
         """Check if user can modify foods in the group (creator and member only)"""
-        role = await self._get_user_group_role(group_id, user_id)
+        if food_id:
+            role = await self._get_user_food_role(user_id, food_id)
+        if group_id:
+            role = await self._get_user_group_role(group_id, user_id)
+
         return role in ["creator", "member"]
-
-    async def _get_food_with_permission_check(
-        self, food_id: str, user_id: str, require_manage: bool = False
-    ) -> tuple[Food, str]:
-        """
-        Get food and check user permissions.
-
-        Args:
-            food_id: Target food ID
-            user_id: User requesting access
-            require_manage: If True, requires management permissions
-
-        Returns:
-            tuple[Food, str]: Food object and user's group role
-
-        Raises:
-            HTTPException: If food not found or user lacks permissions
-        """
-        query = "SELECT * FROM foods WHERE id = $1 AND is_active = TRUE"
-        food_dict = await self.db.read_one(query, food_id)
-        if not food_dict:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Food not found")
-
-        food = Food(**food_dict)
-
-        if require_manage:
-            if not await self._can_manage_food(food.group_id, user_id):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="You don't have permission to modify foods in this group",
-                )
-        else:
-            if not await self._can_view_food(food.group_id, user_id):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="You don't have permission to view foods in this group",
-                )
-
-        role = await self._get_user_group_role(food.group_id, user_id)
-        return food, role
 
     # ================== Food CRUD Operations ==================
 
-    async def create_food(self, group_id: str, request: CreateFoodRequest, user_id: str) -> FoodDetails:
+    async def create_food(self, group_id: str, request: CreateFoodRequest, user) -> FoodDetails:
         """
         Create a new food item in the group's database.
         Only creators and members can add foods to the group database.
@@ -143,7 +122,7 @@ class FoodService:
             FoodDetails: Created food information
         """
         # Check permissions
-        if not await self._can_manage_food(group_id, user_id):
+        if not await self._can_manage_food(user_id=user.id, group_id=group_id):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Only group creators and members can add foods to the database",
@@ -158,12 +137,13 @@ class FoodService:
             )
 
         # Generate food ID using a short, URL-safe base64 encoding of random bytes (8 chars)
-        food_id = base64.urlsafe_b64encode(os.urandom(6)).decode("utf-8").rstrip("=")
+        food_id = base64.urlsafe_b64encode(os.urandom(16)).decode("utf-8").rstrip("=")
 
         # Create food
         food = Food(
             id=food_id,
             group_id=group_id,
+            creator_id=user.id,
             brand=request.brand,
             product_name=request.product_name,
             food_type=request.food_type,
@@ -189,7 +169,7 @@ class FoodService:
         group_name = group_dict["name"] if group_dict else "Unknown Group"
 
         # Calculate calories per unit for convenience
-        calories_per_unit = (request.calories_per_100g * request.unit_weight_g) / 100
+        calories_per_unit = (request.calories * request.unit_weight) / 100
 
         return FoodDetails(
             id=food.id,
@@ -208,7 +188,9 @@ class FoodService:
             photo_url=food.photo_url,
             group_id=food.group_id,
             group_name=group_name,
-            has_photo=food.photo_url is not None,
+            creator_id=user.id,
+            creator_name=user.name,
+            has_photo=food.photo_url != "",
             calories_per_unit=calories_per_unit,
         )
 
@@ -229,7 +211,7 @@ class FoodService:
             List[FoodInfo]: Foods in the group database
         """
         # Check permissions
-        if not await self._can_view_food(group_id, user_id):
+        if not await self._can_view_food(group_id=group_id, user_id=user_id):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have permission to view this group's food database",
@@ -237,7 +219,8 @@ class FoodService:
 
         sql = f"""
         select
-            *
+            f.*,
+            g.name as group_name
         from foods f
         join groups g on f.group_id = g.id
         where
@@ -249,7 +232,7 @@ class FoodService:
         """
         food_records = await self.db.read(sql)
 
-        food_infos = [FoodInfo(**food_dict) for food_dict in food_records]
+        food_infos = [FoodInfo(**food_dict, has_photo=food_dict["photo_url"] != "") for food_dict in food_records]
 
         # Sort by brand and product name
         food_infos.sort(key=lambda f: (f.brand.lower(), f.product_name.lower()))
@@ -268,14 +251,21 @@ class FoodService:
         Returns:
             FoodDetails: Comprehensive food information
         """
+        if not await self._can_view_food(user_id=user_id, food_id=food_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have permission to view this food",
+            )
 
         sql = f"""
         select
             f.*,
             g.name as group_name,
+            u.name as creator_name
         from foods f
         join group_members gm using (group_id)
         join groups g on (g.id = f.group_id)
+        join users u on (u.id = f.creator_id)
         where
             f.id = '{food_id}'
             and f.is_active = true
@@ -289,6 +279,7 @@ class FoodService:
         # Calculate calories per unit
         calories_per_unit = (food_details["calories"] * food_details["unit_weight"]) / 100
         food_details["calories_per_unit"] = calories_per_unit
+        food_details["has_photo"] = food_details["photo_url"] != ""
         return FoodDetails(**food_details)
 
     async def update_food(self, food_id: str, request: UpdateFoodRequest, user_id: str) -> FoodDetails:
@@ -305,10 +296,14 @@ class FoodService:
             FoodDetails: Updated food information
         """
         # Check permissions and get food
-        food, role = await self._get_food_with_permission_check(food_id, user_id, require_manage=True)
+        if not await self._can_manage_food(user_id=user_id, food_id=food_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have permission to modify this food",
+            )
 
         # Prepare update data
-        update_data = {"updated_at": int(dt.now(tz.utc).timestamp())}
+        update_data = {}
 
         # Update only provided fields
         if request.brand is not None:
@@ -319,49 +314,18 @@ class FoodService:
             update_data["food_type"] = request.food_type.value
         if request.target_pet is not None:
             update_data["target_pet"] = request.target_pet.value
-        if request.unit_weight_g is not None:
-            update_data["unit_weight_g"] = request.unit_weight_g
-        if request.calories_per_100g is not None:
-            update_data["calories_per_100g"] = request.calories_per_100g
-        if request.protein_percentage is not None:
-            update_data["protein_percentage"] = request.protein_percentage
-        if request.fat_percentage is not None:
-            update_data["fat_percentage"] = request.fat_percentage
-        if request.moisture_percentage is not None:
-            update_data["moisture_percentage"] = request.moisture_percentage
-        if request.carbohydrate_percentage is not None:
-            update_data["carbohydrate_percentage"] = request.carbohydrate_percentage
-
-        # Validate nutritional percentages if any are being updated
-        nutritional_updates = [
-            request.protein_percentage,
-            request.fat_percentage,
-            request.moisture_percentage,
-            request.carbohydrate_percentage,
-        ]
-        if any(x is not None for x in nutritional_updates):
-            # Get current values for fields not being updated
-            current_protein = (
-                request.protein_percentage if request.protein_percentage is not None else food.protein_percentage
-            )
-            current_fat = request.fat_percentage if request.fat_percentage is not None else food.fat_percentage
-            current_moisture = (
-                request.moisture_percentage if request.moisture_percentage is not None else food.moisture_percentage
-            )
-            current_carb = (
-                request.carbohydrate_percentage
-                if request.carbohydrate_percentage is not None
-                else food.carbohydrate_percentage
-            )
-
-            total_percentage = current_protein + current_fat + current_moisture + current_carb
-            if total_percentage > 105:  # Allow 5% tolerance
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Updated nutritional percentages cannot exceed 100% (total: {:.1f}%)".format(
-                        total_percentage
-                    ),
-                )
+        if request.unit_weight is not None:
+            update_data["unit_weight"] = request.unit_weight
+        if request.calories is not None:
+            update_data["calories"] = request.calories
+        if request.protein is not None:
+            update_data["protein"] = request.protein
+        if request.fat is not None:
+            update_data["fat"] = request.fat
+        if request.moisture is not None:
+            update_data["moisture"] = request.moisture
+        if request.carbohydrate is not None:
+            update_data["carbohydrate"] = request.carbohydrate
 
         # Update food in PostgreSQL
         if update_data:  # Only update if there are changes
@@ -395,15 +359,19 @@ class FoodService:
         Returns:
             dict: Success confirmation
         """
-        # Check permissions and get food
-        food, role = await self._get_food_with_permission_check(food_id, user_id, require_manage=True)
+        # Check permissions
+        if not await self._can_manage_food(user_id=user_id, food_id=food_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have permission to delete this food",
+            )
 
-        # Soft delete food
-        current_time = int(dt.now(tz.utc).timestamp())
-        delete_query = "UPDATE foods SET is_active = FALSE, updated_at = $1 WHERE id = $2"
-        await self.db.execute(delete_query, current_time, food_id)
+        sql = f"""
+        delete from foods where id = '{food_id}'
+        """
+        await self.db.execute(sql)
 
-        return {"message": f"Food '{food.brand} - {food.product_name}' has been removed from the group database"}
+        return {"message": "Food has been deleted from the group database"}
 
     # ================== Search and Discovery ==================
 
@@ -430,7 +398,7 @@ class FoodService:
             List[FoodSearchResult]: Matching foods
         """
         # Check permissions
-        if not await self._can_view_food(group_id, user_id):
+        if not await self._can_view_food(user_id=user_id, group_id=group_id):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have permission to search this group's food database",

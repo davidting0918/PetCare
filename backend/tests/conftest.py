@@ -23,6 +23,7 @@ os.environ["APP_ENV"] = "test"
 from backend.core.db_manager import DatabaseManager, close_database, get_db, init_database
 from backend.main import app
 from backend.models.auth import access_token_table, api_key_table
+from backend.models.food import food_table
 from backend.models.group import group_invitation_table, group_member_table, group_table
 from backend.models.pet import pet_table
 from backend.models.user import user_table
@@ -60,6 +61,7 @@ async def test_db():
         group_invitation_table,
         group_member_table,
         pet_table,
+        food_table,
     ]
 
     try:
@@ -92,6 +94,7 @@ async def clean_db_per_test(test_db):
         group_invitation_table,
         group_member_table,
         pet_table,
+        food_table,
     ]
 
     # Clean test data before test
@@ -140,6 +143,7 @@ async def auto_clean_per_test(request, test_db):
             group_invitation_table,
             group_member_table,
             pet_table,
+            food_table,
         ]
 
         # Clean test data before test
@@ -198,6 +202,7 @@ async def clean_db_session_only():
         group_invitation_table,
         group_member_table,
         pet_table,
+        food_table,
     ]
 
     print("🧹 SESSION START: Cleaning test data tables...")
@@ -240,6 +245,7 @@ async def cleanup_session_data():
         group_invitation_table,
         group_member_table,
         pet_table,
+        food_table,
     ]
 
     print("🧹 Performing final session cleanup...")
@@ -453,6 +459,48 @@ class TestHelper:
         for field in required_fields:
             assert field in pet_data, f"Missing required field: {field}"
 
+    @staticmethod
+    def assert_food_structure(food_data: dict, detailed: bool = False):
+        """
+        Assert that food data contains required fields.
+
+        Args:
+            food_data: Food data dictionary
+            detailed: Whether to check for detailed food info fields
+        """
+        required_fields = [
+            "id",
+            "brand",
+            "product_name",
+            "food_type",
+            "target_pet",
+            "unit_weight",
+            "calories",
+            "protein",
+            "fat",
+            "moisture",
+            "carbohydrate",
+            "created_at",
+            "updated_at",
+            "group_id",
+            "is_active",
+        ]
+
+        if detailed:
+            # Additional fields for detailed food info
+            required_fields.extend(
+                [
+                    "group_name",
+                    "has_photo",
+                    "calories_per_unit",
+                    "creator_id",
+                    "creator_name",
+                ]
+            )
+
+        for field in required_fields:
+            assert field in food_data, f"Missing required field: {field}"
+
 
 @pytest.fixture
 def test_helper() -> TestHelper:
@@ -557,6 +605,7 @@ async def session_users(session_api_key: Dict[str, str]) -> Dict[str, Dict[str, 
                 "name": user_data["name"],
                 "pwd": user_data["pwd"],
                 "access_token": token_data["access_token"],
+                "group_id": created_user["personal_group_id"],
             }
 
             print(f"✅ Session user created: {user_data['name']} (ID: {created_user['id']})")
