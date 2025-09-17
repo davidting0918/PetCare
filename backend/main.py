@@ -13,6 +13,7 @@ from backend.core.environment import env_config, get_config
 from backend.routers.auth_router import router as auth_router
 from backend.routers.food_router import router as food_router
 from backend.routers.group_router import router as group_router
+from backend.routers.meal_router import router as meal_router
 from backend.routers.pet_router import router as pet_router
 from backend.routers.user_router import router as user_router
 
@@ -73,6 +74,7 @@ app.include_router(user_router)
 app.include_router(group_router)
 app.include_router(pet_router)
 app.include_router(food_router)
+app.include_router(meal_router)
 
 storage_path = os.path.join(os.path.dirname(__file__), "storage")
 app.mount("/static", StaticFiles(directory=storage_path), name="static")

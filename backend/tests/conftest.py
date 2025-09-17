@@ -25,6 +25,7 @@ from backend.main import app
 from backend.models.auth import access_token_table, api_key_table
 from backend.models.food import food_table
 from backend.models.group import group_invitation_table, group_member_table, group_table
+from backend.models.meal import meal_table
 from backend.models.pet import pet_table
 from backend.models.user import user_table
 
@@ -62,6 +63,7 @@ async def test_db():
         group_member_table,
         pet_table,
         food_table,
+        meal_table,
     ]
 
     try:
@@ -95,6 +97,7 @@ async def clean_db_per_test(test_db):
         group_member_table,
         pet_table,
         food_table,
+        meal_table,
     ]
 
     # Clean test data before test
@@ -144,6 +147,7 @@ async def auto_clean_per_test(request, test_db):
             group_member_table,
             pet_table,
             food_table,
+            meal_table,
         ]
 
         # Clean test data before test
@@ -203,6 +207,7 @@ async def clean_db_session_only():
         group_member_table,
         pet_table,
         food_table,
+        meal_table,
     ]
 
     print("🧹 SESSION START: Cleaning test data tables...")
@@ -246,6 +251,7 @@ async def cleanup_session_data():
         group_member_table,
         pet_table,
         food_table,
+        meal_table,
     ]
 
     print("🧹 Performing final session cleanup...")
