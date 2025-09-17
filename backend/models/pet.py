@@ -45,7 +45,7 @@ class Pet(BaseModel):
     gender: PetGender = PetGender.UNKNOWN
 
     # Physical Characteristics
-    birth_date: Optional[int] = None  # Unix timestamp
+    birth_date: Optional[dt] = None  # Unix timestamp
     current_weight_kg: Optional[float] = Field(None, ge=0.1, le=200)
     target_weight_kg: Optional[float] = Field(None, ge=0.1, le=200)
     height_cm: Optional[float] = Field(None, ge=1, le=200)
@@ -88,7 +88,7 @@ class CreatePetRequest(BaseModel):
     pet_type: PetType
     breed: Optional[str] = Field(None, max_length=100)
     gender: PetGender = PetGender.UNKNOWN
-    birth_date: Optional[int] = None
+    birth_date: Optional[dt] = None
     current_weight_kg: Optional[float] = Field(None, ge=0.1, le=200)
     target_weight_kg: Optional[float] = Field(None, ge=0.1, le=200)
     height_cm: Optional[float] = Field(None, ge=1, le=200)
@@ -153,7 +153,7 @@ class PetDetails(BaseModel):
     gender: PetGender
 
     # Physical Characteristics
-    birth_date: Optional[int]
+    birth_date: Optional[dt]
     age: Optional[float]
     current_weight_kg: Optional[float]
     target_weight_kg: Optional[float]
