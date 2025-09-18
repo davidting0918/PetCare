@@ -44,6 +44,89 @@ export const LoginPage: React.FC = () => {
     } catch (error) {
       setError('Google login failed. Please check the browser console for detailed error messages.');
     }
+
+    // For demo purposes, accept any password for existing users
+    const success = await login(email, password);
+    if (!success) {
+      setError('Invalid email or password. Try john.doe@example.com or jane.doe@example.com');
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setError('');
+    try {
+      console.log('🚀 [REBUILT] LoginPage: Starting Google login...');
+      console.log('🔍 LoginPage: Current state - isLoading:', isLoading);
+
+      const success = await loginWithGoogle();
+      console.log('🏁 [REBUILT] LoginPage: Google login result:', success);
+
+      if (!success) {
+        const errorMsg = 'Google login failed. Please check your configuration and browser console for detailed error messages.';
+        console.error('❌ LoginPage:', errorMsg);
+        setError(errorMsg);
+      }
+    } catch (error) {
+      console.error('❌ LoginPage: Critical error in handleGoogleLogin:', error);
+      setError('Google login failed. Please check the browser console for detailed error messages.');
+    }
+  };
+
+  // Debug function to help users troubleshoot
+  const runDiagnostics = () => {
+    console.log('🔍 === GOOGLE AUTH DIAGNOSTICS (REBUILT VERSION) ===');
+    console.log('🌐 Current URL:', window.location.href);
+    console.log('🔧 Environment Variables:');
+    console.log('  - VITE_GOOGLE_CLIENT_ID exists:', !!import.meta.env.VITE_GOOGLE_CLIENT_ID);
+    console.log('  - VITE_GOOGLE_CLIENT_ID value:', import.meta.env.VITE_GOOGLE_CLIENT_ID);
+    console.log('  - VITE_GOOGLE_CLIENT_ID preview:', import.meta.env.VITE_GOOGLE_CLIENT_ID?.substring(0, 30) + '...');
+
+    console.log('🔍 Window object checks:');
+    console.log('  - window.google exists:', !!window.google);
+    console.log('  - window.google.accounts exists:', !!(window.google?.accounts));
+    console.log('  - window.google.accounts.id exists:', !!(window.google?.accounts?.id));
+
+    // Check Google API methods
+    if (window.google?.accounts?.id) {
+      console.log('  - initialize method:', typeof window.google.accounts.id.initialize);
+      console.log('  - renderButton method:', typeof window.google.accounts.id.renderButton);
+      console.log('  - prompt method:', typeof window.google.accounts.id.prompt);
+    }
+
+    console.log('🔍 CORS and Network checks:');
+    console.log('  - Origin:', window.location.origin);
+    console.log('  - Protocol:', window.location.protocol);
+    console.log('  - Is HTTPS or localhost:', window.location.protocol === 'https:' || window.location.hostname === 'localhost');
+
+    console.log('🔍 Browser compatibility:');
+    console.log('  - User Agent:', navigator.userAgent);
+    console.log('  - Cookies enabled:', navigator.cookieEnabled);
+    console.log('  - Third-party cookies blocked:', 'Unknown (check browser settings)');
+
+    console.log('🔍 Service checks:');
+    console.log('  - Google services initialized:', 'Check initialization in app startup');
+
+    console.log('🔍 Local storage:');
+    console.log('  - petcare_access_token:', localStorage.getItem('petcare_access_token'));
+    console.log('  - petcare_user:', localStorage.getItem('petcare_user'));
+
+    console.log('🔍 Rebuilt implementation features:');
+    console.log('  ✅ CORS issues fixed with simplified approach');
+    console.log('  ✅ FedCM compatibility (disabled to avoid conflicts)');
+    console.log('  ✅ Comprehensive token logging');
+    console.log('  ✅ Invisible button method (no popup blockers)');
+    console.log('  ✅ Automatic cleanup and error recovery');
+
+    console.log('🔍 Common issues to check:');
+    console.log('  1. ✅ Make sure you have a .env file with VITE_GOOGLE_CLIENT_ID');
+    console.log('  2. ✅ Make sure your domain is in Google Cloud Console authorized origins');
+    console.log('  3. ✅ Popup blockers not relevant (using invisible button method)');
+    console.log('  4. ✅ Clear browser cache and localStorage if issues persist');
+    console.log('  5. ✅ Check browser network tab for failed requests');
+    console.log('  6. ✅ CORS errors should be resolved with new implementation');
+    console.log('  7. ✅ Token details will be logged automatically on success');
+
+    console.log('=== END REBUILT DIAGNOSTICS ===');
   };
 
   const handleQuickLogin = (email: string) => {
