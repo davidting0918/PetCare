@@ -9,7 +9,7 @@ import {
   ChevronRight,
   Utensils
 } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { format } from 'date-fns';
 import { useAuth } from '../../contexts/AuthContext';
 import {
@@ -20,6 +20,53 @@ import {
 import { FoodSelectionModal } from './FoodSelectionModal';
 import { AddFoodModal } from './AddFoodModal';
 import { MealHistoryModal } from './MealHistoryModal';
+
+// Custom Tooltip Component for Calorie Chart
+const CalorieLineTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    const caloriesData = payload.find((p: any) => p.dataKey === 'calories');
+    const goalData = payload.find((p: any) => p.dataKey === 'goal');
+
+    if (caloriesData && goalData) {
+      const calories = caloriesData.value;
+      const goal = goalData.value;
+      const percentageNum = (calories / goal) * 100;
+      const percentageStr = percentageNum.toFixed(0);
+      const remaining = goal - calories;
+
+      return (
+        <div className="bg-white p-3 rounded-lg shadow-3d border border-gray-200 text-sm">
+          <p className="font-semibold text-gray-800 mb-2">{label}</p>
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-gray-600">Consumed:</span>
+              <span className="font-medium text-mint">{calories} cal</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-600">Goal:</span>
+              <span className="font-medium text-orange">{goal} cal</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-600">Progress:</span>
+              <span className={`font-medium ${percentageNum > 100 ? 'text-red-600' : percentageNum > 90 ? 'text-yellow-600' : 'text-green-600'}`}>
+                {percentageStr}%
+              </span>
+            </div>
+            <div className="flex items-center justify-between pt-1 border-t border-gray-100">
+              <span className="text-gray-600">
+                {remaining >= 0 ? 'Remaining:' : 'Over limit:'}
+              </span>
+              <span className={`font-medium ${remaining >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {Math.abs(remaining)} cal
+              </span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+  }
+  return null;
+};
 
 export const MealPage: React.FC = () => {
   const { selectedPet } = useAuth();
@@ -142,6 +189,7 @@ export const MealPage: React.FC = () => {
                   tickLine={false}
                   tick={{ fontSize: 12, fill: '#6B7280' }}
                 />
+                <Tooltip content={<CalorieLineTooltip />} cursor={{ stroke: '#B8E6D3', strokeWidth: 2 }} />
                 <Line
                   type="monotone"
                   dataKey="calories"

@@ -8,7 +8,7 @@ import {
   AlertCircle,
   Plus
 } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, BarChart, Bar, Tooltip } from 'recharts';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   mockDailySummary,
@@ -19,6 +19,56 @@ import {
   mockMealEntries
 } from '../../data/mockData';
 import { format } from 'date-fns';
+
+// Custom Tooltip Components
+const CalorieTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    const calories = payload[0].value;
+    const goal = payload[0].payload.goal;
+    const percentageNum = (calories / goal) * 100;
+    const percentageStr = percentageNum.toFixed(0);
+
+    return (
+      <div className="bg-white p-3 rounded-lg shadow-3d border border-gray-200 text-sm">
+        <p className="font-semibold text-gray-800 mb-2">{label}</p>
+        <div className="space-y-1">
+          <div className="flex items-center justify-between">
+            <span className="text-gray-600">Calories:</span>
+            <span className="font-medium text-orange">{calories}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-gray-600">Goal:</span>
+            <span className="font-medium text-gray-700">{goal}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-gray-600">Progress:</span>
+            <span className={`font-medium ${percentageNum > 100 ? 'text-red-600' : percentageNum > 90 ? 'text-yellow-600' : 'text-green-600'}`}>
+              {percentageStr}%
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
+const WeightTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    const weight = payload[0].value;
+
+    return (
+      <div className="bg-white p-3 rounded-lg shadow-3d border border-gray-200 text-sm">
+        <p className="font-semibold text-gray-800 mb-2">{label}</p>
+        <div className="flex items-center justify-between">
+          <span className="text-gray-600">Weight:</span>
+          <span className="font-medium text-mint">{weight} kg</span>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
 
 export const Dashboard: React.FC = () => {
   const { selectedPet } = useAuth();
@@ -163,6 +213,7 @@ export const Dashboard: React.FC = () => {
                 tick={{ fontSize: 12, fill: '#6B7280' }}
               />
               <YAxis hide />
+              <Tooltip content={<CalorieTooltip />} cursor={{ fill: 'rgba(244, 194, 161, 0.1)' }} />
               <Bar
                 dataKey="calories"
                 fill="#F4C2A1"
@@ -201,6 +252,7 @@ export const Dashboard: React.FC = () => {
                   tickLine={false}
                   tick={{ fontSize: 12, fill: '#6B7280' }}
                 />
+                <Tooltip content={<WeightTooltip />} cursor={{ stroke: '#B8E6D3', strokeWidth: 2 }} />
                 <Line
                   type="monotone"
                   dataKey="weight"

@@ -9,7 +9,7 @@ import {
   ChevronDown,
   ChevronRight
 } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell, Legend, Tooltip } from 'recharts';
 import { format, subDays, isWithinInterval } from 'date-fns';
 import { mockMealEntries, mockFamilyMembers } from '../../data/mockData';
 import type { MealEntry } from '../../types';
@@ -21,6 +21,61 @@ interface MealHistoryModalProps {
 
 type ViewMode = 'timeline' | 'analytics' | 'patterns';
 type TimeRange = '7days' | '30days' | '90days' | 'custom';
+
+// Custom Tooltip Components
+const CalorieLineTooltipHistory = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    const calories = payload[0].value;
+    const meals = payload[0].payload.meals;
+
+    return (
+      <div className="bg-white p-3 rounded-lg shadow-3d border border-gray-200 text-sm">
+        <p className="font-semibold text-gray-800 mb-2">{label}</p>
+        <div className="space-y-1">
+          <div className="flex items-center justify-between">
+            <span className="text-gray-600">Calories:</span>
+            <span className="font-medium text-mint">{calories}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-gray-600">Meals:</span>
+            <span className="font-medium text-gray-700">{meals}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
+const PieTooltip = ({ active, payload }: any) => {
+  if (active && payload && payload.length) {
+    const data = payload[0];
+    const percentage = ((data.value / data.payload.total) * 100).toFixed(1);
+
+    return (
+      <div className="bg-white p-3 rounded-lg shadow-3d border border-gray-200 text-sm">
+        <div className="flex items-center mb-2">
+          <div
+            className="w-3 h-3 rounded-full mr-2"
+            style={{ backgroundColor: data.color }}
+          />
+          <p className="font-semibold text-gray-800">{data.name}</p>
+        </div>
+        <div className="space-y-1">
+          <div className="flex items-center justify-between">
+            <span className="text-gray-600">Count:</span>
+            <span className="font-medium text-gray-700">{data.value}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-gray-600">Percentage:</span>
+            <span className="font-medium text-orange">{percentage}%</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
 
 export const MealHistoryModal: React.FC<MealHistoryModalProps> = ({
   petId,
@@ -302,6 +357,7 @@ export const MealHistoryModal: React.FC<MealHistoryModalProps> = ({
                         tickLine={false}
                         tick={{ fontSize: 12, fill: '#6B7280' }}
                       />
+                      <Tooltip content={<CalorieLineTooltipHistory />} cursor={{ stroke: '#B8E6D3', strokeWidth: 2 }} />
                       <Line
                         type="monotone"
                         dataKey="calories"
@@ -413,6 +469,7 @@ export const MealHistoryModal: React.FC<MealHistoryModalProps> = ({
                           <Cell key={`cell-${index}`} fill={color} />
                         ))}
                       </Pie>
+                      <Tooltip content={<PieTooltip />} />
                       <Legend />
                     </PieChart>
                   </ResponsiveContainer>

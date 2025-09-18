@@ -11,7 +11,7 @@ import {
   Download,
   Bell
 } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, ReferenceLine, Tooltip } from 'recharts';
 import { format, subDays } from 'date-fns';
 import { useAuth } from '../../contexts/AuthContext';
 import {
@@ -26,6 +26,46 @@ import { WeightEntryModal } from './WeightEntryModal';
 import { GoalSettingModal } from './GoalSettingModal';
 import { WeightHistoryModal } from './WeightHistoryModal';
 import { CircularProgress } from './CircularProgress';
+
+// Custom Tooltip Component for Weight Chart
+const WeightChartTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    const weight = payload[0].value;
+    const data = payload[0].payload;
+
+    return (
+      <div className="bg-white p-3 rounded-lg shadow-3d border border-gray-200 text-sm">
+        <p className="font-semibold text-gray-800 mb-2">{label}</p>
+        <div className="space-y-1">
+          <div className="flex items-center justify-between">
+            <span className="text-gray-600">Weight:</span>
+            <span className="font-medium text-mint">{weight} kg</span>
+          </div>
+          {data.target && (
+            <div className="flex items-center justify-between">
+              <span className="text-gray-600">Target:</span>
+              <span className="font-medium text-orange">{data.target} kg</span>
+            </div>
+          )}
+          {data.change && (
+            <div className="flex items-center justify-between pt-1 border-t border-gray-100">
+              <span className="text-gray-600">Change:</span>
+              <span className={`font-medium ${data.change > 0 ? 'text-green-600' : data.change < 0 ? 'text-red-600' : 'text-gray-600'}`}>
+                {data.change > 0 ? '+' : ''}{data.change} kg
+              </span>
+            </div>
+          )}
+          {data.notes && (
+            <div className="pt-1 border-t border-gray-100">
+              <span className="text-gray-600 text-xs">{data.notes}</span>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
 
 export const WeightPage: React.FC = () => {
   const { selectedPet } = useAuth();
@@ -225,6 +265,7 @@ export const WeightPage: React.FC = () => {
                   tickLine={false}
                   tick={{ fontSize: 11, fill: '#6B7280' }}
                 />
+                <Tooltip content={<WeightChartTooltip />} cursor={{ stroke: '#B8E6D3', strokeWidth: 2 }} />
                 {selectedPet.targetWeight && (
                   <ReferenceLine
                     y={selectedPet.targetWeight}
