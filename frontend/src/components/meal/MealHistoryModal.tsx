@@ -142,10 +142,10 @@ export const MealHistoryModal: React.FC<MealHistoryModalProps> = ({
   ];
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50">
-      <div className="bg-primary w-full max-w-md h-[90vh] rounded-t-3xl overflow-hidden shadow-3d">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-primary w-full max-w-md max-h-[90vh] rounded-3xl overflow-hidden shadow-3d flex flex-col">
         {/* Header */}
-        <div className="bg-white p-4 shadow-3d">
+        <div className="bg-white p-4 shadow-3d flex-shrink-0">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-semibold text-gray-800">Meal History</h2>
             <button

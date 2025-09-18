@@ -98,10 +98,10 @@ export const FoodSelectionModal: React.FC<FoodSelectionModalProps> = ({
   ];
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50">
-      <div className="bg-primary w-full max-w-md h-[85vh] rounded-t-3xl overflow-hidden shadow-3d">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-primary w-full max-w-md max-h-[90vh] rounded-3xl overflow-hidden shadow-3d flex flex-col">
         {/* Header */}
-        <div className="bg-white p-4 shadow-3d">
+        <div className="bg-white p-4 shadow-3d flex-shrink-0">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-800">
               {step === 'select' && 'Select Food'}
@@ -314,12 +314,14 @@ export const FoodSelectionModal: React.FC<FoodSelectionModalProps> = ({
                 </div>
               </div>
 
-              <button
-                onClick={() => setStep('confirm')}
-                className="btn-3d w-full py-3 text-white font-medium"
-              >
-                Continue to Confirmation
-              </button>
+              <div className="sticky bottom-0 bg-primary pt-4 pb-2 mt-6">
+                <button
+                  onClick={() => setStep('confirm')}
+                  className="btn-3d w-full py-3 text-white font-medium"
+                >
+                  Continue to Confirmation
+                </button>
+              </div>
             </>
           )}
 
@@ -392,19 +394,21 @@ export const FoodSelectionModal: React.FC<FoodSelectionModalProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={() => setStep('amount')}
-                  className="btn-3d btn-3d-mint py-3 text-gray-700 font-medium"
-                >
-                  Back to Edit
-                </button>
-                <button
-                  onClick={handleLogMeal}
-                  className="btn-3d py-3 text-white font-medium"
-                >
-                  Log Meal
-                </button>
+              <div className="sticky bottom-0 bg-primary pt-4 pb-2 mt-6">
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => setStep('amount')}
+                    className="btn-3d btn-3d-mint py-3 text-gray-700 font-medium"
+                  >
+                    Back to Edit
+                  </button>
+                  <button
+                    onClick={handleLogMeal}
+                    className="btn-3d py-3 text-white font-medium"
+                  >
+                    Log Meal
+                  </button>
+                </div>
               </div>
             </>
           )}
