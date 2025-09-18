@@ -6,6 +6,7 @@ import { MainLayout } from './components/layout/MainLayout';
 import { Dashboard } from './components/dashboard/Dashboard';
 import { MealPage } from './components/meal/MealPage';
 import { WeightPage } from './components/weight/WeightPage';
+import { SettingsPage } from './components/settings/SettingsPage';
 import { ComingSoon } from './components/common/ComingSoon';
 import type { NavigationTab } from './types';
 
@@ -50,12 +51,7 @@ const AppContent: React.FC = () => {
       case 'weight':
         return <WeightPage />;
       case 'settings':
-        return (
-          <ComingSoon
-            title="Settings"
-            description="Manage your account, pet profiles, family members, and app preferences."
-          />
-        );
+        return <SettingsPage />;
       default:
         return <Dashboard />;
     }
