@@ -702,3 +702,74 @@ export const getDailyMealBreakdown = (petId: string, date: Date = new Date()): R
 
   return breakdown;
 };
+
+// Mock Settings Data
+export const mockAppSettings = {
+  user: {
+    language: 'zh-TW',
+    region: 'TW',
+    timezone: 'Asia/Taipei',
+    dateFormat: 'DD/MM/YYYY',
+    timeFormat: '24h' as const,
+    currency: 'TWD'
+  },
+  units: {
+    weight: 'kg' as const,
+    temperature: 'celsius' as const,
+    volume: 'ml' as const,
+    distance: 'km' as const
+  },
+  notifications: {
+    mealReminders: true,
+    medicineAlerts: true,
+    weightReminders: true,
+    activityUpdates: true,
+    soundEnabled: true,
+    vibrationEnabled: true,
+    quietHoursEnabled: true,
+    quietHoursStart: '22:00',
+    quietHoursEnd: '07:00'
+  },
+  privacy: {
+    analyticsEnabled: true,
+    crashReporting: true,
+    marketingEmails: false,
+    dataSharing: false
+  },
+  app: {
+    theme: 'light' as const,
+    autoSync: true,
+    syncFrequency: 'hourly' as const,
+    wifiOnlySync: false,
+    defaultDashboardView: 'summary' as const
+  }
+};
+
+// Mock User Preferences
+export const mockUserPreferences = {
+  dashboard: {
+    showCalorieProgress: true,
+    showWeightChart: true,
+    showRecentActivities: true,
+    showMedicineReminders: true,
+    compactView: false
+  },
+  mealTracking: {
+    defaultMealType: 'breakfast' as const,
+    showNutritionInfo: true,
+    enablePhotos: true,
+    quickAddFavorites: true
+  },
+  weightTracking: {
+    defaultUnit: 'kg' as const,
+    showProgressPhotos: true,
+    enableGoalTracking: true,
+    weeklyReminders: true
+  },
+  medicineTracking: {
+    strictTiming: false,
+    allowEarlyDoses: true,
+    requireConfirmation: true,
+    showInstructions: true
+  }
+};

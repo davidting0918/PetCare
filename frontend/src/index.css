@@ -106,6 +106,31 @@ body {
     transition: stroke-dasharray 1s ease-in-out;
   }
 
+  /* Toggle Checkbox */
+  .toggle-checkbox {
+    @apply relative w-11 h-6 bg-gray-200 rounded-full outline-none cursor-pointer transition-colors duration-200;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+  }
+
+  .toggle-checkbox:checked {
+    @apply bg-orange;
+  }
+
+  .toggle-checkbox::before {
+    @apply absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200;
+    content: '';
+  }
+
+  .toggle-checkbox:checked::before {
+    @apply transform translate-x-5;
+  }
+
+  .toggle-checkbox:hover::before {
+    @apply shadow-md;
+  }
+
   /* Scale Display Animation */
   .scale-display {
     background: linear-gradient(135deg, #1F2937 0%, #374151 100%);
