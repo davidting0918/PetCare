@@ -12,7 +12,7 @@ import {
   AlertCircle,
   Check
 } from 'lucide-react';
-import { mockFamilyMembers, getUserAccessiblePets } from '../../data/mockData';
+import { mockFamilyMembers } from '../../data/mockData';
 import { useAuth } from '../../contexts/AuthContext';
 import type { FamilyMember } from '../../types';
 
@@ -209,7 +209,7 @@ export const FamilyMembersModal: React.FC<FamilyMembersModalProps> = ({
                           <div className="flex items-center space-x-2">
                             <h3 className="font-medium text-gray-800">{member.name}</h3>
                             {member.id === 'family1' && (
-                              <Crown className="w-4 h-4 text-orange" title="Primary caregiver" />
+                              <Crown className="w-4 h-4 text-orange" />
                             )}
                           </div>
                           <p className="text-sm text-gray-600 capitalize">{member.role}</p>

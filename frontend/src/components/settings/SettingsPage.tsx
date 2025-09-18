@@ -14,15 +14,13 @@ import {
   LogOut,
   Edit,
   Crown,
-  Trash2
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { mockFamilyMembers, getUserAccessiblePets } from '../../data/mockData';
+import { mockFamilyMembers } from '../../data/mockData';
 import { ProfileEditModal } from './ProfileEditModal';
 import { FamilyMembersModal } from './FamilyMembersModal';
 import { NotificationSettingsModal } from './NotificationSettingsModal';
 import { AppPreferencesModal } from './AppPreferencesModal';
-import type { Pet } from '../../types';
 
 export const SettingsPage: React.FC = () => {
   const { user, logout, getUserPets, selectedPet } = useAuth();

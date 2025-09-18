@@ -4,7 +4,6 @@ import {
   Globe,
   Palette,
   Scale,
-  Clock,
   Calendar,
   Save,
   RefreshCw,
