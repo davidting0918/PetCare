@@ -55,4 +55,66 @@ body {
     @apply focus:border-orange focus:shadow-3d focus:outline-none;
     background: linear-gradient(135deg, #ffffff 0%, #fafafa 100%);
   }
+
+  /* Gradient Progress Bar Styles */
+  .progress-gradient {
+    background: linear-gradient(90deg, #B8E6D3 0%, #F4C2A1 50%, #8D7053 100%);
+    background-size: 200% 100%;
+    animation: shimmer 2s ease-in-out infinite alternate;
+  }
+
+  .progress-gradient-ring {
+    background: conic-gradient(from 0deg, #B8E6D3 0%, #F4C2A1 50%, #8D7053 100%, #B8E6D3 100%);
+  }
+
+  .weight-trend-up {
+    background: linear-gradient(135deg, #10B981 0%, #34D399 100%);
+  }
+
+  .weight-trend-down {
+    background: linear-gradient(135deg, #EF4444 0%, #F87171 100%);
+  }
+
+  .weight-trend-stable {
+    background: linear-gradient(135deg, #6B7280 0%, #9CA3AF 100%);
+  }
+
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  /* Circular Progress Ring */
+  .circular-progress {
+    position: relative;
+    transform: rotate(-90deg);
+  }
+
+  .circular-progress-ring {
+    fill: none;
+    stroke-width: 8;
+    stroke-linecap: round;
+  }
+
+  .circular-progress-bg {
+    stroke: #E5E7EB;
+  }
+
+  .circular-progress-fill {
+    stroke: url(#progressGradient);
+    stroke-dasharray: 0 100;
+    transition: stroke-dasharray 1s ease-in-out;
+  }
+
+  /* Scale Display Animation */
+  .scale-display {
+    background: linear-gradient(135deg, #1F2937 0%, #374151 100%);
+    color: #10B981;
+    font-family: 'Courier New', monospace;
+    text-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+  }
+
+  .weight-card-glow {
+    box-shadow: 0 4px 20px rgba(180, 230, 211, 0.3), 0 2px 10px rgba(180, 230, 211, 0.2);
+  }
 }

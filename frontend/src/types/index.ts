@@ -65,6 +65,7 @@ export interface WeightEntry {
   weight: number;
   date: Date;
   notes?: string;
+  photo?: string;
   loggedBy: string;
 }
 
