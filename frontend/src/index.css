@@ -3,19 +3,56 @@
 @tailwind utilities;
 
 :root {
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-  line-height: 1.5;
-  font-weight: 400;
-  
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  -webkit-text-size-adjust: 100%;
 }
 
 body {
   margin: 0;
-  min-width: 320px;
-  min-height: 100vh;
+  background-color: #F2EAD3;
+}
+
+/* 3D Button Styles */
+@layer components {
+  .btn-3d {
+    @apply relative overflow-hidden rounded-lg transition-all duration-200 ease-out;
+    @apply shadow-3d active:shadow-3d-pressed;
+    background: linear-gradient(135deg, #F4C2A1 0%, #F4C2A1 50%, #e8b690 100%);
+    transform: translateY(0px);
+  }
+
+  .btn-3d:hover {
+    @apply shadow-3d-hover;
+    transform: translateY(-2px);
+  }
+
+  .btn-3d:active {
+    @apply shadow-3d-pressed;
+    transform: translateY(1px);
+  }
+
+  .btn-3d-mint {
+    background: linear-gradient(135deg, #B8E6D3 0%, #B8E6D3 50%, #a3d8c4 100%);
+  }
+
+  .btn-3d-earth {
+    background: linear-gradient(135deg, #8D7053 0%, #8D7053 50%, #7a6147 100%);
+  }
+
+  .card-3d {
+    @apply bg-white rounded-xl shadow-3d transition-all duration-200;
+    background: linear-gradient(135deg, #ffffff 0%, #fafafa 100%);
+  }
+
+  .card-3d:hover {
+    @apply shadow-3d-hover;
+    transform: translateY(-1px);
+  }
+
+  .input-3d {
+    @apply border-2 border-gray-200 rounded-lg px-4 py-3 transition-all duration-200;
+    @apply focus:border-orange focus:shadow-3d focus:outline-none;
+    background: linear-gradient(135deg, #ffffff 0%, #fafafa 100%);
+  }
 }
