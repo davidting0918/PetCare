@@ -10,7 +10,10 @@ import type {
   MedicineLog,
   Activity,
   FamilyMember,
-  DailySummary
+  DailySummary,
+  Group,
+  GroupMembership,
+  InviteCode
 } from '../types';
 
 // Mock Users
@@ -533,6 +536,97 @@ export const mockDailySummary: DailySummary = {
   medicinesScheduled: 3
 };
 
+// Mock Groups
+export const mockGroups: Group[] = [
+  {
+    id: 'group1',
+    name: "Buddy's Family",
+    icon: '🐕',
+    createdBy: 'user1',
+    createdAt: new Date('2024-01-01'),
+    memberCount: 4
+  },
+  {
+    id: 'group2',
+    name: "Whiskers' Care",
+    icon: '🐱',
+    createdBy: 'user2',
+    createdAt: new Date('2024-01-15'),
+    memberCount: 2
+  },
+  {
+    id: 'group3',
+    name: "Charlie's Pack",
+    icon: '🐕',
+    createdBy: 'user3',
+    createdAt: new Date('2024-02-01'),
+    memberCount: 3
+  }
+];
+
+// Mock Group Memberships
+export const mockGroupMemberships: GroupMembership[] = [
+  // User 1 memberships
+  {
+    groupId: 'group1',
+    userId: 'user1',
+    role: 'Creator',
+    joinedAt: new Date('2024-01-01'),
+    group: mockGroups[0]
+  },
+  {
+    groupId: 'group2',
+    userId: 'user1',
+    role: 'Member',
+    joinedAt: new Date('2024-01-20'),
+    group: mockGroups[1]
+  },
+  {
+    groupId: 'group3',
+    userId: 'user1',
+    role: 'Viewer',
+    joinedAt: new Date('2024-02-05'),
+    group: mockGroups[2]
+  },
+  // User 2 memberships
+  {
+    groupId: 'group1',
+    userId: 'user2',
+    role: 'Member',
+    joinedAt: new Date('2024-01-02'),
+    group: mockGroups[0]
+  },
+  {
+    groupId: 'group2',
+    userId: 'user2',
+    role: 'Creator',
+    joinedAt: new Date('2024-01-15'),
+    group: mockGroups[1]
+  }
+];
+
+// Mock Invite Codes
+export const mockInviteCodes: InviteCode[] = [
+  {
+    id: 'invite1',
+    code: 'ABC123XY',
+    groupId: 'group1',
+    createdBy: 'user1',
+    createdAt: new Date('2024-01-10'),
+    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
+    isUsed: false
+  },
+  {
+    id: 'invite2',
+    code: 'DEF456ZW',
+    groupId: 'group2',
+    createdBy: 'user2',
+    createdAt: new Date('2024-01-12'),
+    expiresAt: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000), // 5 days from now
+    isUsed: false
+  }
+];
+
 // Helper function to get user's accessible pets
 export const getUserAccessiblePets = (userId: string): PetAccess[] => {
   return mockPetAccess.filter(access => access.userId === userId);
@@ -701,6 +795,47 @@ export const getDailyMealBreakdown = (petId: string, date: Date = new Date()): R
   });
 
   return breakdown;
+};
+
+// Group Management Helper Functions
+
+// Get user's group memberships
+export const getUserGroupMemberships = (userId: string): GroupMembership[] => {
+  return mockGroupMemberships.filter(membership => membership.userId === userId);
+};
+
+// Get group members by group ID
+export const getGroupMembers = (groupId: string): GroupMembership[] => {
+  return mockGroupMemberships.filter(membership => membership.groupId === groupId);
+};
+
+// Generate new invite code
+export const generateInviteCode = (): string => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = '';
+  for (let i = 0; i < 8; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+};
+
+// Get active invite codes for a group
+export const getGroupInviteCodes = (groupId: string): InviteCode[] => {
+  return mockInviteCodes.filter(
+    invite => invite.groupId === groupId &&
+    !invite.isUsed &&
+    invite.expiresAt > new Date()
+  );
+};
+
+// Validate invite code
+export const validateInviteCode = (code: string): InviteCode | null => {
+  const invite = mockInviteCodes.find(
+    invite => invite.code === code &&
+    !invite.isUsed &&
+    invite.expiresAt > new Date()
+  );
+  return invite || null;
 };
 
 // Mock Settings Data

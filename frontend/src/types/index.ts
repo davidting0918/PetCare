@@ -35,6 +35,36 @@ export interface FamilyMember {
   role: 'Adult' | 'Child';
 }
 
+// Group Management Types
+export interface Group {
+  id: string;
+  name: string;
+  icon?: string;
+  createdBy: string;
+  createdAt: Date;
+  memberCount: number;
+}
+
+export interface GroupMembership {
+  groupId: string;
+  userId: string;
+  role: 'Creator' | 'Member' | 'Viewer';
+  joinedAt: Date;
+  group: Group;
+}
+
+export interface InviteCode {
+  id: string;
+  code: string;
+  groupId: string;
+  createdBy: string;
+  createdAt: Date;
+  expiresAt: Date;
+  isUsed: boolean;
+  usedBy?: string;
+  usedAt?: Date;
+}
+
 // Food and Meal Types
 export interface Food {
   id: string;
