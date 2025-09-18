@@ -6,3 +6,5 @@ node_modules
 .pyc
 .vscode
 storage
+.vite
+repo
