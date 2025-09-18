@@ -4,6 +4,8 @@ import { LoginPage } from './components/auth/LoginPage';
 import { PetSelectionPage } from './components/auth/PetSelectionPage';
 import { MainLayout } from './components/layout/MainLayout';
 import { Dashboard } from './components/dashboard/Dashboard';
+import { MealPage } from './components/meal/MealPage';
+import { WeightPage } from './components/weight/WeightPage';
 import { ComingSoon } from './components/common/ComingSoon';
 import type { NavigationTab } from './types';
 
@@ -37,12 +39,7 @@ const AppContent: React.FC = () => {
       case 'dashboard':
         return <Dashboard />;
       case 'meal':
-        return (
-          <ComingSoon
-            title="Meal Tracking"
-            description="Log your pet's meals, track calories, and manage their food intake with ease."
-          />
-        );
+        return <MealPage />;
       case 'medicine':
         return (
           <ComingSoon
@@ -51,12 +48,7 @@ const AppContent: React.FC = () => {
           />
         );
       case 'weight':
-        return (
-          <ComingSoon
-            title="Weight Tracking"
-            description="Monitor your pet's weight progress and visualize trends over time."
-          />
-        );
+        return <WeightPage />;
       case 'settings':
         return (
           <ComingSoon

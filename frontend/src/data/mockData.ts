@@ -35,7 +35,7 @@ export const mockUsers: User[] = [
 export const mockPets: Pet[] = [
   {
     id: 'pet1',
-    name: 'Buddy',
+    name: '小帥',
     breed: 'Golden Retriever',
     age: 3,
     weight: 28.5,
@@ -64,6 +64,16 @@ export const mockPets: Pet[] = [
     photo: 'https://via.placeholder.com/200x200?text=Max',
     dailyCalorieGoal: 1400,
     ownerId: 'user2'
+  },
+  {
+    id: 'pet4',
+    name: 'Test Cat',
+    breed: 'British Shorthair',
+    age: 5,
+    weight: 32.0,
+    photo: 'https://via.placeholder.com/200x200?text=Max',
+    dailyCalorieGoal: 1400,
+    ownerId: 'user2'
   }
 ];
 
@@ -86,6 +96,12 @@ export const mockPetAccess: PetAccess[] = [
     userId: 'user1',
     role: 'Member',
     pet: mockPets[2]
+  },
+  {
+    petId: 'pet4',
+    userId: 'user2',
+    role: 'Member',
+    pet: mockPets[3]
   }
 ];
 
@@ -213,19 +229,50 @@ const generateMealEntries = (): MealEntry[] => {
 
 export const mockMealEntries = generateMealEntries();
 
-// Mock Weight Entries (last 30 days)
+// Mock Weight Entries (last 90 days with realistic weight loss progression)
 const generateWeightEntries = (): WeightEntry[] => {
   const entries: WeightEntry[] = [];
   const today = new Date();
 
-  for (let i = 0; i < 30; i += 3) {
+  // Simulate a realistic weight loss journey for Buddy (Golden Retriever)
+  // Starting weight: 30kg, target: 27kg, current: 28.5kg
+  const startWeight = 30.0;
+  const currentWeight = 28.5;
+  const targetWeight = 27.0;
+  const totalDays = 90;
+
+  for (let i = 0; i < totalDays; i += 2) { // Every 2 days
     const date = new Date(today);
     date.setDate(date.getDate() - i);
+
+    // Calculate expected weight with some natural variation
+    const progressRatio = i / totalDays;
+    const expectedWeight = startWeight - (startWeight - currentWeight) * (1 - progressRatio);
+
+    // Add realistic daily variation (-0.3 to +0.2 kg)
+    const dailyVariation = (Math.random() - 0.7) * 0.5;
+    const actualWeight = Math.max(targetWeight - 0.5, expectedWeight + dailyVariation);
 
     entries.push({
       id: `weight-${i}`,
       petId: 'pet1',
-      weight: 28.5 + (Math.random() - 0.5) * 0.8, // Random variation
+      weight: Math.round(actualWeight * 10) / 10, // Round to 1 decimal
+      date: date,
+      notes: i % 14 === 0 ? 'Weekly vet check' : i % 7 === 0 ? 'Weekly weigh-in' : undefined,
+      loggedBy: ['family1', 'family2'][Math.floor(Math.random() * 2)]
+    });
+  }
+
+  // Add entries for other pets
+  // Whiskers (cat) - maintaining healthy weight
+  for (let i = 0; i < 60; i += 5) {
+    const date = new Date(today);
+    date.setDate(date.getDate() - i);
+
+    entries.push({
+      id: `weight-cat-${i}`,
+      petId: 'pet2',
+      weight: 4.2 + (Math.random() - 0.5) * 0.3, // 3.9-4.5kg range
       date: date,
       loggedBy: 'family1'
     });
@@ -384,4 +431,66 @@ export const getTodayMedicineLogs = (petId: string): MedicineLog[] => {
     log.petId === petId &&
     log.scheduledTime.toDateString() === today.toDateString()
   );
+};
+
+// Helper function to get weight entries for a pet
+export const getPetWeightEntries = (petId: string): WeightEntry[] => {
+  return mockWeightEntries.filter(entry => entry.petId === petId);
+};
+
+// Helper function to get latest weight entry for a pet
+export const getLatestWeightEntry = (petId: string): WeightEntry | undefined => {
+  const entries = getPetWeightEntries(petId).sort((a, b) => b.date.getTime() - a.date.getTime());
+  return entries[0];
+};
+
+// Helper function to calculate weight progress percentage
+export const calculateWeightProgress = (petId: string): number => {
+  const pet = mockPets.find(p => p.id === petId);
+  const latestEntry = getLatestWeightEntry(petId);
+
+  if (!pet || !pet.targetWeight || !latestEntry) return 0;
+
+  // Find starting weight (oldest entry)
+  const entries = getPetWeightEntries(petId).sort((a, b) => a.date.getTime() - b.date.getTime());
+  const startWeight = entries[0]?.weight || pet.weight;
+
+  const totalWeightToLose = startWeight - pet.targetWeight;
+  const weightLostSoFar = startWeight - latestEntry.weight;
+
+  if (totalWeightToLose <= 0) return 100;
+
+  return Math.min(Math.max((weightLostSoFar / totalWeightToLose) * 100, 0), 100);
+};
+
+// Helper function to get weekly weight average
+export const getWeeklyWeightAverage = (petId: string, weeksAgo: number = 0): number => {
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - (weeksAgo * 7 + 7));
+  const endDate = new Date();
+  endDate.setDate(endDate.getDate() - (weeksAgo * 7));
+
+  const weekEntries = getPetWeightEntries(petId).filter(entry =>
+    entry.date >= startDate && entry.date < endDate
+  );
+
+  if (weekEntries.length === 0) return 0;
+
+  const totalWeight = weekEntries.reduce((sum, entry) => sum + entry.weight, 0);
+  return totalWeight / weekEntries.length;
+};
+
+// Helper function to get weight trend direction
+export const getWeightTrend = (petId: string): 'up' | 'down' | 'stable' => {
+  const entries = getPetWeightEntries(petId).sort((a, b) => b.date.getTime() - a.date.getTime()).slice(0, 5);
+
+  if (entries.length < 3) return 'stable';
+
+  const recentAvg = entries.slice(0, 2).reduce((sum, e) => sum + e.weight, 0) / 2;
+  const olderAvg = entries.slice(2, 4).reduce((sum, e) => sum + e.weight, 0) / 2;
+
+  const difference = recentAvg - olderAvg;
+
+  if (Math.abs(difference) < 0.1) return 'stable';
+  return difference > 0 ? 'up' : 'down';
 };
