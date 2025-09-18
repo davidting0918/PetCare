@@ -104,8 +104,8 @@ export const MealPage: React.FC = () => {
             <div className="w-full bg-gray-200 rounded-full h-3">
               <div
                 className={`h-3 rounded-full transition-all duration-500 ${
-                  progressPercentage <= 70 ? 'bg-green-500' :
-                  progressPercentage <= 90 ? 'bg-yellow-500' : 'bg-red-500'
+                  progressPercentage <= 70 ? 'progress-gradient' :
+                  progressPercentage <= 90 ? 'bg-gradient-to-r from-yellow-400 to-yellow-500' : 'bg-gradient-to-r from-red-400 to-red-500'
                 }`}
                 style={{ width: `${Math.min(progressPercentage, 100)}%` }}
               />

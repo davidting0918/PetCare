@@ -114,10 +114,10 @@ export const AddFoodModal: React.FC<AddFoodModalProps> = ({ onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50">
-      <div className="bg-primary w-full max-w-md h-[90vh] rounded-t-3xl overflow-hidden shadow-3d">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-primary w-full max-w-md max-h-[90vh] rounded-3xl overflow-hidden shadow-3d flex flex-col">
         {/* Header */}
-        <div className="bg-white p-4 shadow-3d">
+        <div className="bg-white p-4 shadow-3d flex-shrink-0">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-800">Add New Food</h2>
             <button
@@ -311,7 +311,7 @@ export const AddFoodModal: React.FC<AddFoodModalProps> = ({ onClose }) => {
           </div>
 
           {/* Submit Button */}
-          <div className="pb-6">
+          <div className="sticky bottom-0 bg-primary pt-4 pb-6 mt-6">
             <button
               type="submit"
               disabled={isSubmitting}

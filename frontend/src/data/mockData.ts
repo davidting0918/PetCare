@@ -173,52 +173,145 @@ export const mockFoods: Food[] = [
   }
 ];
 
-// Mock Meal Entries (last 7 days)
+// Mock Meal Entries (last 30 days with realistic variation)
 const generateMealEntries = (): MealEntry[] => {
   const entries: MealEntry[] = [];
   const today = new Date();
+  const dayRange = 30; // Generate 30 days of data
 
-  for (let i = 0; i < 7; i++) {
+  // Meal types with different probability and calorie targets
+  const mealPlans = [
+    { type: 'breakfast', baseHour: 8, calorieTarget: 400 },
+    { type: 'lunch', baseHour: 13, calorieTarget: 300 },
+    { type: 'dinner', baseHour: 18, calorieTarget: 400 },
+    { type: 'snack', baseHour: 15, calorieTarget: 100 }
+  ];
+
+  const familyMembers = ['family1', 'family2', 'family3'];
+
+  for (let i = 0; i < dayRange; i++) {
     const date = new Date(today);
     date.setDate(date.getDate() - i);
+    const dayOfWeek = date.getDay(); // 0 = Sunday, 6 = Saturday
 
-    // Breakfast for Buddy
-    entries.push({
-      id: `meal-${i}-1`,
-      petId: 'pet1',
-      foodId: 'food1',
-      amount: 1,
-      calories: 350,
-      mealType: 'breakfast',
-      timestamp: new Date(date.setHours(8, 0, 0, 0)),
-      loggedBy: 'family1',
-      food: mockFoods[0]
+    let entryCounter = 0;
+
+    // Generate meals for Buddy (小帥) with more realistic patterns
+    mealPlans.forEach((mealPlan) => {
+      // Skip some meals occasionally to simulate real life
+      const skipChance = mealPlan.type === 'snack' ? 0.3 :
+                       (mealPlan.type === 'lunch' && (dayOfWeek === 0 || dayOfWeek === 6)) ? 0.2 : 0.05;
+
+      if (Math.random() > skipChance) {
+        const mealTime = new Date(date);
+        // Add some variation to meal times (±30 minutes)
+        const timeVariation = (Math.random() - 0.5) * 60; // ±30 minutes
+        mealTime.setHours(mealPlan.baseHour, Math.floor(timeVariation), 0, 0);
+
+        // Select food based on meal type and add variety
+        let selectedFood, amount, calories;
+
+        switch (mealPlan.type) {
+          case 'breakfast':
+            if (Math.random() > 0.7) {
+              // Sometimes mix wet and dry food
+              selectedFood = mockFoods[Math.random() > 0.5 ? 0 : 1];
+              amount = selectedFood.id === 'food1' ? 1.2 : 1.5;
+              calories = Math.round(selectedFood.caloriesPerUnit * amount);
+            } else {
+              selectedFood = mockFoods[0]; // Premium Dry Dog Food
+              amount = 1 + (Math.random() - 0.5) * 0.4; // 0.8-1.2 cups
+              calories = Math.round(selectedFood.caloriesPerUnit * amount);
+            }
+            break;
+
+          case 'lunch':
+            selectedFood = mockFoods[1]; // Wet food
+            amount = 0.8 + Math.random() * 0.4; // 0.8-1.2 cans
+            calories = Math.round(selectedFood.caloriesPerUnit * amount);
+            break;
+
+          case 'dinner':
+            selectedFood = mockFoods[Math.random() > 0.6 ? 0 : 1];
+            amount = selectedFood.id === 'food1' ? 1 + (Math.random() - 0.5) * 0.3 : 1.2 + Math.random() * 0.6;
+            calories = Math.round(selectedFood.caloriesPerUnit * amount);
+            break;
+
+          case 'snack':
+            selectedFood = mockFoods[Math.random() > 0.3 ? 2 : 4]; // Treats or dental chews
+            amount = Math.floor(2 + Math.random() * 4); // 2-6 pieces
+            calories = selectedFood.caloriesPerUnit * amount;
+            break;
+
+          default:
+            selectedFood = mockFoods[0];
+            amount = 1;
+            calories = selectedFood.caloriesPerUnit;
+        }
+
+        entries.push({
+          id: `meal-${i}-${++entryCounter}`,
+          petId: 'pet1',
+          foodId: selectedFood.id,
+          amount: Math.round(amount * 10) / 10, // Round to 1 decimal
+          calories: calories,
+          mealType: mealPlan.type as any,
+          timestamp: mealTime,
+          loggedBy: familyMembers[Math.floor(Math.random() * familyMembers.length)],
+          food: selectedFood
+        });
+      }
     });
 
-    // Dinner for Buddy
-    entries.push({
-      id: `meal-${i}-2`,
-      petId: 'pet1',
-      foodId: 'food2',
-      amount: 1,
-      calories: 120,
-      mealType: 'dinner',
-      timestamp: new Date(date.setHours(18, 0, 0, 0)),
-      loggedBy: 'family2',
-      food: mockFoods[1]
-    });
+    // Occasionally add extra treats or supplements
+    if (Math.random() > 0.8) {
+      const extraTime = new Date(date);
+      extraTime.setHours(20 + Math.random() * 2, Math.random() * 60, 0, 0);
 
-    // Cat food for Whiskers
-    if (i < 3) {
       entries.push({
-        id: `meal-${i}-3`,
+        id: `meal-${i}-extra`,
+        petId: 'pet1',
+        foodId: 'food3',
+        amount: Math.floor(1 + Math.random() * 3),
+        calories: mockFoods[2].caloriesPerUnit * Math.floor(1 + Math.random() * 3),
+        mealType: 'snack',
+        timestamp: extraTime,
+        loggedBy: familyMembers[Math.floor(Math.random() * familyMembers.length)],
+        food: mockFoods[2]
+      });
+    }
+
+    // Cat food for Whiskers (more consistent pattern)
+    if (i < 15) { // Last 15 days only
+      // Morning meal
+      const catMorning = new Date(date);
+      catMorning.setHours(7, 30 + (Math.random() - 0.5) * 20, 0, 0);
+
+      entries.push({
+        id: `meal-cat-${i}-1`,
         petId: 'pet2',
         foodId: 'food4',
-        amount: 0.5,
-        calories: 190,
+        amount: 0.4 + Math.random() * 0.3, // 0.4-0.7 cups
+        calories: Math.round(mockFoods[3].caloriesPerUnit * (0.4 + Math.random() * 0.3)),
         mealType: 'breakfast',
-        timestamp: new Date(date.setHours(7, 30, 0, 0)),
-        loggedBy: 'family1',
+        timestamp: catMorning,
+        loggedBy: familyMembers[0],
+        food: mockFoods[3]
+      });
+
+      // Evening meal
+      const catEvening = new Date(date);
+      catEvening.setHours(17, 45 + (Math.random() - 0.5) * 30, 0, 0);
+
+      entries.push({
+        id: `meal-cat-${i}-2`,
+        petId: 'pet2',
+        foodId: 'food4',
+        amount: 0.3 + Math.random() * 0.2, // 0.3-0.5 cups
+        calories: Math.round(mockFoods[3].caloriesPerUnit * (0.3 + Math.random() * 0.2)),
+        mealType: 'dinner',
+        timestamp: catEvening,
+        loggedBy: familyMembers[Math.floor(Math.random() * familyMembers.length)],
         food: mockFoods[3]
       });
     }
@@ -398,13 +491,43 @@ export const mockActivities: Activity[] = [
   }
 ];
 
-// Mock Daily Summary
+// Helper function to calculate daily calorie consumption for a pet
+export const getDailyCalories = (petId: string, date: Date = new Date()): number => {
+  const dayStart = new Date(date);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(date);
+  dayEnd.setHours(23, 59, 59, 999);
+
+  return mockMealEntries
+    .filter(entry =>
+      entry.petId === petId &&
+      entry.timestamp >= dayStart &&
+      entry.timestamp <= dayEnd
+    )
+    .reduce((total, entry) => total + entry.calories, 0);
+};
+
+// Helper function to get daily meal count for a pet
+export const getDailyMealCount = (petId: string, date: Date = new Date()): number => {
+  const dayStart = new Date(date);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(date);
+  dayEnd.setHours(23, 59, 59, 999);
+
+  return mockMealEntries.filter(entry =>
+    entry.petId === petId &&
+    entry.timestamp >= dayStart &&
+    entry.timestamp <= dayEnd
+  ).length;
+};
+
+// Mock Daily Summary (dynamically calculated)
 export const mockDailySummary: DailySummary = {
   date: new Date(),
   petId: 'pet1',
-  caloriesConsumed: 470,
+  caloriesConsumed: getDailyCalories('pet1'),
   caloriesGoal: 1200,
-  mealsLogged: 2,
+  mealsLogged: getDailyMealCount('pet1'),
   weight: 28.3,
   medicinesGiven: 1,
   medicinesScheduled: 3
@@ -493,4 +616,89 @@ export const getWeightTrend = (petId: string): 'up' | 'down' | 'stable' => {
 
   if (Math.abs(difference) < 0.1) return 'stable';
   return difference > 0 ? 'up' : 'down';
+};
+
+// Helper function to get calorie data for the last N days (for charts)
+export const getCalorieHistory = (petId: string, days: number = 7): Array<{date: Date, calories: number, goal: number}> => {
+  const result = [];
+  const today = new Date();
+  const petData = mockPets.find(p => p.id === petId);
+  const calorieGoal = petData?.dailyCalorieGoal || 1200;
+
+  for (let i = 0; i < days; i++) {
+    const date = new Date(today);
+    date.setDate(date.getDate() - i);
+
+    const calories = getDailyCalories(petId, date);
+
+    result.unshift({
+      date: new Date(date),
+      calories,
+      goal: calorieGoal
+    });
+  }
+
+  return result;
+};
+
+// Helper function to get weekly calorie averages
+export const getWeeklyCalorieAverage = (petId: string, weeksAgo: number = 0): number => {
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - (weeksAgo * 7 + 7));
+  const endDate = new Date();
+  endDate.setDate(endDate.getDate() - (weeksAgo * 7));
+
+  let totalCalories = 0;
+  let dayCount = 0;
+
+  for (let d = new Date(startDate); d < endDate; d.setDate(d.getDate() + 1)) {
+    const dayCalories = getDailyCalories(petId, new Date(d));
+    if (dayCalories > 0) {
+      totalCalories += dayCalories;
+      dayCount++;
+    }
+  }
+
+  return dayCount > 0 ? Math.round(totalCalories / dayCount) : 0;
+};
+
+// Helper function to get calorie trend direction
+export const getCalorieTrend = (petId: string): 'up' | 'down' | 'stable' => {
+  const thisWeekAvg = getWeeklyCalorieAverage(petId, 0);
+  const lastWeekAvg = getWeeklyCalorieAverage(petId, 1);
+
+  if (thisWeekAvg === 0 || lastWeekAvg === 0) return 'stable';
+
+  const difference = thisWeekAvg - lastWeekAvg;
+  const threshold = 50; // 50 calories threshold
+
+  if (Math.abs(difference) < threshold) return 'stable';
+  return difference > 0 ? 'up' : 'down';
+};
+
+// Helper function to get meal breakdown by type for a specific day
+export const getDailyMealBreakdown = (petId: string, date: Date = new Date()): Record<string, {count: number, calories: number}> => {
+  const dayStart = new Date(date);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(date);
+  dayEnd.setHours(23, 59, 59, 999);
+
+  const meals = mockMealEntries.filter(entry =>
+    entry.petId === petId &&
+    entry.timestamp >= dayStart &&
+    entry.timestamp <= dayEnd
+  );
+
+  const breakdown: Record<string, {count: number, calories: number}> = {};
+
+  meals.forEach(meal => {
+    const mealType = meal.mealType || 'other';
+    if (!breakdown[mealType]) {
+      breakdown[mealType] = { count: 0, calories: 0 };
+    }
+    breakdown[mealType].count += 1;
+    breakdown[mealType].calories += meal.calories;
+  });
+
+  return breakdown;
 };
