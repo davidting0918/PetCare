@@ -21,7 +21,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   showBackButton = false,
   onBackClick
 }) => {
-  const { selectedPet, user, selectPet, getUserPets } = useAuth();
+  const { selectedPet, selectPet, getUserPets } = useAuth();
   const [showPetSelector, setShowPetSelector] = useState(false);
   const userPets = getUserPets();
 

@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  Calendar,
   Target,
   TrendingUp,
   Activity,

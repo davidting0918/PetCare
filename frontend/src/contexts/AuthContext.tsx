@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
-import type { User, Pet, PetAccess, AppState } from '../types';
+import type { Pet, PetAccess, AppState } from '../types';
 import { mockUsers, getUserAccessiblePets } from '../data/mockData';
 
 interface AuthContextType extends AppState {
