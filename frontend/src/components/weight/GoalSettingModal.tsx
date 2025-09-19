@@ -29,7 +29,7 @@ export const GoalSettingModal: React.FC<GoalSettingModalProps> = ({
   const [targetDate, setTargetDate] = useState<Date>(addWeeks(new Date(), 12));
   const [vetRecommendation, setVetRecommendation] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [goalType, setGoalType] = useState<'lose' | 'gain' | 'maintain'>('lose');
+  const [_goalType, setGoalType] = useState<'lose' | 'gain' | 'maintain'>('lose');
 
   if (!pet || !latestWeight) return null;
 
@@ -132,20 +132,12 @@ export const GoalSettingModal: React.FC<GoalSettingModalProps> = ({
 
     try {
       // Here you would update the pet's target weight
-      console.log('Updating weight goal:', {
-        petId,
-        targetWeight,
-        targetDate,
-        vetRecommendation: vetRecommendation.trim() || undefined,
-        goalType
-      });
 
       // Simulate API delay
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       onClose();
     } catch (error) {
-      console.error('Failed to update weight goal:', error);
     } finally {
       setIsSubmitting(false);
     }

@@ -44,14 +44,6 @@ export class UnifiedApiClient {
 
     this.baseClient = new BaseApiClient(finalConfig, tokenStorageInstance);
 
-    if (finalConfig.enableLogging) {
-      console.log('🚀 Unified API Client initialized with config:', {
-        baseUrl: finalConfig.baseUrl,
-        production: API_BASE.PRODUCTION,
-        development: API_BASE.DEVELOPMENT,
-        current: API_BASE.CURRENT,
-      });
-    }
   }
 
   // =========================================================================
@@ -71,7 +63,6 @@ export class UnifiedApiClient {
     pwd: string; // Note: backend uses 'pwd' not 'password'
   }): Promise<ApiResponse<LoginResponse>> {
     try {
-      console.log('🔐 API: Email/password login attempt...');
 
       const response = await this.baseClient.post<LoginResponse>(
         API_ENDPOINTS.AUTH.EMAIL_LOGIN,
@@ -82,10 +73,8 @@ export class UnifiedApiClient {
         { requiresAuth: false }
       );
 
-      console.log('✅ API: Email login successful');
       return response;
     } catch (error) {
-      console.error('❌ API: Email login failed:', error);
       throw error;
     }
   }
@@ -109,10 +98,8 @@ export class UnifiedApiClient {
         { requiresAuth: false }
       );
 
-      console.log(response);
       return response;
     } catch (error) {
-      console.error('❌ API: Google JWT login failed:', error);
       throw error;
     }
   }
@@ -130,7 +117,6 @@ export class UnifiedApiClient {
     password: string;
   }): Promise<ApiResponse<{ access_token: string; token_type: string; message: string }>> {
     try {
-      console.log('🔐 API: OAuth2 access token generation...');
 
       // Create form-encoded data
       const formData = new URLSearchParams();
@@ -148,10 +134,8 @@ export class UnifiedApiClient {
         requiresAuth: false,
       });
 
-      console.log('✅ API: Access token generated successfully');
       return response;
     } catch (error) {
-      console.error('❌ API: Access token generation failed:', error);
       throw error;
     }
   }
@@ -163,12 +147,10 @@ export class UnifiedApiClient {
    * Clears local tokens and session data
    */
   logout(): ApiResponse<void> {
-    console.log('🚪 API: Logout (local cleanup only)...');
 
     // No backend API call needed - backend has no logout endpoint
     // Local cleanup is handled by the caller (AuthContext/authService)
 
-    console.log('✅ API: Local logout completed');
     return { status: 1, data: undefined };
   }
 
@@ -190,7 +172,6 @@ export class UnifiedApiClient {
     pwd: string; // backend uses 'pwd'
   }, apiKey: string): Promise<ApiResponse<UserProfile>> {
     try {
-      console.log('👤 API: Creating user account...');
 
       const response = await this.baseClient.post<UserProfile>(
         API_ENDPOINTS.USER.CREATE,
@@ -207,10 +188,8 @@ export class UnifiedApiClient {
         }
       );
 
-      console.log('✅ API: User account created successfully');
       return response;
     } catch (error) {
-      console.error('❌ API: User creation failed:', error);
       throw error;
     }
   }
@@ -223,16 +202,13 @@ export class UnifiedApiClient {
    */
   async getCurrentUser(): Promise<ApiResponse<UserProfile>> {
     try {
-      console.log('👤 API: Getting current user profile...');
 
       const response = await this.baseClient.get<UserProfile>(
         API_ENDPOINTS.USER.ME
       );
 
-      console.log('✅ API: User profile retrieved successfully');
       return response;
     } catch (error) {
-      console.error('❌ API: Failed to get user profile:', error);
       throw error;
     }
   }
@@ -248,17 +224,14 @@ export class UnifiedApiClient {
     picture?: string;
   }): Promise<ApiResponse<UserProfile>> {
     try {
-      console.log('👤 API: Updating user profile...');
 
       const response = await this.baseClient.post<UserProfile>(
         API_ENDPOINTS.USER.UPDATE,
         updates
       );
 
-      console.log('✅ API: User profile updated successfully');
       return response;
     } catch (error) {
-      console.error('❌ API: User update failed:', error);
       throw error;
     }
   }
@@ -274,7 +247,6 @@ export class UnifiedApiClient {
     new_pwd: string;
   }): Promise<ApiResponse<UserProfile>> {
     try {
-      console.log('🔐 API: Resetting password...');
 
       const response = await this.baseClient.post<UserProfile>(
         API_ENDPOINTS.USER.RESET_PASSWORD,
@@ -284,10 +256,8 @@ export class UnifiedApiClient {
         }
       );
 
-      console.log('✅ API: Password reset successfully');
       return response;
     } catch (error) {
-      console.error('❌ API: Password reset failed:', error);
       throw error;
     }
   }
@@ -318,19 +288,14 @@ export class UnifiedApiClient {
     notes?: string;
   }): Promise<ApiResponse<Pet>> {
     try {
-      console.log('🐾 API: Creating new pet...');
-      console.log('📤 Pet data:', petData);
 
       const response = await this.baseClient.post<Pet>(
         API_ENDPOINTS.PETS.CREATE,
         petData
       );
 
-      console.log('✅ API: Pet created successfully');
-      console.log('📥 Backend Response:', response);
       return response;
     } catch (error) {
-      console.error('❌ API: Pet creation failed:', error);
       throw error;
     }
   }
@@ -379,7 +344,6 @@ export class UnifiedApiClient {
     }
 
     this.updateConfig({ baseUrl: newBaseUrl });
-    console.log(`🔧 API Base URL changed to: ${newBaseUrl}`);
   }
 
   /**

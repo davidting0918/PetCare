@@ -22,7 +22,7 @@ type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 type FoodCategory = 'all' | 'favorites' | 'dry-food' | 'wet-food' | 'treat' | 'supplement';
 
 export const FoodSelectionModal: React.FC<FoodSelectionModalProps> = ({
-  petId,
+  petId: _petId,
   onClose
 }) => {
   const [selectedFood, setSelectedFood] = useState<Food | null>(null);
@@ -58,15 +58,6 @@ export const FoodSelectionModal: React.FC<FoodSelectionModalProps> = ({
     if (!selectedFood) return;
 
     // Here you would typically save to your data store
-    console.log('Logging meal:', {
-      petId,
-      foodId: selectedFood.id,
-      amount,
-      calories: calculateCalories(),
-      mealType,
-      timestamp: new Date(),
-      loggedBy: selectedFamilyMember
-    });
 
     onClose();
   };
