@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LoginPage } from './components/auth/LoginPage';
+import { SignUpPage } from './components/auth/SignupPage';
 import { PetSelectionPage } from './components/auth/PetSelectionPage';
 import { MainLayout } from './components/layout/MainLayout';
 import { Dashboard } from './components/dashboard/Dashboard';
@@ -135,6 +136,14 @@ const AppContent: React.FC = () => {
         path="/login"
         element={
           isAuthenticated ? <Navigate to="/dashboard" replace /> : <LoginPage />
+        }
+      />
+
+      {/* Signup page - redirect to dashboard if already authenticated */}
+      <Route
+        path="/signup"
+        element={
+          isAuthenticated ? <Navigate to="/dashboard" replace /> : <SignUpPage />
         }
       />
 

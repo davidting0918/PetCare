@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Mail, Heart, PawPrint, Lock, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 export const LoginPage: React.FC = () => {
+  const navigate = useNavigate();
   const { login, loginWithGoogle, isLoading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -23,9 +25,12 @@ export const LoginPage: React.FC = () => {
       return;
     }
 
-    // For demo purposes, accept any password for existing users
-    const success = await login(email, password);
-    if (!success) {
+    try {
+      // For demo purposes, accept any password for existing users
+      await login(email, password);
+      // If we reach here, login was successful
+    } catch (error) {
+      console.error('❌ LoginPage: Login failed:', error);
       setError('Invalid email or password. Try john.doe@example.com or jane.doe@example.com');
     }
   };
@@ -33,78 +38,12 @@ export const LoginPage: React.FC = () => {
   const handleGoogleLogin = async () => {
     setError('');
     try {
-      console.log('🚀 [REBUILT] LoginPage: Starting Google login...');
-      console.log('🔍 LoginPage: Current state - isLoading:', isLoading);
 
-      const success = await loginWithGoogle();
-      console.log('🏁 [REBUILT] LoginPage: Google login result:', success);
-
-      if (!success) {
-        const errorMsg = 'Google login failed. Please check your configuration and browser console for detailed error messages.';
-        console.error('❌ LoginPage:', errorMsg);
-        setError(errorMsg);
-      }
+      await loginWithGoogle();
+      // If we reach here, Google login was successful
     } catch (error) {
-      console.error('❌ LoginPage: Critical error in handleGoogleLogin:', error);
       setError('Google login failed. Please check the browser console for detailed error messages.');
     }
-  };
-
-  // Debug function to help users troubleshoot
-  const runDiagnostics = () => {
-    console.log('🔍 === GOOGLE AUTH DIAGNOSTICS (REBUILT VERSION) ===');
-    console.log('🌐 Current URL:', window.location.href);
-    console.log('🔧 Environment Variables:');
-    console.log('  - VITE_GOOGLE_CLIENT_ID exists:', !!import.meta.env.VITE_GOOGLE_CLIENT_ID);
-    console.log('  - VITE_GOOGLE_CLIENT_ID value:', import.meta.env.VITE_GOOGLE_CLIENT_ID);
-    console.log('  - VITE_GOOGLE_CLIENT_ID preview:', import.meta.env.VITE_GOOGLE_CLIENT_ID?.substring(0, 30) + '...');
-
-    console.log('🔍 Window object checks:');
-    console.log('  - window.google exists:', !!window.google);
-    console.log('  - window.google.accounts exists:', !!(window.google?.accounts));
-    console.log('  - window.google.accounts.id exists:', !!(window.google?.accounts?.id));
-
-    // Check Google API methods
-    if (window.google?.accounts?.id) {
-      console.log('  - initialize method:', typeof window.google.accounts.id.initialize);
-      console.log('  - renderButton method:', typeof window.google.accounts.id.renderButton);
-      console.log('  - prompt method:', typeof window.google.accounts.id.prompt);
-    }
-
-    console.log('🔍 CORS and Network checks:');
-    console.log('  - Origin:', window.location.origin);
-    console.log('  - Protocol:', window.location.protocol);
-    console.log('  - Is HTTPS or localhost:', window.location.protocol === 'https:' || window.location.hostname === 'localhost');
-
-    console.log('🔍 Browser compatibility:');
-    console.log('  - User Agent:', navigator.userAgent);
-    console.log('  - Cookies enabled:', navigator.cookieEnabled);
-    console.log('  - Third-party cookies blocked:', 'Unknown (check browser settings)');
-
-    console.log('🔍 Service checks:');
-    console.log('  - Google services initialized:', 'Check initialization in app startup');
-
-    console.log('🔍 Local storage:');
-    console.log('  - petcare_access_token:', localStorage.getItem('petcare_access_token'));
-    console.log('  - petcare_user:', localStorage.getItem('petcare_user'));
-
-    console.log('🔍 Rebuilt implementation features:');
-    console.log('  ✅ CORS issues fixed with simplified approach');
-    console.log('  ✅ FedCM compatibility (disabled to avoid conflicts)');
-    console.log('  ✅ Comprehensive token logging');
-    console.log('  ✅ Invisible button method (no popup blockers)');
-    console.log('  ✅ Automatic cleanup and error recovery');
-
-    console.log('🔍 Common issues to check:');
-    console.log('  1. ✅ Make sure you have a .env file with VITE_GOOGLE_CLIENT_ID');
-    console.log('  2. ✅ Make sure your domain is in Google Cloud Console authorized origins');
-    console.log('  3. ✅ Popup blockers not relevant (using invisible button method)');
-    console.log('  4. ✅ Clear browser cache and localStorage if issues persist');
-    console.log('  5. ✅ Check browser network tab for failed requests');
-    console.log('  6. ✅ CORS errors should be resolved with new implementation');
-    console.log('  7. ✅ Token details will be logged automatically on success');
-
-    console.log('=== END REBUILT DIAGNOSTICS ===');
   };
 
   const handleQuickLogin = (email: string) => {
@@ -234,8 +173,21 @@ export const LoginPage: React.FC = () => {
               <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
               <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
             </svg>
-            {isLoading ? 'Signing in...' : 'Continue with Google (Rebuilt)'}
+            {isLoading ? 'Signing in...' : 'Continue with Google'}
           </button>
+
+          {/* Sign Up Link */}
+          <div className="mt-6 text-center">
+            <p className="text-sm text-gray-600">
+              Don't have an account?{' '}
+              <button
+                onClick={() => navigate('/signup')}
+                className="font-medium text-blue-600 hover:text-blue-500 focus:outline-none focus:underline transition-colors"
+              >
+                Create account
+              </button>
+            </p>
+          </div>
 
           {/* Demo Login Section */}
           <div className="mt-8 pt-6 border-t border-gray-200">
@@ -256,17 +208,6 @@ export const LoginPage: React.FC = () => {
                 🐱 Login as Jane Doe (Cat Owner)
               </button>
             </div>
-          </div>
-
-          {/* Debug Section */}
-          <div className="mt-6 pt-4 border-t border-gray-200">
-            <p className="text-xs text-gray-500 mb-2 text-center">Troubleshooting</p>
-            <button
-              onClick={runDiagnostics}
-              className="w-full py-2 px-3 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-            >
-              🔍 Run Google Auth Diagnostics (Check Console)
-            </button>
           </div>
         </div>
       </div>

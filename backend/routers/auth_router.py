@@ -31,7 +31,7 @@ async def validate_email_login_route(request: EmailAuthRequest) -> dict:
 
 @router.post("/google/login")
 async def validate_google_login_route(request: GoogleAuthRequest) -> dict:
-    user = await auth_service.authenticate_google_user(request.code, request.redirect_uri)
+    user = await auth_service.authenticate_google_user(request.token)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Google authorization code")
 
