@@ -84,9 +84,9 @@ export const MealPage: React.FC = () => {
 
   const todayMeals = getTodayMeals(selectedPet.id);
   const todayCalories = todayMeals.reduce((sum, meal) => sum + meal.calories, 0);
-  const calorieGoal = selectedPet.dailyCalorieGoal;
+  const calorieGoal = selectedPet.dailyCalorieGoal || selectedPet.daily_calorie_target || 0;
   const remainingCalories = calorieGoal - todayCalories;
-  const progressPercentage = Math.min((todayCalories / calorieGoal) * 100, 100);
+  const progressPercentage = calorieGoal > 0 ? Math.min((todayCalories / calorieGoal) * 100, 100) : 0;
 
   // Prepare 7-day calorie chart data
   const sevenDayData = [];
@@ -112,6 +112,7 @@ export const MealPage: React.FC = () => {
 
   // Get calorie status color
   const getCalorieStatusColor = () => {
+    if (calorieGoal === 0) return 'text-gray-600 bg-gray-100';
     const percentage = (todayCalories / calorieGoal) * 100;
     if (percentage <= 70) return 'text-green-600 bg-green-100';
     if (percentage <= 90) return 'text-yellow-600 bg-yellow-100';

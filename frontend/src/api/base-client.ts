@@ -251,16 +251,4 @@ export class BaseApiClient {
   public async post<T>(url: string, data?: any, options?: Partial<ApiRequestConfig>): Promise<ApiResponse<T>> {
     return this.request<T>({ method: 'POST', url, data, ...options });
   }
-
-  public async put<T>(url: string, data?: any, options?: Partial<ApiRequestConfig>): Promise<ApiResponse<T>> {
-    return this.request<T>({ method: 'PUT', url, data, ...options });
-  }
-
-  public async patch<T>(url: string, data?: any, options?: Partial<ApiRequestConfig>): Promise<ApiResponse<T>> {
-    return this.request<T>({ method: 'PATCH', url, data, ...options });
-  }
-
-  public async delete<T>(url: string, options?: Partial<ApiRequestConfig>): Promise<ApiResponse<T>> {
-    return this.request<T>({ method: 'DELETE', url, ...options });
-  }
 }

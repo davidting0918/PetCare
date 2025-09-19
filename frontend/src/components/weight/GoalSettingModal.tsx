@@ -41,7 +41,7 @@ export const GoalSettingModal: React.FC<GoalSettingModalProps> = ({
 
   // Calculate recommended rate (0.5-2% per week for dogs, 1-3% per month for cats)
   const getRecommendedRate = () => {
-    const isdog = pet.breed.toLowerCase().includes('retriever') || pet.breed.toLowerCase().includes('shepherd');
+    const isdog = pet.breed?.toLowerCase().includes('retriever') || pet.breed?.toLowerCase().includes('shepherd');
     if (isdog) {
       return {
         weekly: currentWeight * 0.01, // 1% per week max
@@ -75,8 +75,8 @@ export const GoalSettingModal: React.FC<GoalSettingModalProps> = ({
 
   const getHealthyWeightRange = () => {
     // Rough estimate based on breed (this would come from a breed database in a real app)
-    const isLargeDog = pet.breed.toLowerCase().includes('retriever') || pet.breed.toLowerCase().includes('shepherd');
-    const isCat = pet.breed.toLowerCase().includes('shorthair') || pet.breed.toLowerCase().includes('cat');
+    const isLargeDog = pet.breed?.toLowerCase().includes('retriever') || pet.breed?.toLowerCase().includes('shepherd');
+    const isCat = pet.breed?.toLowerCase().includes('shorthair') || pet.breed?.toLowerCase().includes('cat');
 
     if (isLargeDog) {
       return { min: 25, max: 32, ideal: 27 };

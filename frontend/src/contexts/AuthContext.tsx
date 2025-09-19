@@ -314,12 +314,26 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       if (response.status === 1 && response.data) {
         // Convert Pet[] to PetAccess[] with basic role assignments
-        const petAccessList: PetAccess[] = response.data.map((pet: Pet) => ({
-          petId: pet.id,
-          userId: state.user?.id || '',
-          pet: pet,
-          role: pet.owner_id === state.user?.id ? 'Creator' : 'Member',
-        }));
+        const petAccessList: PetAccess[] = response.data.map((apiPet: any) => {
+          // Convert API Pet format to local Pet format
+          const pet: Pet = {
+            ...apiPet,
+            breed: apiPet.breed || '',
+            // Computed fields for backward compatibility
+            weight: apiPet.current_weight_kg,
+            targetWeight: apiPet.target_weight_kg,
+            dailyCalorieGoal: apiPet.daily_calorie_target,
+            photo: apiPet.photo_url,
+            ownerId: apiPet.owner_id
+          };
+
+          return {
+            petId: pet.id,
+            userId: state.user?.id || '',
+            pet: pet,
+            role: pet.owner_id === state.user?.id ? 'Creator' : 'Member',
+          };
+        });
 
         setState(prev => ({ ...prev, userPets: petAccessList }));
         console.log('✅ User pets refreshed:', petAccessList);
@@ -345,7 +359,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         // Refresh pets list to include the new pet
         await refreshUserPets();
 
-        return response.data;
+        // Convert API Pet format to local Pet format
+        const apiPet = response.data;
+        const pet: Pet = {
+          ...apiPet,
+          breed: apiPet.breed || '',
+          // Computed fields for backward compatibility
+          weight: apiPet.current_weight_kg,
+          targetWeight: apiPet.target_weight_kg,
+          dailyCalorieGoal: apiPet.daily_calorie_target,
+          photo: apiPet.photo_url,
+          ownerId: apiPet.owner_id
+        };
+
+        return pet;
       } else {
         throw new Error(response.message || 'Failed to create pet');
       }
