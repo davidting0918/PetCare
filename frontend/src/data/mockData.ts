@@ -39,7 +39,10 @@ export const mockPets: Pet[] = [
   {
     id: 'pet1',
     name: '小帥',
+    pet_type: 'dog',
+    owner_id: 'user1',
     breed: 'Golden Retriever',
+    gender: 'male',
     age: 3,
     weight: 28.5,
     targetWeight: 27.0,
@@ -50,7 +53,10 @@ export const mockPets: Pet[] = [
   {
     id: 'pet2',
     name: 'Whiskers',
+    pet_type: 'cat',
+    owner_id: 'user1',
     breed: 'British Shorthair',
+    gender: 'female',
     age: 2,
     weight: 4.2,
     targetWeight: 4.0,
@@ -61,7 +67,10 @@ export const mockPets: Pet[] = [
   {
     id: 'pet3',
     name: 'Max',
+    pet_type: 'dog',
+    owner_id: 'user2',
     breed: 'German Shepherd',
+    gender: 'male',
     age: 5,
     weight: 32.0,
     photo: 'https://via.placeholder.com/200x200?text=Max',
@@ -71,7 +80,10 @@ export const mockPets: Pet[] = [
   {
     id: 'pet4',
     name: 'Test Cat',
+    pet_type: 'cat',
+    owner_id: 'user2',
     breed: 'British Shorthair',
+    gender: 'female',
     age: 5,
     weight: 32.0,
     photo: 'https://via.placeholder.com/200x200?text=Max',
@@ -672,8 +684,8 @@ export const calculateWeightProgress = (petId: string): number => {
   const entries = getPetWeightEntries(petId).sort((a, b) => a.date.getTime() - b.date.getTime());
   const startWeight = entries[0]?.weight || pet.weight;
 
-  const totalWeightToLose = startWeight - pet.targetWeight;
-  const weightLostSoFar = startWeight - latestEntry.weight;
+  const totalWeightToLose = (startWeight || 0) - (pet.targetWeight || pet.target_weight_kg || 0);
+  const weightLostSoFar = (startWeight || 0) - latestEntry.weight;
 
   if (totalWeightToLose <= 0) return 100;
 

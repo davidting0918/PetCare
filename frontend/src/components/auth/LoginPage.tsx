@@ -30,7 +30,6 @@ export const LoginPage: React.FC = () => {
       await login(email, password);
       // If we reach here, login was successful
     } catch (error) {
-      console.error('❌ LoginPage: Login failed:', error);
       setError('Invalid email or password. Try john.doe@example.com or jane.doe@example.com');
     }
   };
@@ -38,13 +37,13 @@ export const LoginPage: React.FC = () => {
   const handleGoogleLogin = async () => {
     setError('');
     try {
-
       await loginWithGoogle();
-      // If we reach here, Google login was successful
     } catch (error) {
-      setError('Google login failed. Please check the browser console for detailed error messages.');
+      setError('Google login failed. Please try again.');
     }
   };
+
+
 
   const handleQuickLogin = (email: string) => {
     setEmail(email);

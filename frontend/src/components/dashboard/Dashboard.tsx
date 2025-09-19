@@ -111,9 +111,9 @@ export const Dashboard: React.FC = () => {
     });
   }
 
-  const caloriesRemaining = selectedPet.dailyCalorieGoal - summary.caloriesConsumed;
-  const weightProgress = selectedPet.targetWeight ?
-    ((selectedPet.weight - selectedPet.targetWeight) / selectedPet.targetWeight * 100) : 0;
+  const caloriesRemaining = (selectedPet.dailyCalorieGoal || selectedPet.daily_calorie_target || 0) - summary.caloriesConsumed;
+  const weightProgress = selectedPet.targetWeight || selectedPet.target_weight_kg ?
+    (((selectedPet.weight || selectedPet.current_weight_kg || 0) - (selectedPet.targetWeight || selectedPet.target_weight_kg || 0)) / (selectedPet.targetWeight || selectedPet.target_weight_kg || 1) * 100) : 0;
 
   return (
     <div className="p-4 space-y-4">
@@ -136,7 +136,7 @@ export const Dashboard: React.FC = () => {
               <div
                 className="bg-orange h-2 rounded-full transition-all duration-500"
                 style={{
-                  width: `${Math.min((summary.caloriesConsumed / selectedPet.dailyCalorieGoal) * 100, 100)}%`
+                  width: `${Math.min((summary.caloriesConsumed / (selectedPet.dailyCalorieGoal || selectedPet.daily_calorie_target || 1)) * 100, 100)}%`
                 }}
               />
             </div>
