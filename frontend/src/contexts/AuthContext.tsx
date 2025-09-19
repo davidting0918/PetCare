@@ -1,17 +1,20 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import type { Pet, PetAccess, AppState } from '../types';
-import { getUserAccessiblePets } from '../data/mockData';
+// import { getUserAccessiblePets } from '../data/mockData'; // Using real API now
 import { googleAuthService } from '../services/GoogleAuthService';
 import { validateGoogleConfig } from '../api/config';
-import { petCareSDK, tokenStorage } from '../api';
+import { unifiedApiClient, tokenStorage, authService } from '../api';
 
 interface AuthContextType extends AppState {
-  login: (email: string, password?: string) => Promise<boolean>;
-  loginWithGoogle: () => Promise<boolean>;
-  logout: () => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
+  signup: (name: string, email: string, password: string) => Promise<void>;
+  logout: () => void;
   selectPet: (pet: Pet) => void;
   getUserPets: () => PetAccess[];
+  createPet: (petData: any) => Promise<Pet>;
+  refreshUserPets: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -24,6 +27,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [state, setState] = useState<AppState>({
     user: null,
     selectedPet: null,
+    userPets: null,
     isAuthenticated: false,
     isLoading: true
   });
@@ -47,40 +51,61 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           selectedPet: savedPet ? JSON.parse(savedPet) : null,
           isLoading: false
         }));
-      } else {
-        console.log('ℹ️ AuthContext: No existing session found');
-        setState(prev => ({
-          ...prev,
-          isLoading: false
-        }));
-      }
-
-      // Initialize Google OAuth Service
-      if (validateGoogleConfig()) {
-        try {
-          await googleAuthService.initializeGoogle();
-          console.log('🔐 AuthContext: Google Auth Service initialized successfully');
-        } catch (error) {
-          console.error('❌ AuthContext: Failed to initialize Google Auth Service:', error);
+        } else {
+          console.log('ℹ️ AuthContext: No existing session found');
+          setState(prev => ({
+            ...prev,
+            isLoading: false
+          }));
         }
-      } else {
-        console.warn('⚠️ AuthContext: Google OAuth not configured properly. Please set VITE_GOOGLE_CLIENT_ID in your .env file.');
-      }
 
-      console.log('✅ AuthContext: Authentication initialization complete');
-    };
+        // Initialize Google OAuth Service
+        console.log('🔍 Checking Google configuration...');
+        console.log('📋 Google Config:', {
+          hasClientId: !!import.meta.env.VITE_GOOGLE_CLIENT_ID,
+          clientIdPreview: import.meta.env.VITE_GOOGLE_CLIENT_ID ?
+            import.meta.env.VITE_GOOGLE_CLIENT_ID.substring(0, 20) + '...' : 'Not set',
+          isValid: validateGoogleConfig()
+        });
+
+        if (validateGoogleConfig()) {
+          try {
+            console.log('🔧 Initializing Google Auth Service...');
+            await googleAuthService.initializeGoogle();
+            console.log('✅ Google Auth Service initialized successfully');
+          } catch (error) {
+            console.error('❌ Failed to initialize Google Auth Service:', error);
+            console.error('💡 Possible causes:');
+            console.error('   1. Google APIs not loading correctly');
+            console.error('   2. Network connectivity issues');
+            console.error('   3. CORS or domain restrictions');
+          }
+        } else {
+          console.error('❌ Google OAuth configuration invalid!');
+          console.error('📝 To fix this:');
+          console.error('   1. Create a .env file in your frontend folder');
+          console.error('   2. Add: VITE_GOOGLE_CLIENT_ID=your_actual_client_id');
+          console.error('   3. Get your Client ID from: https://console.cloud.google.com/');
+          console.error('   4. Restart the development server');
+        }
+
+        console.log('✅ AuthContext: Authentication initialization complete');
+      };
 
     initializeAuth();
   }, []);
 
   const handleGoogleSuccess = async (credential: string): Promise<boolean> => {
     try {
-      console.log('🎉 AuthContext: Google authentication successful, processing with SDK...');
 
-      // Use the new API SDK for Google authentication
-      const response = await petCareSDK.auth.loginWithGoogle({ credential });
+      const response = await unifiedApiClient.loginWithGoogle({
+        token: credential // ✅ Backend expects exactly this format!
+      });
 
-      if (response.success && response.data) {
+      // Log backend response for debugging
+      console.log('📥 Backend Response:', response);
+
+      if (response.status === 1 && response.data) {
         console.log('✅ AuthContext: SDK authentication successful');
 
         // Store tokens using the new token storage
@@ -99,6 +124,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }));
 
         console.log('🎯 AuthContext: Google authentication completed successfully');
+
+        // Load user's pets after successful login
+        setTimeout(() => {
+          refreshUserPets().catch(error =>
+            console.warn('⚠️ Failed to load user pets after login:', error)
+          );
+        }, 100);
         return true;
       } else {
         console.error('❌ AuthContext: SDK authentication failed:', response.message);
@@ -122,18 +154,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setState(prev => ({ ...prev, isLoading: false }));
   };
 
-  const login = async (email: string, password?: string): Promise<boolean> => {
+  const login = async (email: string, password: string): Promise<void> => {
     console.log('🔐 AuthContext: Starting email/password login...');
     setState(prev => ({ ...prev, isLoading: true }));
 
     try {
-      // Use the new API SDK for email/password authentication
-      const response = await petCareSDK.auth.login({
+      // Use the unified API client for email/password authentication
+      const response = await unifiedApiClient.emailLogin({
         email,
-        password: password || 'demo123' // Default password for demo
+        pwd: password // Note: backend uses 'pwd' not 'password'
       });
 
-      if (response.success && response.data) {
+      if (response.status === 1 && response.data) {
         console.log('✅ AuthContext: SDK login successful');
 
         // Store tokens using the new token storage
@@ -152,68 +184,95 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }));
 
         console.log('🎯 AuthContext: Email login completed successfully');
-        return true;
+
+        // Load user's pets after successful login
+        setTimeout(() => {
+          refreshUserPets().catch(error =>
+            console.warn('⚠️ Failed to load user pets after login:', error)
+          );
+        }, 100);
       } else {
         console.error('❌ AuthContext: SDK login failed:', response.message);
         setState(prev => ({ ...prev, isLoading: false }));
-        return false;
+        throw new Error(response.message || 'Login failed');
       }
     } catch (error) {
       console.error('❌ AuthContext: Login error:', error);
       setState(prev => ({ ...prev, isLoading: false }));
-      return false;
+      throw error;
     }
   };
 
-  const loginWithGoogle = async (): Promise<boolean> => {
-    console.log('🚀 [REBUILT] Starting Google authentication...')
-
+  const loginWithGoogle = async (): Promise<void> => {
     if (!googleAuthService.isLoaded()) {
       console.error('❌ Google Auth Service not loaded');
-      return false;
+      throw new Error('Google Auth Service not loaded');
     }
 
     if (!validateGoogleConfig()) {
       console.error('❌ Google OAuth not configured properly');
-      return false;
+      throw new Error('Google OAuth not configured properly');
     }
 
     setState(prev => ({ ...prev, isLoading: true }));
 
     try {
-      return new Promise((resolve) => {
+      await new Promise<void>((resolve, reject) => {
         googleAuthService.authenticateWithButton({
           onSuccess: async (credential: string) => {
             console.log('🎉 Google authentication success, processing credential...')
-            const success = await handleGoogleSuccess(credential);
-            resolve(success);
+            try {
+              const success = await handleGoogleSuccess(credential);
+              if (success) {
+                resolve();
+              } else {
+                reject(new Error('Google login failed in handleGoogleSuccess'));
+              }
+            } catch (error) {
+              reject(error);
+            }
           },
           onError: (error: string) => {
             console.error('❌ Google authentication failed:', error);
             handleGoogleError(error);
-            resolve(false);
+            reject(new Error(error));
           }
         });
       });
     } catch (error) {
       console.error('❌ Critical error in loginWithGoogle:', error);
       setState(prev => ({ ...prev, isLoading: false }));
-      return false;
+      throw error;
     }
   };
 
-  const logout = async () => {
-    console.log('🚪 AuthContext: Starting logout...');
+  const signup = async (name: string, email: string, password: string): Promise<void> => {
+    console.log('📝 AuthContext: Starting user registration...');
     setState(prev => ({ ...prev, isLoading: true }));
 
     try {
-      // Call SDK logout (this will attempt to invalidate tokens on backend)
-      await petCareSDK.auth.logout();
-      console.log('✅ AuthContext: SDK logout successful');
+      const result = await authService.signupWithEmail({
+        name,
+        email,
+        pwd: password
+      });
+
+      console.log('✅ AuthContext: User registration successful:', result);
+
+      // Registration successful, but user still needs to login
+      // Reset loading state
+      setState(prev => ({ ...prev, isLoading: false }));
+
+      console.log('🎯 AuthContext: Registration completed successfully');
     } catch (error) {
-      // Even if SDK logout fails, we should still clear local data
-      console.warn('⚠️ AuthContext: SDK logout failed, continuing with local cleanup:', error);
+      console.error('❌ AuthContext: Registration error:', error);
+      setState(prev => ({ ...prev, isLoading: false }));
+      throw error;
     }
+  };
+
+  const logout = () => {
+    console.log('🚪 AuthContext: Starting logout (local cleanup only)...');
 
     // Clear all authentication data using token storage
     tokenStorage.clearAll();
@@ -223,14 +282,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setState({
       user: null,
       selectedPet: null,
+      userPets: null,
       isAuthenticated: false,
       isLoading: false
     });
 
-    console.log('🎯 AuthContext: Logout completed successfully');
+    console.log('✅ AuthContext: Logout completed successfully (local cleanup only)');
   };
 
-  const selectPet = (pet: Pet) => {
+  const selectPet = useCallback((pet: Pet) => {
     setState(prev => ({
       ...prev,
       selectedPet: pet
@@ -238,20 +298,73 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     // Save to localStorage
     localStorage.setItem('petcare_selected_pet', JSON.stringify(pet));
-  };
+  }, []);
 
-  const getUserPets = (): PetAccess[] => {
-    if (!state.user) return [];
-    return getUserAccessiblePets(state.user.id);
-  };
+  const getUserPets = useCallback((): PetAccess[] => {
+    if (!state.user || !state.userPets) return [];
+    return state.userPets;
+  }, [state.user, state.userPets]);
+
+  const refreshUserPets = useCallback(async (): Promise<void> => {
+    if (!state.user) return;
+
+    try {
+      console.log('🔄 Refreshing user pets...');
+      const response = await unifiedApiClient.getAccessiblePets();
+
+      if (response.status === 1 && response.data) {
+        // Convert Pet[] to PetAccess[] with basic role assignments
+        const petAccessList: PetAccess[] = response.data.map((pet: Pet) => ({
+          petId: pet.id,
+          userId: state.user?.id || '',
+          pet: pet,
+          role: pet.owner_id === state.user?.id ? 'Creator' : 'Member',
+        }));
+
+        setState(prev => ({ ...prev, userPets: petAccessList }));
+        console.log('✅ User pets refreshed:', petAccessList);
+      } else {
+        console.warn('⚠️ No pets found or empty response');
+        setState(prev => ({ ...prev, userPets: [] }));
+      }
+    } catch (error) {
+      console.error('❌ Failed to refresh user pets:', error);
+      // Don't throw error to avoid breaking the UI
+      setState(prev => ({ ...prev, userPets: [] }));
+    }
+  }, [state.user]);
+
+  const createPet = useCallback(async (petData: any): Promise<Pet> => {
+    try {
+      console.log('🐾 Creating new pet...');
+      const response = await unifiedApiClient.createPet(petData);
+
+      if (response.status === 1 && response.data) {
+        console.log('✅ Pet created successfully:', response.data);
+
+        // Refresh pets list to include the new pet
+        await refreshUserPets();
+
+        return response.data;
+      } else {
+        throw new Error(response.message || 'Failed to create pet');
+      }
+    } catch (error) {
+      console.error('❌ Pet creation failed:', error);
+      throw error;
+    }
+  }, [refreshUserPets]);
 
   const contextValue: AuthContextType = {
     ...state,
     login,
     loginWithGoogle,
+    signup,
     logout,
     selectPet,
-    getUserPets
+    getUserPets,
+    createPet,
+    refreshUserPets
   };
 
   return (

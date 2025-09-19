@@ -131,13 +131,35 @@ export class BaseApiClient {
       );
     }
 
-    // For demo purposes, handle both wrapped and unwrapped responses
-    if (responseData && typeof responseData === 'object' && 'success' in responseData) {
-      return responseData as ApiResponse<T>;
+    // Handle backend API response format (status: 1 = success, 0 = error)
+    if (responseData && typeof responseData === 'object') {
+      // Check if it's the backend's documented response format
+      if ('status' in responseData) {
+        return responseData as ApiResponse<T>;
+      }
+      // Check if it's our legacy format
+      else if ('success' in responseData) {
+        // Convert legacy format to new format for backward compatibility
+        return {
+          status: responseData.success ? 1 : 0,
+          data: responseData.data,
+          message: responseData.message
+        } as ApiResponse<T>;
+      }
+      // Raw data without wrapper
+      else {
+        return {
+          status: 1,
+          data: responseData as T,
+          message: 'Request successful'
+        };
+      }
     } else {
+      // Simple data response
       return {
-        success: true,
-        data: responseData as T
+        status: 1,
+        data: responseData as T,
+        message: 'Request successful'
       };
     }
   }

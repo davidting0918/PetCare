@@ -21,8 +21,7 @@ api_key_scheme = HTTPBearer()
 
 
 class GoogleAuthRequest(BaseModel):
-    code: str  # Authorization code from Google
-    redirect_uri: str = None  # Redirect URI used for the OAuth flow
+    token: str
 
 
 class GoogleUserInfo(BaseModel):

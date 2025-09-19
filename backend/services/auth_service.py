@@ -2,7 +2,6 @@ import os
 import uuid
 from datetime import datetime as dt
 from datetime import timedelta as td
-from datetime import timezone as tz
 from typing import Optional
 
 from fastapi import Depends, HTTPException, status
@@ -21,6 +20,7 @@ from backend.models.auth import (
     oauth2_scheme,
     pwd_context,
 )
+from backend.models.group import CreateGroupRequest
 from backend.models.user import User, UserInfo, user_table
 from backend.services.google_auth_provider import GoogleAuthProvider
 from backend.services.group_service import GroupService
@@ -37,6 +37,8 @@ class AuthService:
         self.secret_key = ACCESS_TOKEN_SECRET_KEY
         self.algorithm = ALGORITHM
         self.access_token_expire_minutes = ACCESS_TOKEN_EXPIRE_MINUTES
+
+        self.group_service = GroupService()
 
     @property
     def db(self):
@@ -92,45 +94,51 @@ class AuthService:
                 "token_type": "bearer",
             }
 
-    async def authenticate_google_user(self, authorization_code: str, redirect_uri: str = None) -> Optional[User]:
-        google_user_info = await self.google_provider.verify_authorization_code(authorization_code, redirect_uri)
+    async def authenticate_google_user(self, token: str) -> Optional[User]:
+        google_user_info = await self.google_provider.verify_token(token)
 
         # Try to find user by email first, then by google_id
-        user_dict = await self.db.find_one(user_table, {"email": google_user_info.email})
-        if not user_dict:
-            user_dict = await self.db.find_one(user_table, {"google_id": google_user_info.id})
+        sql = f"""
+        select * from users u where u.email = '{google_user_info.email}'
+        """
+        user_dict = await self.db.read_one(sql)
 
         if user_dict:
             user = User(**user_dict)
 
             if not user.google_id:
-                await self.db.update_one(
-                    user_table,
-                    {"id": user.id},
-                    {
-                        "google_id": google_user_info.id,
-                        "updated_at": int(dt.now(tz.utc).timestamp()),
-                        "picture": google_user_info.picture,
-                    },
-                )
+                sql = f"""
+                Update users
+                set google_id = '{google_user_info.id}', picture = '{google_user_info.picture}'
+                where id = '{user.id}'
+                """
+                await self.db.execute(sql)
                 user.google_id = google_user_info.id
+                user.picture = google_user_info.picture
 
             return user
         else:
+            user_id = str(uuid.uuid4())[:8]
             new_user = User(
-                id=str(uuid.uuid4())[:8],
+                id=user_id,
                 google_id=google_user_info.id,
                 email=google_user_info.email,
                 hashed_pwd=self.get_password_hash(google_user_info.id),
                 picture=google_user_info.picture,
                 name=google_user_info.name,
-                personal_group_id=GroupService._generate_group_id(),
-                created_at=int(dt.now(tz.utc).timestamp()),
-                updated_at=int(dt.now(tz.utc).timestamp()),
+                created_at=dt.now(),
+                updated_at=dt.now(),
                 source="google",
                 is_active=True,
             )
+
             await self.db.insert_one(user_table, new_user.model_dump())
+
+            personal_group = await self.group_service.create_group(CreateGroupRequest(name=new_user.name), user_id)
+            query = f"""
+            Update users set personal_group_id = '{personal_group.id}' where id = '{user_id}'
+            """
+            await self.db.execute(query)
             return new_user
 
     def verify_password(self, password: str, hashed_pwd: str) -> bool:

@@ -39,9 +39,6 @@ export class GoogleAuthService {
     }
 
     this.initializationPromise = new Promise((resolve, reject) => {
-      console.log('🔄 [REBUILT] Initializing Google Identity Services...')
-      console.log('🔧 Client ID:', this.googleConfig.clientId.substring(0, 20) + '...')
-      console.log('🌐 Current URL:', window.location.origin)
 
       // Validate configuration first
       if (!validateGoogleConfig()) {
@@ -146,7 +143,6 @@ export class GoogleAuthService {
         use_fedcm_for_prompt: false
       })
 
-      console.log('✅ Google Identity Services initialized')
 
       // Create a temporary invisible button
       const tempContainer = document.createElement('div')
@@ -159,7 +155,6 @@ export class GoogleAuthService {
       tempContainer.style.zIndex = '-1'
       document.body.appendChild(tempContainer)
 
-      console.log('🔧 Creating invisible Google button...')
 
       // Render Google button
       window.google.accounts.id.renderButton(tempContainer, {
@@ -171,13 +166,11 @@ export class GoogleAuthService {
         width: 250
       })
 
-      console.log('✅ Google button created, triggering authentication...')
 
       // Wait a moment for button to render, then trigger it
       setTimeout(() => {
         const button = tempContainer.querySelector('div[role="button"]') as HTMLElement
         if (button) {
-          console.log('🖱️ Programmatically clicking Google button...')
           button.click()
 
           // Clean up after a delay

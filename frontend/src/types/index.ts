@@ -10,13 +10,31 @@ export interface User {
 export interface Pet {
   id: string;
   name: string;
-  breed: string;
-  age: number;
-  weight: number;
+  pet_type: string;
+  breed?: string;
+  gender?: string;
+  birth_date?: string;
+  current_weight_kg?: number;
+  target_weight_kg?: number;
+  height_cm?: number;
+  is_spayed?: boolean;
+  microchip_id?: string;
+  daily_calorie_target?: number;
+  owner_id: string;
+  group_id?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  is_active?: boolean;
+  photo_url?: string;
+  notes?: string;
+
+  // Computed fields for backward compatibility
+  age?: number;
+  weight?: number;
   targetWeight?: number;
   photo?: string;
-  dailyCalorieGoal: number;
-  ownerId: string;
+  dailyCalorieGoal?: number;
+  ownerId?: string;
 }
 
 export type UserRole = 'Creator' | 'Member' | 'Viewer';
@@ -157,6 +175,7 @@ export interface DailySummary {
 export interface AppState {
   user: User | null;
   selectedPet: Pet | null;
+  userPets: PetAccess[] | null;
   isAuthenticated: boolean;
   isLoading: boolean;
 }

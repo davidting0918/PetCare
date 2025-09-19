@@ -107,6 +107,7 @@ class EnvironmentConfig:
                     "http://localhost:3001",
                     "https://your-app-staging.vercel.app",
                     "https://staging.yourapp.com",
+                    "http://localhost:5173",
                 ],
             },
             Environment.PRODUCTION: {
