@@ -10,7 +10,7 @@ import {
   User
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { mockFoods, mockFamilyMembers } from '../../data/mockData';
+import { mockFoods, mockFamilyMembers } from '../../data/tempPlaceholders';
 import type { Food } from '../../types';
 
 interface FoodSelectionModalProps {

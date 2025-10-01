@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell, Legend, Tooltip } from 'recharts';
 import { format, subDays, isWithinInterval } from 'date-fns';
-import { mockMealEntries, mockFamilyMembers } from '../../data/mockData';
+import { mockMealEntries, mockFamilyMembers } from '../../data/tempPlaceholders';
 import type { MealEntry } from '../../types';
 
 interface MealHistoryModalProps {

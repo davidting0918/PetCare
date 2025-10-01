@@ -149,7 +149,7 @@ const AppContent: React.FC = () => {
 
       {/* Pet selection page - protected route */}
       <Route
-        path="/select-pet"
+        path="/select_pet"
         element={
           <ProtectedRoute>
             <PetSelectionPage />

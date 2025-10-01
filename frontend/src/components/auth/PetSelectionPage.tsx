@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Crown, Users, Eye, ArrowRight, LogOut, Plus, PawPrint } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { CreatePetForm } from '../pet';
 import type { UserRole } from '../../types';
 
 const getRoleIcon = (role: UserRole) => {
@@ -26,81 +27,65 @@ const getRoleColor = (role: UserRole) => {
 };
 
 export const PetSelectionPage: React.FC = () => {
-  const { user, selectPet, getUserPets, createPet, logout } = useAuth();
+  const { user, selectPet, getUserPets, logout, refreshUserPets } = useAuth();
   const userPets = getUserPets(); // Get pets directly from AuthContext - no need for local state
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [createFormData, setCreateFormData] = useState({
-    name: '',
-    pet_type: 'dog',
-    breed: '',
-    current_weight_kg: '',
-    daily_calorie_target: ''
-  });
+  const [petsLoading, setPetsLoading] = useState(false);
+  const [petsError, setPetsError] = useState<string | null>(null);
+
+  // Load pets when component mounts if not already loaded
+  useEffect(() => {
+    const loadPetsIfNeeded = async () => {
+      // Only load if user is authenticated and pets are null (not loaded yet)
+      // userPets is null initially, then becomes [] or Pet[] after API call
+      if (user && userPets === null && !petsLoading) {
+        setPetsLoading(true);
+        setPetsError(null);
+        try {
+          await refreshUserPets();
+        } catch (error) {
+          console.error('Failed to load pets:', error);
+          setPetsError('無法載入寵物清單。請稍後再試。');
+        } finally {
+          setPetsLoading(false);
+        }
+      }
+    };
+
+    loadPetsIfNeeded();
+  }, [user, userPets, petsLoading]); // Don't include refreshUserPets to avoid infinite loops
+
+  const handleRefreshPets = async () => {
+    setPetsLoading(true);
+    setPetsError(null);
+    try {
+      await refreshUserPets();
+    } catch (error) {
+      console.error('Failed to refresh pets:', error);
+      setPetsError('無法重新載入寵物清單。請稍後再試。');
+    } finally {
+      setPetsLoading(false);
+    }
+  };
 
   const handlePetSelect = (petAccess: any) => {
     selectPet(petAccess.pet);
   };
 
-  const handleCreateFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setCreateFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
-  const handleCreatePet = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-
-    try {
-      const petData = {
-        name: createFormData.name.trim(),
-        pet_type: createFormData.pet_type,
-        breed: createFormData.breed.trim() || undefined,
-        current_weight_kg: createFormData.current_weight_kg ? parseFloat(createFormData.current_weight_kg) : undefined,
-        daily_calorie_target: createFormData.daily_calorie_target ? parseInt(createFormData.daily_calorie_target) : undefined
-      };
-
-      console.log('🐾 Creating pet with data:', petData);
-      await createPet(petData);
-
-      // Reset form and close modal - pets list will be automatically updated by AuthContext
-      setCreateFormData({
-        name: '',
-        pet_type: 'dog',
-        breed: '',
-        current_weight_kg: '',
-        daily_calorie_target: ''
-      });
-      setShowCreateForm(false);
-
-      console.log('✅ Pet created successfully');
-    } catch (error) {
-      console.error('❌ Failed to create pet:', error);
-      alert('Failed to create pet. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleCancelCreate = () => {
+  const handleCreatePetSuccess = () => {
     setShowCreateForm(false);
-    setCreateFormData({
-      name: '',
-      pet_type: 'dog',
-      breed: '',
-      current_weight_kg: '',
-      daily_calorie_target: ''
-    });
+    // The pet list will be automatically refreshed by AuthContext after creation
+  };
+
+  const handleCreatePetCancel = () => {
+    setShowCreateForm(false);
   };
 
   if (!user) return null;
 
   return (
     <div className="min-h-screen bg-primary p-4">
-      {/* Header */}
+        {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold text-earth">Welcome, {user.name}!</h1>
@@ -121,7 +106,6 @@ export const PetSelectionPage: React.FC = () => {
           <button
             onClick={() => setShowCreateForm(true)}
             className="w-full btn-3d btn-3d-mint p-4 flex items-center justify-center space-x-2 text-white font-semibold"
-            disabled={isLoading}
           >
             <Plus className="w-5 h-5" />
             <span>Create Your First Pet</span>
@@ -130,118 +114,46 @@ export const PetSelectionPage: React.FC = () => {
       )}
 
       {/* Create Pet Form */}
-      {showCreateForm && (
-        <div className="card-3d p-6 max-w-md mx-auto mb-6">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-            <PawPrint className="w-5 h-5 text-orange mr-2" />
-            Create New Pet
-          </h3>
+      <CreatePetForm
+        isVisible={showCreateForm}
+        onSuccess={handleCreatePetSuccess}
+        onCancel={handleCreatePetCancel}
+      />
 
-          <form onSubmit={handleCreatePet} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Pet Name *
-              </label>
-              <input
-                type="text"
-                name="name"
-                value={createFormData.name}
-                onChange={handleCreateFormChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-orange focus:border-orange"
-                placeholder="Enter pet name"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Pet Type *
-              </label>
-              <select
-                name="pet_type"
-                value={createFormData.pet_type}
-                onChange={handleCreateFormChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-orange focus:border-orange"
-                required
-              >
-                <option value="dog">Dog</option>
-                <option value="cat">Cat</option>
-                <option value="bird">Bird</option>
-                <option value="rabbit">Rabbit</option>
-                <option value="fish">Fish</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Breed
-              </label>
-              <input
-                type="text"
-                name="breed"
-                value={createFormData.breed}
-                onChange={handleCreateFormChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-orange focus:border-orange"
-                placeholder="e.g., Golden Retriever"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Current Weight (kg)
-              </label>
-              <input
-                type="number"
-                name="current_weight_kg"
-                value={createFormData.current_weight_kg}
-                onChange={handleCreateFormChange}
-                step="0.1"
-                min="0"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-orange focus:border-orange"
-                placeholder="e.g., 5.2"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Daily Calorie Target
-              </label>
-              <input
-                type="number"
-                name="daily_calorie_target"
-                value={createFormData.daily_calorie_target}
-                onChange={handleCreateFormChange}
-                min="0"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-orange focus:border-orange"
-                placeholder="e.g., 400"
-              />
-            </div>
-
-            <div className="flex space-x-3 pt-4">
+      {/* Error Message */}
+      {petsError && (
+        <div className="max-w-md mx-auto mb-4">
+          <div className="card-3d p-4 bg-red-50 border-red-200">
+            <div className="flex items-center justify-between">
+              <div className="text-red-800">
+                <p className="font-medium">載入失敗</p>
+                <p className="text-sm mt-1">{petsError}</p>
+              </div>
               <button
-                type="submit"
-                disabled={isLoading || !createFormData.name.trim()}
-                className="flex-1 btn-3d btn-3d-orange text-white py-2 px-4 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={handleRefreshPets}
+                className="btn-3d btn-3d-orange text-white px-3 py-1 text-sm"
+                disabled={petsLoading}
               >
-                {isLoading ? 'Creating...' : 'Create Pet'}
-              </button>
-              <button
-                type="button"
-                onClick={handleCancelCreate}
-                disabled={isLoading}
-                className="flex-1 btn-3d btn-3d-earth text-white py-2 px-4 font-medium"
-              >
-                Cancel
+                重試
               </button>
             </div>
-          </form>
+          </div>
         </div>
       )}
 
       {/* Pet List */}
       <div className="space-y-4 max-w-md mx-auto">
-        {userPets.length === 0 && !showCreateForm ? (
+        {petsLoading && !showCreateForm && (
+          <div className="card-3d p-6 text-center">
+            <div className="w-16 h-16 mx-auto mb-4 bg-orange/20 rounded-full flex items-center justify-center animate-pulse">
+              <PawPrint className="w-8 h-8 text-orange animate-bounce" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">載入中...</h3>
+            <p className="text-gray-600">正在取得您的寵物清單</p>
+          </div>
+        )}
+
+        {!petsLoading && userPets.length === 0 && !showCreateForm ? (
           <div className="card-3d p-6 text-center">
             <div className="w-16 h-16 mx-auto mb-4 bg-orange/20 rounded-full flex items-center justify-center">
               <PawPrint className="w-8 h-8 text-orange" />
@@ -259,7 +171,7 @@ export const PetSelectionPage: React.FC = () => {
             </button>
           </div>
         ) : (
-          userPets.map((petAccess) => (
+          !petsLoading && userPets.map((petAccess) => (
             <div
               key={petAccess.petId}
               className="card-3d p-4 cursor-pointer group hover:shadow-3d-hover transition-all duration-200"
@@ -334,24 +246,7 @@ export const PetSelectionPage: React.FC = () => {
         )}
       </div>
 
-      {/* Role Information */}
-      <div className="card-3d p-4 max-w-md mx-auto mt-6">
-        <h3 className="font-semibold text-gray-800 mb-3">Permission Levels</h3>
-        <div className="space-y-2 text-sm">
-          <div className="flex items-center">
-            <Crown className="w-4 h-4 text-orange mr-2" />
-            <span className="text-gray-700"><strong>Creator:</strong> Full access to all features</span>
-          </div>
-          <div className="flex items-center">
-            <Users className="w-4 h-4 text-mint mr-2" />
-            <span className="text-gray-700"><strong>Member:</strong> Can log activities and view data</span>
-          </div>
-          <div className="flex items-center">
-            <Eye className="w-4 h-4 text-gray-500 mr-2" />
-            <span className="text-gray-700"><strong>Viewer:</strong> Can only view data</span>
-          </div>
-        </div>
-      </div>
+
     </div>
   );
 };

@@ -12,7 +12,7 @@ import {
   User
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { mockFamilyMembers, getLatestWeightEntry } from '../../data/mockData';
+import { mockFamilyMembers, getLatestWeightEntry } from '../../data/tempPlaceholders';
 
 interface WeightEntryModalProps {
   petId: string;

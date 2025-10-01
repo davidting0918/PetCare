@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, ReferenceLine, BarChart, Bar } from 'recharts';
 import { format, subDays, isWithinInterval } from 'date-fns';
-import { getPetWeightEntries, mockPets, mockFamilyMembers } from '../../data/mockData';
+import { getPetWeightEntries, mockPets, mockFamilyMembers } from '../../data/tempPlaceholders';
 import type { WeightEntry } from '../../types';
 
 interface WeightHistoryModalProps {

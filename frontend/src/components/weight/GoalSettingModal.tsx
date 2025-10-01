@@ -11,7 +11,7 @@ import {
   Info
 } from 'lucide-react';
 import { format, addWeeks } from 'date-fns';
-import { mockPets, getLatestWeightEntry } from '../../data/mockData';
+import { mockPets, getLatestWeightEntry } from '../../data/tempPlaceholders';
 
 interface GoalSettingModalProps {
   petId: string;

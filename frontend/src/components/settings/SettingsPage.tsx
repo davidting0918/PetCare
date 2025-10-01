@@ -19,7 +19,7 @@ import {
   getGroupMembers,
   generateInviteCode,
   validateInviteCode
-} from '../../data/mockData';
+} from '../../data/tempPlaceholders';
 import type { GroupMembership } from '../../types';
 
 export const SettingsPage: React.FC = () => {

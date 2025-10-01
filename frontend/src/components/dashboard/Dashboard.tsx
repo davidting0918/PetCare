@@ -17,7 +17,7 @@ import {
   mockWeightEntries,
   mockActivities,
   mockMealEntries
-} from '../../data/mockData';
+} from '../../data/tempPlaceholders';
 import { format } from 'date-fns';
 
 // Custom Tooltip Components

@@ -16,7 +16,7 @@ import {
   getTodayMeals,
   mockMealEntries,
   mockFoods
-} from '../../data/mockData';
+} from '../../data/tempPlaceholders';
 import { FoodSelectionModal } from './FoodSelectionModal';
 import { AddFoodModal } from './AddFoodModal';
 import { MealHistoryModal } from './MealHistoryModal';

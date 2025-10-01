@@ -21,7 +21,7 @@ import {
   getWeeklyWeightAverage,
   getWeightTrend,
   mockFamilyMembers
-} from '../../data/mockData';
+} from '../../data/tempPlaceholders';
 import { WeightEntryModal } from './WeightEntryModal';
 import { GoalSettingModal } from './GoalSettingModal';
 import { WeightHistoryModal } from './WeightHistoryModal';

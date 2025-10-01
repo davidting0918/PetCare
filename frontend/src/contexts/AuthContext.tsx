@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import type { Pet, PetAccess, AppState } from '../types';
-// import { getUserAccessiblePets } from '../data/mockData'; // Using real API now
+// Mock data removed - Now using real API
 import { googleAuthService } from '../services/GoogleAuthService';
 import { validateGoogleConfig } from '../api/config';
 import { unifiedApiClient, tokenStorage, authService } from '../api';
