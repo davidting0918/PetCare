@@ -35,8 +35,10 @@ export const LoginPage: React.FC = () => {
 
     try {
       await login(email, password);
+      // If we reach here, login was successful - navigate to dashboard
       navigate('/dashboard');
     } catch (error) {
+      console.error('Login error:', error);
       setError('Login failed. Please check your email and password');
     }
   };
