@@ -11,7 +11,10 @@
   },
   "dependencies": {
     "@headlessui/react": "^2.2.8",
+<<<<<<< HEAD
     "@reduxjs/toolkit": "^2.9.0",
+=======
+>>>>>>> 920a04b (Update api client)
     "axios": "^1.12.2",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
