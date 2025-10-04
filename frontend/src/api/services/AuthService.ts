@@ -1,5 +1,5 @@
 import { apiClient } from "../client";
-import { type EmailLoginRequest, type LoginResponse} from "../types/AuthType";
+import type { EmailLoginRequest, LoginResponse} from "../types/AuthType";
 import { type ApiResponse } from "../types";
 
 class AuthService {

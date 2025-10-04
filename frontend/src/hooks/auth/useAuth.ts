@@ -1,7 +1,6 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useAppDispatch, useAppSelector } from '../redux';
-import { loginUser, signupUser, logout, selectPet } from '../../store/slices/authSlice';
-import { selectAuth } from './selectors';
+import { loginUser, signupUser, logout, selectPet, initializeAuth } from '../../store/slices/authSlice';
 import type { Pet } from '../../types';
 
 /**
@@ -12,7 +11,7 @@ import type { Pet } from '../../types';
  */
 export const useAuth = () => {
   const dispatch = useAppDispatch();
-  const authState = useAppSelector(selectAuth);
+  const authState = useAppSelector((state) => state.auth);
 
   // 🔐 登入
   const login = useCallback(async (email: string, password: string): Promise<void> => {
@@ -66,4 +65,17 @@ export const useAuth = () => {
     selectPet: handleSelectPet,
     getUserPets,
   };
+};
+
+/**
+ * 初始化認證的 Hook
+ * 在 App 組件中使用，自動檢查儲存的認證狀態
+ */
+export const useAuthInitialization = () => {
+  const dispatch = useAppDispatch();
+
+  useEffect(() => {
+    console.log('🔄 useAuthInitialization: Initializing authentication...');
+    dispatch(initializeAuth());
+  }, [dispatch]);
 };
