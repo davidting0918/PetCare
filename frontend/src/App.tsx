@@ -1,14 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { useAuth, useAuthInitialization } from './hooks';
 import { LoginPage } from './components/auth/LoginPage';
 import { SignUpPage } from './components/auth/SignupPage';
 import { PetSelectionPage } from './components/auth/PetSelectionPage';
 import { MainLayout } from './components/layout/MainLayout';
-import { Dashboard } from './components/dashboard/Dashboard';
-import { MealPage } from './components/meal/MealPage';
-import { WeightPage } from './components/weight/WeightPage';
-import { SettingsPage } from './components/settings/SettingsPage';
 import { ComingSoon } from './components/common/ComingSoon';
 import type { NavigationTab } from './types';
 
@@ -100,8 +96,24 @@ const AppLayout: React.FC = () => {
       title={getPageTitle()}
     >
       <Routes>
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/meal" element={<MealPage />} />
+        <Route
+          path="/dashboard"
+          element={
+            <ComingSoon
+              title="Dashboard"
+              description="Your pet's health overview and daily summary will be displayed here."
+            />
+          }
+        />
+        <Route
+          path="/meal"
+          element={
+            <ComingSoon
+              title="Meal Tracking"
+              description="Track your pet's meals, calories, and feeding schedule."
+            />
+          }
+        />
         <Route
           path="/medicine"
           element={
@@ -111,8 +123,24 @@ const AppLayout: React.FC = () => {
             />
           }
         />
-        <Route path="/weight" element={<WeightPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
+        <Route
+          path="/weight"
+          element={
+            <ComingSoon
+              title="Weight Tracking"
+              description="Monitor your pet's weight progress and set health goals."
+            />
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <ComingSoon
+              title="Settings"
+              description="Manage your account, pet profiles, and app preferences."
+            />
+          }
+        />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </MainLayout>
@@ -173,11 +201,10 @@ const AppContent: React.FC = () => {
 };
 
 const App: React.FC = () => {
-  return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
-  );
+  // 🆕 現代化做法：直接在根組件初始化認證
+  useAuthInitialization();
+
+  return <AppContent />;
 };
 
 export default App;

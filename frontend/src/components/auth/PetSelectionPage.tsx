@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { Crown, Users, Eye, ArrowRight, LogOut, Plus, PawPrint } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
-import { CreatePetForm } from '../pet';
+import React, { useEffect } from 'react';
+import { Crown, Users, Eye, ArrowRight, LogOut, PawPrint } from 'lucide-react';
+import { useAuth } from '../../hooks';
 import type { UserRole } from '../../types';
 
 const getRoleIcon = (role: UserRole) => {
@@ -27,58 +26,17 @@ const getRoleColor = (role: UserRole) => {
 };
 
 export const PetSelectionPage: React.FC = () => {
-  const { user, selectPet, getUserPets, logout, refreshUserPets } = useAuth();
-  const userPets = getUserPets(); // Get pets directly from AuthContext - no need for local state
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [petsLoading, setPetsLoading] = useState(false);
-  const [petsError, setPetsError] = useState<string | null>(null);
+  const { user, selectPet, getUserPets, logout } = useAuth();
+  const userPets = getUserPets(); // Get pets directly from AuthContext
 
   // Load pets when component mounts if not already loaded
   useEffect(() => {
-    const loadPetsIfNeeded = async () => {
-      // Only load if user is authenticated and pets are null (not loaded yet)
-      // userPets is null initially, then becomes [] or Pet[] after API call
-      if (user && userPets === null && !petsLoading) {
-        setPetsLoading(true);
-        setPetsError(null);
-        try {
-          await refreshUserPets();
-        } catch (error) {
-          console.error('Failed to load pets:', error);
-          setPetsError('無法載入寵物清單。請稍後再試。');
-        } finally {
-          setPetsLoading(false);
-        }
-      }
-    };
-
-    loadPetsIfNeeded();
-  }, [user, userPets, petsLoading]); // Don't include refreshUserPets to avoid infinite loops
-
-  const handleRefreshPets = async () => {
-    setPetsLoading(true);
-    setPetsError(null);
-    try {
-      await refreshUserPets();
-    } catch (error) {
-      console.error('Failed to refresh pets:', error);
-      setPetsError('無法重新載入寵物清單。請稍後再試。');
-    } finally {
-      setPetsLoading(false);
-    }
-  };
+    // TODO: 當實作 pets API 後，可以在這裡載入寵物資料
+    console.log('PetSelectionPage mounted, userPets:', userPets);
+  }, [userPets]);
 
   const handlePetSelect = (petAccess: any) => {
     selectPet(petAccess.pet);
-  };
-
-  const handleCreatePetSuccess = () => {
-    setShowCreateForm(false);
-    // The pet list will be automatically refreshed by AuthContext after creation
-  };
-
-  const handleCreatePetCancel = () => {
-    setShowCreateForm(false);
   };
 
   if (!user) return null;
@@ -100,78 +58,21 @@ export const PetSelectionPage: React.FC = () => {
         </button>
       </div>
 
-      {/* Create Pet Button */}
-      {!showCreateForm && (
-        <div className="max-w-md mx-auto mb-6">
-          <button
-            onClick={() => setShowCreateForm(true)}
-            className="w-full btn-3d btn-3d-mint p-4 flex items-center justify-center space-x-2 text-white font-semibold"
-          >
-            <Plus className="w-5 h-5" />
-            <span>Create Your First Pet</span>
-          </button>
-        </div>
-      )}
-
-      {/* Create Pet Form */}
-      <CreatePetForm
-        isVisible={showCreateForm}
-        onSuccess={handleCreatePetSuccess}
-        onCancel={handleCreatePetCancel}
-      />
-
-      {/* Error Message */}
-      {petsError && (
-        <div className="max-w-md mx-auto mb-4">
-          <div className="card-3d p-4 bg-red-50 border-red-200">
-            <div className="flex items-center justify-between">
-              <div className="text-red-800">
-                <p className="font-medium">載入失敗</p>
-                <p className="text-sm mt-1">{petsError}</p>
-              </div>
-              <button
-                onClick={handleRefreshPets}
-                className="btn-3d btn-3d-orange text-white px-3 py-1 text-sm"
-                disabled={petsLoading}
-              >
-                重試
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Pet List */}
       <div className="space-y-4 max-w-md mx-auto">
-        {petsLoading && !showCreateForm && (
-          <div className="card-3d p-6 text-center">
-            <div className="w-16 h-16 mx-auto mb-4 bg-orange/20 rounded-full flex items-center justify-center animate-pulse">
-              <PawPrint className="w-8 h-8 text-orange animate-bounce" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">載入中...</h3>
-            <p className="text-gray-600">正在取得您的寵物清單</p>
-          </div>
-        )}
-
-        {!petsLoading && userPets.length === 0 && !showCreateForm ? (
+        {userPets.length === 0 ? (
           <div className="card-3d p-6 text-center">
             <div className="w-16 h-16 mx-auto mb-4 bg-orange/20 rounded-full flex items-center justify-center">
               <PawPrint className="w-8 h-8 text-orange" />
             </div>
             <h3 className="text-lg font-semibold text-gray-800 mb-2">Welcome to PetCare!</h3>
             <p className="text-gray-600 mb-4">No pets found in your account</p>
-            <p className="text-sm text-gray-500 mb-4">
-              Create your first pet to start tracking their health, meals, and activities.
+            <p className="text-sm text-gray-500">
+              Please contact the administrator to add your pet data.
             </p>
-            <button
-              onClick={() => setShowCreateForm(true)}
-              className="btn-3d btn-3d-orange text-white px-6 py-2 font-medium"
-            >
-              Get Started
-            </button>
           </div>
         ) : (
-          !petsLoading && userPets.map((petAccess) => (
+          userPets.map((petAccess) => (
             <div
               key={petAccess.petId}
               className="card-3d p-4 cursor-pointer group hover:shadow-3d-hover transition-all duration-200"

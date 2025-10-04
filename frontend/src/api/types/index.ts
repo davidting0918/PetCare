@@ -4,4 +4,5 @@ export interface ApiResponse<T> {
     message: string;
 }
 
-export * from './LoginTypes';
+export * from './AuthType';
+export * from './UserType';

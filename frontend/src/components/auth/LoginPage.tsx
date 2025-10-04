@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mail, Heart, PawPrint, Lock, Eye, EyeOff } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../hooks';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -35,10 +35,8 @@ export const LoginPage: React.FC = () => {
 
     try {
       await login(email, password);
-      // If we reach here, login was successful - navigate to dashboard
       navigate('/dashboard');
     } catch (error) {
-      console.error('Login error:', error);
       setError('Login failed. Please check your email and password');
     }
   };

@@ -1,8 +1,8 @@
 import { apiClient } from "../client";
-import { type EmailLoginRequest, type LoginResponse } from "../types/LoginTypes";
+import { type EmailLoginRequest, type LoginResponse} from "../types/AuthType";
 import { type ApiResponse } from "../types";
 
-class LoginService {
+class AuthService {
     private basePath = '/auth';
 
     async emailLogin(request: EmailLoginRequest): Promise<ApiResponse<LoginResponse>> {
@@ -11,4 +11,4 @@ class LoginService {
     }
 }
 
-export const loginService = new LoginService();
+export const authService = new AuthService();
