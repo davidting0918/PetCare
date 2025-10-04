@@ -14,9 +14,9 @@ export const useAuth = () => {
   const authState = useAppSelector((state) => state.auth);
 
   // 🔐 登入
-  const login = useCallback(async (email: string, password: string): Promise<void> => {
+  const login = useCallback(async (email: string, pwd: string): Promise<void> => {
     console.log('🔐 useAuth: Starting login...');
-    const result = await dispatch(loginUser({ email, password }));
+    const result = await dispatch(loginUser({ email, pwd }));
 
     if (loginUser.rejected.match(result)) {
       throw new Error(result.payload as string);

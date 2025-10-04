@@ -9,6 +9,11 @@ class PetService {
         const response = await apiClient.post(`${this.basePath}/create`, request);
         return response.data;
     }
+
+    async getAccessiblePets(): Promise<ApiResponse<PetInfo[]>> {
+        const response = await apiClient.get(`${this.basePath}/accessible`);
+        return response.data;
+    }
 }
 
 export const petService = new PetService();

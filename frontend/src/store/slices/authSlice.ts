@@ -26,13 +26,13 @@ const initialState: AuthState = {
 // Async Thunks for API calls
 export const loginUser = createAsyncThunk(
   'auth/loginUser',
-  async ({ email, password }: { email: string; password: string }, { rejectWithValue }) => {
+  async ({ email, pwd }: { email: string; pwd: string }, { rejectWithValue }) => {
     try {
       console.log('🔐 Redux Auth: Starting email/password login...');
 
       const response = await authService.emailLogin({
         email,
-        pwd: password
+        pwd
       });
 
       if (response.status === 1 && response.data) {
@@ -82,16 +82,13 @@ export const initializeAuth = createAsyncThunk(
       console.log('🔄 Redux Auth: Initializing authentication...');
 
       const token = localStorage.getItem('petcare_token');
-      const savedUserStr = localStorage.getItem('petcare_user');
-      const savedUser = savedUserStr ? JSON.parse(savedUserStr) : null;
-      const savedPet = localStorage.getItem('petcare_selected_pet');
+      const userId = localStorage.getItem('petcare_user_id');
+      const userEmail = localStorage.getItem('petcare_user_email');
+      const userName = localStorage.getItem('petcare_user_name');
 
-      if (token && savedUser) {
+      if (token && userId && userEmail && userName) {
         console.log('🔍 Redux Auth: Found existing session');
-        return {
-          user: savedUser,
-          selectedPet: savedPet ? JSON.parse(savedPet) : null,
-        };
+        return { user: { id: userId, email: userEmail, name: userName } };
       } else {
         console.log('ℹ️ Redux Auth: No existing session found');
         return null;
@@ -182,7 +179,7 @@ const authSlice = createSlice({
         state.isLoading = false;
         if (action.payload) {
           state.user = action.payload.user;
-          state.selectedPet = action.payload.selectedPet;
+          state.selectedPet = null;
           state.isAuthenticated = true;
         }
       })
