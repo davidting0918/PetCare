@@ -11,13 +11,17 @@
   },
   "dependencies": {
     "@headlessui/react": "^2.2.8",
+    "@reduxjs/toolkit": "^2.9.0",
+    "axios": "^1.12.2",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "lucide-react": "^0.544.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
+    "react-redux": "^9.2.0",
     "react-router-dom": "^7.9.1",
-    "recharts": "^3.2.1"
+    "recharts": "^3.2.1",
+    "redux-persist": "^6.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.35.0",

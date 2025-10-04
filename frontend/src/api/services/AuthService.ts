@@ -1,0 +1,14 @@
+import { apiClient } from "../client";
+import { type EmailLoginRequest, type LoginResponse} from "../types/AuthType";
+import { type ApiResponse } from "../types";
+
+class AuthService {
+    private basePath = '/auth';
+
+    async emailLogin(request: EmailLoginRequest): Promise<ApiResponse<LoginResponse>> {
+        const response = await apiClient.post(`${this.basePath}/email/login`, request);
+        return response.data;
+    }
+}
+
+export const authService = new AuthService();

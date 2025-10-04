@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ArrowLeft, ChevronDown } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../hooks';
 import { BottomNavigation } from './BottomNavigation';
 import type { NavigationTab } from '../../types';
 
