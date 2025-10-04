@@ -8,7 +8,7 @@ class UserService {
     async createUser(request: CreateUserRequest): Promise<ApiResponse<UserInfo>> {
         const response = await apiClient.post(`${this.basePath}/create`, request, {
             headers: {
-                'X-API-Key': `${localStorage.getItem('petcare_api_key')}:${localStorage.getItem('petcare_api_secret')}`
+                'Authorization': `Bearer ${import.meta.env.VITE_API_KEY}:${import.meta.env.VITE_API_SECRET}`
             }
         });
         return response.data;
