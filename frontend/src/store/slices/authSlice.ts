@@ -1,13 +1,11 @@
-import { createSlice, createAsyncThunk, type PayloadAction } from '@reduxjs/toolkit';
-import type { User, Pet, PetAccess } from '../../types';
-import { authService } from '../../api/services';
-import { userService } from '../../api/services';
+import { createSlice, createAsyncThunk} from '@reduxjs/toolkit';
+import type { User } from '../../types';
+import { authService } from '../../api';
+import { userService } from '../../api';
 
 // 定義 Auth State 介面
 interface AuthState {
   user: User | null;
-  selectedPet: Pet | null;
-  userPets: PetAccess[] | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
@@ -16,8 +14,6 @@ interface AuthState {
 // 初始狀態
 const initialState: AuthState = {
   user: null,
-  selectedPet: null,
-  userPets: null,
   isAuthenticated: false,
   isLoading: false,
   error: null,
@@ -117,25 +113,12 @@ const authSlice = createSlice({
 
       // Reset state
       state.user = null;
-      state.selectedPet = null;
-      state.userPets = null;
       state.isAuthenticated = false;
       state.isLoading = false;
       state.error = null;
 
       console.log('✅ Redux Auth: Logout completed');
-    },
-    selectPet: (state, action: PayloadAction<Pet>) => {
-      console.log('🐕 Redux Auth: Selecting pet:', action.payload.name);
-      state.selectedPet = action.payload;
-      localStorage.setItem('petcare_selected_pet', JSON.stringify(action.payload));
-    },
-    clearError: (state) => {
-      state.error = null;
-    },
-    setUserPets: (state, action: PayloadAction<PetAccess[]>) => {
-      state.userPets = action.payload;
-    },
+    }
   },
   extraReducers: (builder) => {
     // Login User
@@ -179,7 +162,6 @@ const authSlice = createSlice({
         state.isLoading = false;
         if (action.payload) {
           state.user = action.payload.user;
-          state.selectedPet = null;
           state.isAuthenticated = true;
         }
       })
@@ -190,5 +172,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { logout, selectPet, clearError, setUserPets } = authSlice.actions;
+export const { logout } = authSlice.actions;
 export default authSlice.reducer;

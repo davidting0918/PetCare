@@ -1,6 +1,5 @@
 import { apiClient } from "../client";
-import type { CreatePetRequest, PetInfo } from "../types/PetType";
-import type { ApiResponse } from "../types";
+import type { CreatePetRequest, PetInfo, ApiResponse } from "../../types";
 
 class PetService {
     private basePath = '/pets';

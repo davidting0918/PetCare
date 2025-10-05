@@ -61,7 +61,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
 
                 {showPetSelector && (
                   <div className="absolute right-0 top-full mt-2 bg-white rounded-lg shadow-3d border border-gray-200 min-w-48 z-50">
-                    {userPets.map((petAccess) => (
+                    {userPets.map(([]) => (
                       <button
                         key={petAccess.petId}
                         onClick={() => handlePetChange(petAccess)}
