@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { ArrowLeft, ChevronDown } from 'lucide-react';
-import { useAuth } from '../../hooks';
 import { BottomNavigation } from './BottomNavigation';
 import type { NavigationTab } from '../../types';
+import { usePet } from '../../hooks';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -21,12 +21,12 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   showBackButton = false,
   onBackClick
 }) => {
-  const { selectedPet, selectPet, getUserPets } = useAuth();
+  const { selectedPet, selectPet, getUserPets } = usePet();
   const [showPetSelector, setShowPetSelector] = useState(false);
-  const userPets = getUserPets();
+  const userPets = getUserPets(); // Get pets from state, not async function
 
-  const handlePetChange = (pet: any) => {
-    selectPet(pet.pet);
+  const handlePetChange = (petAccess: any) => {
+    selectPet(petAccess.pet);
     setShowPetSelector(false);
   };
 
@@ -61,7 +61,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
 
                 {showPetSelector && (
                   <div className="absolute right-0 top-full mt-2 bg-white rounded-lg shadow-3d border border-gray-200 min-w-48 z-50">
-                    {userPets.map(([]) => (
+                    {userPets.map((petAccess) => (
                       <button
                         key={petAccess.petId}
                         onClick={() => handlePetChange(petAccess)}

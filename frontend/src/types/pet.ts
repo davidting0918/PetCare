@@ -37,7 +37,7 @@ export interface CreatePetRequest {
   pet_type: string;
   breed?: string;
   gender: string;
-  birth_date?: Date;
+  birth_date?: string;  // 改為字符串格式 (ISO date string)
   current_weight_kg?: number;
   target_weight_kg?: number;
   height_cm?: number;
@@ -58,8 +58,8 @@ export interface PetInfo {
   owner_name: string;
   group_id?: string;
   group_name?: string;
-  created_at: Date;
-  updated_at: Date;
+  created_at: string;  // 改為字符串格式 (ISO date string)
+  updated_at: string;  // 改為字符串格式 (ISO date string)
   is_active: boolean;
   user_permission?: string;
 }

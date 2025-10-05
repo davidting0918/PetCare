@@ -23,12 +23,14 @@ class ApiClient {
 
         // request interceptor
         this.client.interceptors.request.use((config) => {
-            // 如果請求已經有 Authorization header，保持不變（支援 API Key 認證）
             if (!config.headers.Authorization) {
                 const token = localStorage.getItem('petcare_token');
                 if (token) {
                     config.headers.Authorization = `Bearer ${token}`;
                 }
+            }
+            if (config.data && ['post'].includes(config.method?.toLowerCase() || '')) {
+                config.data = this.removeUndefined(config.data);
             }
             return config;
         }, (error) => {
@@ -40,6 +42,20 @@ class ApiClient {
 
     getClient(): AxiosInstance {
         return this.client;
+    }
+
+    private removeUndefined(data: any): any {
+        if (typeof data !== 'object' || data === null) {
+            return data;
+        }
+
+        const cleaned: any = {};
+        for (const [key, value] of Object.entries(data)) {
+            if (value !== undefined ) {
+                cleaned[key] = value;
+            }
+        }
+        return cleaned;
     }
 }
 

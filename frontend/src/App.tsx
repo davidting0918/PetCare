@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { useAuth, useAuthInitialization } from './hooks';
+import { useAuth, useAuthInitialization, usePet, usePetInitialization } from './hooks';
 import { LoginPage } from './components/auth/LoginPage';
 import { SignUpPage } from './components/auth/SignupPage';
 import { PetSelectionPage } from './components/auth/PetSelectionPage';
@@ -38,14 +38,14 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
 // Pet selection guard
 const PetGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { selectedPet, isLoading } = useAuth();
+  const { selectedPet, isLoading } = usePet();
 
   if (isLoading) {
     return <LoadingScreen />;
   }
 
   if (!selectedPet) {
-    return <Navigate to="/select-pet" replace />;
+    return <Navigate to="/select_pet" replace />;
   }
 
   return <>{children}</>;
@@ -201,9 +201,8 @@ const AppContent: React.FC = () => {
 };
 
 const App: React.FC = () => {
-  // 🆕 現代化做法：直接在根組件初始化認證
   useAuthInitialization();
-
+  usePetInitialization();
   return <AppContent />;
 };
 

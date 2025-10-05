@@ -22,8 +22,8 @@ export interface UserInfo {
   name: string;
   picture: string;
   personal_group_id: string;
-  created_at: Date;
-  updated_at: Date;
+  created_at: string;  // 改為字符串格式 (ISO date string)
+  updated_at: string;  // 改為字符串格式 (ISO date string)
   source: string;
   is_active: boolean;
   is_verified: boolean;
