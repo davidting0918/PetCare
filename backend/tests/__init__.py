@@ -12,7 +12,7 @@ Test Organization:
 - test_food_endpoints.py: Food and nutrition tests
 
 Test Database:
-Tests use a separate MongoDB database (configured via MONGO_TEST_DB_NAME)
+Tests use a separate PostgreSQL database (configured via POSTGRES_TEST)
 with automatic cleanup between test runs.
 """
 

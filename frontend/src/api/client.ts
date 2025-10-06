@@ -3,15 +3,15 @@ import axios, { type AxiosInstance } from 'axios';
 class ApiClient {
     private client: AxiosInstance;
     private baseUrl: string;
-    private isHandling401 = false; // 防止重複處理 401
+    private isHandling401 = false;
 
     constructor(environment: string) {
         if (environment === 'prod') {
-            this.baseUrl = 'https://api.petcare.com';
+            this.baseUrl = import.meta.env.VITE_PROD_BASE_URL;
         } else if (environment === 'staging') {
-            this.baseUrl = 'http://localhost:8000';
+            this.baseUrl = import.meta.env.VITE_STAGING_BASE_URL;
         } else {
-            this.baseUrl = 'http://localhost:8000';
+            this.baseUrl = import.meta.env.VITE_TEST_BASE_URL;
         }
 
         this.client = axios.create({
@@ -26,7 +26,6 @@ class ApiClient {
     }
 
     private setupInterceptors() {
-        // Request interceptor - 添加認證token
         this.client.interceptors.request.use((config) => {
             if (!config.headers.Authorization) {
                 const token = localStorage.getItem('petcare_token');
@@ -42,7 +41,6 @@ class ApiClient {
             return Promise.reject(error);
         });
 
-        // Response interceptor - 處理 401 錯誤
         this.client.interceptors.response.use(
             (response) => response,
             (error) => {
@@ -55,15 +53,12 @@ class ApiClient {
     }
 
     private handle401Error() {
-        // 防止重複處理
         if (this.isHandling401) return;
         this.isHandling401 = true;
 
-        // 檢查是否為登錄/註冊相關的 API 調用
         const currentPath = window.location.pathname;
         const isAuthPage = currentPath === '/login' || currentPath === '/signup';
 
-        // 如果不是在認證頁面，則執行自動登出
         if (!isAuthPage) {
             console.log('🔒 ApiClient: 401 detected, clearing auth and redirecting to login');
 
@@ -74,14 +69,11 @@ class ApiClient {
             localStorage.removeItem('petcare_user_name');
             localStorage.removeItem('petcare_selected_pet');
 
-            // 觸發 Redux logout action (通過自定義事件)
             window.dispatchEvent(new CustomEvent('auth:logout'));
 
-            // 跳轉到登錄頁面
             window.location.href = '/login';
         }
 
-        // 重置標誌
         setTimeout(() => {
             this.isHandling401 = false;
         }, 1000);
@@ -106,4 +98,4 @@ class ApiClient {
     }
 }
 
-export const apiClient = new ApiClient("staging").getClient();
+export const apiClient = new ApiClient(import.meta.env.VITE_APP_ENV).getClient();

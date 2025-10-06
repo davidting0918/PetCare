@@ -84,7 +84,6 @@ class EnvironmentConfig:
             Dict[str, Any]: Environment configuration dictionary
         """
         base_config = {
-            "mongo_url": os.getenv("MONGO_URL"),
             "cors_origins": ["http://localhost:3000"],  # Default frontend URL
             "debug": False,
             "log_level": "INFO",
@@ -93,13 +92,11 @@ class EnvironmentConfig:
         # Environment-specific configurations
         env_configs = {
             Environment.TEST: {
-                "mongo_db_name": os.getenv("MONGO_TEST_DB_NAME"),
                 "debug": True,
                 "log_level": "DEBUG",
                 "cors_origins": ["*"],  # Allow all origins in test
             },
             Environment.STAGING: {
-                "mongo_db_name": os.getenv("MONGO_STAGING_DB_NAME"),
                 "debug": True,
                 "log_level": "DEBUG",
                 "cors_origins": [
@@ -111,7 +108,6 @@ class EnvironmentConfig:
                 ],
             },
             Environment.PRODUCTION: {
-                "mongo_db_name": os.getenv("MONGO_PROD_DB_NAME"),
                 "debug": False,
                 "log_level": "INFO",
                 "cors_origins": ["https://yourapp.com", "https://www.yourapp.com"],
