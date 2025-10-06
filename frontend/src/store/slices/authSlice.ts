@@ -24,7 +24,6 @@ export const loginUser = createAsyncThunk(
   'auth/loginUser',
   async ({ email, pwd }: { email: string; pwd: string }, { rejectWithValue }) => {
     try {
-      console.log('🔐 Redux Auth: Starting email/password login...');
 
       const response = await authService.emailLogin({
         email,
@@ -38,13 +37,11 @@ export const loginUser = createAsyncThunk(
         localStorage.setItem('petcare_user_email', response.data.user.email);
         localStorage.setItem('petcare_user_name', response.data.user.name);
 
-        console.log('✅ Redux Auth: Login successful');
         return response.data;
       } else {
         throw new Error(response.message || 'Login failed');
       }
     } catch (error: any) {
-      console.error('❌ Redux Auth: Login failed:', error);
       return rejectWithValue(error.message || 'Login failed');
     }
   }
@@ -54,7 +51,6 @@ export const signupUser = createAsyncThunk(
   'auth/signupUser',
   async ({ name, email, pwd }: { name: string; email: string; pwd: string }, { rejectWithValue }) => {
     try {
-      console.log('📝 Redux Auth: Starting user registration...');
 
       const response = await userService.createUser({
         name,
@@ -62,10 +58,8 @@ export const signupUser = createAsyncThunk(
         pwd
       });
 
-      console.log('✅ Redux Auth: Registration successful');
       return response;
     } catch (error: any) {
-      console.error('❌ Redux Auth: Registration failed:', error);
       return rejectWithValue(error.message || 'Registration failed');
     }
   }
@@ -75,7 +69,6 @@ export const initializeAuth = createAsyncThunk(
   'auth/initializeAuth',
   async (_, { rejectWithValue }) => {
     try {
-      console.log('🔄 Redux Auth: Initializing authentication...');
 
       const token = localStorage.getItem('petcare_token');
       const userId = localStorage.getItem('petcare_user_id');
@@ -83,14 +76,11 @@ export const initializeAuth = createAsyncThunk(
       const userName = localStorage.getItem('petcare_user_name');
 
       if (token && userId && userEmail && userName) {
-        console.log('🔍 Redux Auth: Found existing session');
         return { user: { id: userId, email: userEmail, name: userName } };
       } else {
-        console.log('ℹ️ Redux Auth: No existing session found');
         return null;
       }
     } catch (error: any) {
-      console.error('❌ Redux Auth: Initialization failed:', error);
       return rejectWithValue(error.message || 'Initialization failed');
     }
   }
@@ -102,8 +92,6 @@ const authSlice = createSlice({
   initialState,
   reducers: {
     logout: (state) => {
-      console.log('🚪 Redux Auth: Starting logout...');
-
       // Clear localStorage
       localStorage.removeItem('petcare_token');
       localStorage.removeItem('petcare_user_id');
@@ -116,8 +104,6 @@ const authSlice = createSlice({
       state.isAuthenticated = false;
       state.isLoading = false;
       state.error = null;
-
-      console.log('✅ Redux Auth: Logout completed');
     }
   },
   extraReducers: (builder) => {

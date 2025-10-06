@@ -8,32 +8,38 @@ export const useAuth = () => {
 
   // 🔐 登入
   const login = useCallback(async (email: string, pwd: string): Promise<void> => {
-    console.log('🔐 useAuth: Starting login...');
     const result = await dispatch(loginUser({ email, pwd }));
 
     if (loginUser.rejected.match(result)) {
       throw new Error(result.payload as string);
     }
-
-    console.log('✅ useAuth: Login completed successfully');
   }, [dispatch]);
 
   // 📝 註冊
   const signup = useCallback(async (name: string, email: string, pwd: string): Promise<void> => {
-    console.log('📝 useAuth: Starting signup...');
     const result = await dispatch(signupUser({ name, email, pwd }));
 
     if (signupUser.rejected.match(result)) {
       throw new Error(result.payload as string);
     }
-
-    console.log('✅ useAuth: Signup completed successfully');
   }, [dispatch]);
 
   // 🚪 登出
   const handleLogout = useCallback((): void => {
-    console.log('🚪 useAuth: Starting logout...');
     dispatch(logout());
+  }, [dispatch]);
+
+  // 監聽來自 API client 的自動登出事件
+  useEffect(() => {
+    const handleAutoLogout = () => {
+      dispatch(logout());
+    };
+
+    window.addEventListener('auth:logout', handleAutoLogout);
+
+    return () => {
+      window.removeEventListener('auth:logout', handleAutoLogout);
+    };
   }, [dispatch]);
 
   return {
@@ -55,7 +61,6 @@ export const useAuthInitialization = () => {
   const dispatch = useAppDispatch();
 
   useEffect(() => {
-    console.log('🔄 useAuthInitialization: Initializing authentication...');
     dispatch(initializeAuth());
   }, [dispatch]);
 };
