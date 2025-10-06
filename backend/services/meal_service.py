@@ -50,7 +50,7 @@ class MealService:
         Returns:
             str: User's role ("creator", "member", "viewer", "none")
         """
-        sql = f"""
+        sql = """
         SELECT role FROM group_members
         WHERE group_id = $1 AND user_id = $2 AND is_active = TRUE
         """
@@ -64,7 +64,7 @@ class MealService:
         Returns:
             Dict containing pet and group information
         """
-        sql = f"""
+        sql = """
         SELECT
             p.id as pet_id,
             p.name as pet_name,
@@ -87,7 +87,7 @@ class MealService:
         Returns:
             Dict containing food information
         """
-        sql = f"""
+        sql = """
         SELECT
             id, brand, product_name, food_type, target_pet, unit_weight,
             calories, protein, fat, moisture, carbohydrate
@@ -118,7 +118,7 @@ class MealService:
         Returns:
             Tuple of (can_modify: bool, meal_info: dict)
         """
-        sql = f"""
+        sql = """
         SELECT m.*, p.group_id
         FROM meals m
         JOIN pets p ON m.pet_id = p.id
@@ -348,7 +348,7 @@ class MealService:
         Returns:
             MealDetails: Complete meal information
         """
-        query = f"""
+        query = """
         SELECT
             m.*,
             p.name as pet_name,
@@ -619,14 +619,14 @@ class MealService:
         total_weight = sum(meal.actual_weight_g for meal in meals)
 
         # Get detailed nutrition data
-        detailed_query = f"""
+        detailed_query = """
         SELECT protein_g, fat_g, moisture_g, carbohydrate_g, meal_type, fed_by, food_id
         FROM meals m
         JOIN pets p ON m.pet_id = p.id
         WHERE m.is_active = TRUE
         AND DATE(m.fed_at) BETWEEN $1 AND $2
         """ + (
-            f"AND m.pet_id = $3" if filters.pet_id else f"AND p.group_id = $3"
+            "AND m.pet_id = $3" if filters.pet_id else "AND p.group_id = $3"
         )
 
         nutrition_params = [filters.date_from, filters.date_to]
@@ -655,7 +655,7 @@ class MealService:
         # Get feeder names
         if feeder_counts:
             feeder_ids = list(feeder_counts.keys())
-            feeder_query = f"SELECT id, name FROM users WHERE id = ANY($1)"
+            feeder_query = "SELECT id, name FROM users WHERE id = ANY($1)"
             feeder_names = await self.db.read(feeder_query, feeder_ids)
             feeder_name_map = {f["id"]: f["name"] for f in feeder_names}
 
@@ -676,7 +676,7 @@ class MealService:
 
         if food_counts:
             food_ids = list(food_counts.keys())
-            food_query = f"SELECT id, CONCAT(brand, ' - ', product_name) as food_name FROM foods WHERE id = ANY($1)"
+            food_query = "SELECT id, CONCAT(brand, ' - ', product_name) as food_name FROM foods WHERE id = ANY($1)"
             food_names = await self.db.read(food_query, food_ids)
             food_name_map = {f["id"]: f["food_name"] for f in food_names}
 
