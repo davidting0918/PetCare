@@ -102,9 +102,9 @@ class EnvironmentConfig:
                 "cors_origins": [
                     "http://localhost:3000",
                     "http://localhost:3001",
-                    "https://your-app-staging.vercel.app",
-                    "https://staging.yourapp.com",
+                    "https://pet-care-lake-six.vercel.app",
                     "http://localhost:5173",
+                    "http://localhost:5174",
                 ],
             },
             Environment.PRODUCTION: {
