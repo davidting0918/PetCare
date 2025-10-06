@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Crown, Users, Eye, ArrowRight, LogOut, PawPrint, Plus } from 'lucide-react';
+import { Crown, Users, Eye, ArrowRight, LogOut, PawPrint, Plus, Trash2, X } from 'lucide-react';
 import { useAuth, usePet } from '../../hooks';
 import { CreatePetForm } from '../forms';
 import type { UserRole } from '../../types';
@@ -29,10 +29,13 @@ const getRoleColor = (role: UserRole) => {
 export const PetSelectionPage: React.FC = () => {
   const { user, logout } = useAuth();
 
-  const { selectPet, userPets, isLoading, getAvailablePets } = usePet();
+  const { selectPet, userPets, isLoading, getAvailablePets, removePet } = usePet();
 
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [petToDelete, setPetToDelete] = useState<any>(null);
+  const [deleteError, setDeleteError] = useState('');
 
 
   const handlePetSelect = (petAccess: any) => {
@@ -43,6 +46,34 @@ export const PetSelectionPage: React.FC = () => {
     setSuccessMessage(message);
     await getAvailablePets();
     setTimeout(() => setSuccessMessage(''), 3000);
+  };
+
+  const handleDeleteClick = (petAccess: any, event: React.MouseEvent) => {
+    event.stopPropagation(); // 防止觸發卡片的點擊事件
+    setPetToDelete(petAccess);
+    setShowDeleteModal(true);
+    setDeleteError('');
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!petToDelete) return;
+
+    try {
+      await removePet(petToDelete.petId);
+      setSuccessMessage(`Successfully deleted pet ${petToDelete.pet.name}`);
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (error: any) {
+      setDeleteError(error.message || 'Failed to delete pet');
+    } finally {
+      setShowDeleteModal(false);
+      setPetToDelete(null);
+    }
+  };
+
+  const handleDeleteCancel = () => {
+    setShowDeleteModal(false);
+    setPetToDelete(null);
+    setDeleteError('');
   };
 
   if (!user) return null;
@@ -132,9 +163,10 @@ export const PetSelectionPage: React.FC = () => {
           userPets?.map((petAccess) => (
             <div
               key={petAccess.petId}
-              className="card-3d p-4 cursor-pointer group hover:shadow-3d-hover transition-all duration-200"
+              className="card-3d p-4 cursor-pointer group hover:shadow-3d-hover transition-all duration-200 relative"
               onClick={() => handlePetSelect(petAccess)}
             >
+
               <div className="flex items-center">
                 {/* Pet Photo */}
                 <div className="w-16 h-16 rounded-full bg-gray-200 flex-shrink-0 overflow-hidden shadow-3d">
@@ -178,25 +210,42 @@ export const PetSelectionPage: React.FC = () => {
 
               {/* Pet Stats Preview */}
               <div className="mt-4 pt-4 border-t border-gray-100">
-                <div className="grid grid-cols-3 gap-4 text-center text-xs">
-                  <div>
-                    <p className="text-gray-500">Weight</p>
-                    <p className="font-semibold text-gray-700">
-                      {petAccess.pet.current_weight_kg ? `${petAccess.pet.current_weight_kg} kg` : '-'}
-                    </p>
+                <div className="flex items-end justify-between">
+                  <div className="grid grid-cols-3 gap-4 text-center text-xs flex-1">
+                    <div>
+                      <p className="text-gray-500">Weight</p>
+                      <p className="font-semibold text-gray-700">
+                        {petAccess.pet.current_weight_kg ? `${petAccess.pet.current_weight_kg} kg` : '-'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Daily Calories</p>
+                      <p className="font-semibold text-gray-700">
+                        {petAccess.pet.daily_calorie_target || '-'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Target</p>
+                      <p className="font-semibold text-gray-700">
+                        {petAccess.pet.target_weight_kg ? `${petAccess.pet.target_weight_kg} kg` : '-'}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-gray-500">Daily Calories</p>
-                    <p className="font-semibold text-gray-700">
-                      {petAccess.pet.daily_calorie_target || '-'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Target</p>
-                    <p className="font-semibold text-gray-700">
-                      {petAccess.pet.target_weight_kg ? `${petAccess.pet.target_weight_kg} kg` : '-'}
-                    </p>
-                  </div>
+
+                  {/* Delete Button */}
+                  <button
+                    onClick={(e) => handleDeleteClick(petAccess, e)}
+                    className="btn-3d p-2 bg-red-500 hover:bg-red-600 text-white transition-all duration-200 opacity-0 group-hover:opacity-100 ml-3"
+                    style={{
+                      backgroundColor: '#ef4444',
+                      border: '2px solid #dc2626',
+                      minWidth: '32px',
+                      minHeight: '32px'
+                    }}
+                    title={`Delete ${petAccess.pet.name}`}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
             </div>
@@ -210,6 +259,84 @@ export const PetSelectionPage: React.FC = () => {
         onClose={() => setShowCreateForm(false)}
         onSuccess={handleCreateSuccess}
       />
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && petToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="card-3d bg-primary max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-earth">Confirm Delete Pet</h3>
+              <button
+                onClick={handleDeleteCancel}
+                className="text-gray-500 hover:text-gray-700 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="mb-6">
+              <div className="flex items-center mb-4">
+                <div className="w-12 h-12 rounded-full bg-gray-200 flex-shrink-0 overflow-hidden">
+                  {petToDelete.pet.photo_url ? (
+                    <img
+                      src={petToDelete.pet.photo_url}
+                      alt={petToDelete.pet.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-orange/30 flex items-center justify-center text-earth font-semibold text-sm">
+                      {petToDelete.pet.name.charAt(0)}
+                    </div>
+                  )}
+                </div>
+                <div className="ml-3">
+                  <h4 className="font-semibold text-gray-800">{petToDelete.pet.name}</h4>
+                  <p className="text-sm text-gray-600">
+                    {petToDelete.pet.breed} • {petToDelete.pet.pet_type}
+                  </p>
+                </div>
+              </div>
+
+              <p className="text-earth/80 mb-2">
+                Are you sure you want to delete this pet? This action cannot be undone.
+              </p>
+              <p className="text-sm text-gray-600">
+                All related feeding records and data will be permanently deleted.
+              </p>
+            </div>
+
+            {deleteError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-sm text-red-800">{deleteError}</p>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={handleDeleteCancel}
+                className="flex-1 btn-3d btn-3d-gray px-4 py-3 text-gray-700 bg-gray-100 hover:bg-gray-200"
+                style={{
+                  backgroundColor: '#f3f4f6',
+                  border: '2px solid #e5e7eb'
+                }}
+              >
+                取消
+              </button>
+              <button
+                onClick={handleDeleteConfirm}
+                className="flex-1 btn-3d px-4 py-3 text-white bg-red-500 hover:bg-red-600"
+                style={{
+                  backgroundColor: '#ef4444',
+                  border: '2px solid #dc2626'
+                }}
+                disabled={isLoading}
+              >
+                {isLoading ? 'Deleting...' : 'Confirm Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
