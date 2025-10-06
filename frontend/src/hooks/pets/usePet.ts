@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from "react";
 import { useAppDispatch, useAppSelector } from "../redux";
-import { createPet, fetchAccessiblePets, selectPet as selectPetAction } from "../../store";
+import { createPet, fetchAccessiblePets, selectPet as selectPetAction, deletePet } from "../../store";
 import type { CreatePetRequest, Pet } from "../../types";
 
 export const usePet = () => {
@@ -26,13 +26,18 @@ export const usePet = () => {
         }
     }, [dispatch, isAuthenticated]);
 
-    // 選擇寵物
     const selectPet = useCallback((pet: Pet) => {
         dispatch(selectPetAction(pet));
     }, [dispatch]);
 
+    const removePet = useCallback(async (petId: string) => {
+        const result = await dispatch(deletePet(petId));
+        if (deletePet.rejected.match(result)) {
+            throw new Error(result.payload as string);
+        }
+    }, [dispatch]);
+
     return {
-        // 狀態
         selectedPet: petState.selectedPet,
         userPets: petState.userPets || [],
         isLoading: petState.isLoading,
@@ -42,6 +47,7 @@ export const usePet = () => {
         create,
         getAvailablePets,
         selectPet,
+        removePet,
     }
 }
 

@@ -76,6 +76,22 @@ export const fetchAccessiblePets = createAsyncThunk(
     }
 )
 
+export const deletePet = createAsyncThunk(
+    'pet/deletePet',
+    async (petId: string, { rejectWithValue }) => {
+        try {
+            const response = await petService.deletePet(petId);
+            if (response.status === 1) {
+                return petId;
+            } else {
+                throw new Error(response.message || 'Failed to delete pet');
+            }
+        } catch (error: any) {
+            return rejectWithValue(error.message || 'Failed to delete pet');
+        }
+    }
+)
+
 const petSlice = createSlice({
     name: 'pet',
     initialState,
@@ -118,6 +134,26 @@ const petSlice = createSlice({
                 state.userPets = action.payload;
             })
             .addCase(fetchAccessiblePets.rejected, (state, action) => {
+                state.isLoading = false;
+                state.error = action.payload as string;
+            })
+            // Handle deletePet
+            .addCase(deletePet.pending, (state) => {
+                state.isLoading = true;
+                state.error = null;
+            })
+            .addCase(deletePet.fulfilled, (state, action) => {
+                state.isLoading = false;
+                // Remove the deleted pet from userPets
+                if (state.userPets) {
+                    state.userPets = state.userPets.filter(petAccess => petAccess.petId !== action.payload);
+                }
+                // Clear selected pet if it was deleted
+                if (state.selectedPet && state.selectedPet.id === action.payload) {
+                    state.selectedPet = null;
+                }
+            })
+            .addCase(deletePet.rejected, (state, action) => {
                 state.isLoading = false;
                 state.error = action.payload as string;
             })
