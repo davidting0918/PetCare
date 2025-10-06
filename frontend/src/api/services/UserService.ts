@@ -1,6 +1,5 @@
 import { apiClient } from "../client";
-import { type CreateUserRequest } from "../types/UserType";
-import { type ApiResponse, type UserInfo } from "../types";
+import { type CreateUserRequest, type UserInfo, type ApiResponse } from "../../types";
 
 class UserService {
     private basePath = '/user';

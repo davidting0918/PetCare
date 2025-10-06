@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { ArrowLeft, ChevronDown } from 'lucide-react';
-import { useAuth } from '../../hooks';
 import { BottomNavigation } from './BottomNavigation';
 import type { NavigationTab } from '../../types';
+import { usePet } from '../../hooks';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -21,12 +21,11 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   showBackButton = false,
   onBackClick
 }) => {
-  const { selectedPet, selectPet, getUserPets } = useAuth();
+  const { selectedPet, selectPet, userPets } = usePet();
   const [showPetSelector, setShowPetSelector] = useState(false);
-  const userPets = getUserPets();
 
-  const handlePetChange = (pet: any) => {
-    selectPet(pet.pet);
+  const handlePetChange = (petAccess: any) => {
+    selectPet(petAccess.pet);
     setShowPetSelector(false);
   };
 
@@ -49,7 +48,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
             </div>
 
             {/* Pet Selector */}
-            {selectedPet && userPets.length > 1 && (
+            {selectedPet && userPets && userPets.length > 1 && (
               <div className="relative">
                 <button
                   onClick={() => setShowPetSelector(!showPetSelector)}
@@ -59,7 +58,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                   <ChevronDown className="w-4 h-4 ml-1" />
                 </button>
 
-                {showPetSelector && (
+                {showPetSelector && userPets && (
                   <div className="absolute right-0 top-full mt-2 bg-white rounded-lg shadow-3d border border-gray-200 min-w-48 z-50">
                     {userPets.map((petAccess) => (
                       <button

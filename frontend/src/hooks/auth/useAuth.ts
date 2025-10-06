@@ -1,59 +1,46 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useAppDispatch, useAppSelector } from '../redux';
-import { loginUser, signupUser, logout, selectPet } from '../../store/slices/authSlice';
-import { selectAuth } from './selectors';
-import type { Pet } from '../../types';
+import { loginUser, signupUser, logout, initializeAuth } from '../../store';
 
-/**
- * 主要的認證 Hook
- * 提供所有認證相關的狀態和操作
- *
- * @returns 認證狀態和操作函數
- */
 export const useAuth = () => {
   const dispatch = useAppDispatch();
-  const authState = useAppSelector(selectAuth);
+  const authState = useAppSelector((state) => state.auth);
 
   // 🔐 登入
-  const login = useCallback(async (email: string, password: string): Promise<void> => {
-    console.log('🔐 useAuth: Starting login...');
-    const result = await dispatch(loginUser({ email, password }));
+  const login = useCallback(async (email: string, pwd: string): Promise<void> => {
+    const result = await dispatch(loginUser({ email, pwd }));
 
     if (loginUser.rejected.match(result)) {
       throw new Error(result.payload as string);
     }
-
-    console.log('✅ useAuth: Login completed successfully');
   }, [dispatch]);
 
   // 📝 註冊
   const signup = useCallback(async (name: string, email: string, pwd: string): Promise<void> => {
-    console.log('📝 useAuth: Starting signup...');
     const result = await dispatch(signupUser({ name, email, pwd }));
 
     if (signupUser.rejected.match(result)) {
       throw new Error(result.payload as string);
     }
-
-    console.log('✅ useAuth: Signup completed successfully');
   }, [dispatch]);
 
   // 🚪 登出
   const handleLogout = useCallback((): void => {
-    console.log('🚪 useAuth: Starting logout...');
     dispatch(logout());
   }, [dispatch]);
 
-  // 🐕 選擇寵物
-  const handleSelectPet = useCallback((pet: Pet): void => {
-    console.log('🐕 useAuth: Selecting pet:', pet.name);
-    dispatch(selectPet(pet));
-  }, [dispatch]);
+  // 監聽來自 API client 的自動登出事件
+  useEffect(() => {
+    const handleAutoLogout = () => {
+      dispatch(logout());
+    };
 
-  // 📋 獲取用戶寵物列表
-  const getUserPets = useCallback(() => {
-    return authState.userPets?.map(access => ({ ...access })) || [];
-  }, [authState.userPets]);
+    window.addEventListener('auth:logout', handleAutoLogout);
+
+    return () => {
+      window.removeEventListener('auth:logout', handleAutoLogout);
+    };
+  }, [dispatch]);
 
   return {
     // 狀態
@@ -63,7 +50,17 @@ export const useAuth = () => {
     login,
     signup,
     logout: handleLogout,
-    selectPet: handleSelectPet,
-    getUserPets,
   };
+};
+
+/**
+ * 初始化認證的 Hook
+ * 在 App 組件中使用，自動檢查儲存的認證狀態
+ */
+export const useAuthInitialization = () => {
+  const dispatch = useAppDispatch();
+
+  useEffect(() => {
+    dispatch(initializeAuth());
+  }, [dispatch]);
 };

@@ -40,6 +40,10 @@ body {
     background: linear-gradient(135deg, #8D7053 0%, #8D7053 50%, #7a6147 100%);
   }
 
+  .btn-3d-orange {
+    background: linear-gradient(135deg, #F4C2A1 0%, #F4C2A1 50%, #e8b690 100%);
+  }
+
   .card-3d {
     @apply bg-white rounded-xl shadow-3d transition-all duration-200;
     background: linear-gradient(135deg, #ffffff 0%, #fafafa 100%);

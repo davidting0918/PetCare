@@ -8,7 +8,6 @@ food_table = "foods"
 food_photo_table = "food_photos"
 
 # ================== Table Definitions for PostgreSQL ==================
-# These replace MongoDB collection names for SQL database operations
 
 
 class FoodType(str, Enum):

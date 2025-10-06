@@ -1,13 +1,11 @@
-import { createSlice, createAsyncThunk, type PayloadAction } from '@reduxjs/toolkit';
-import type { User, Pet, PetAccess } from '../../types';
-import { authService } from '../../api/services';
-import { userService } from '../../api/services';
+import { createSlice, createAsyncThunk} from '@reduxjs/toolkit';
+import type { User } from '../../types';
+import { authService } from '../../api';
+import { userService } from '../../api';
 
 // 定義 Auth State 介面
 interface AuthState {
   user: User | null;
-  selectedPet: Pet | null;
-  userPets: PetAccess[] | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
@@ -16,8 +14,6 @@ interface AuthState {
 // 初始狀態
 const initialState: AuthState = {
   user: null,
-  selectedPet: null,
-  userPets: null,
   isAuthenticated: false,
   isLoading: false,
   error: null,
@@ -26,13 +22,12 @@ const initialState: AuthState = {
 // Async Thunks for API calls
 export const loginUser = createAsyncThunk(
   'auth/loginUser',
-  async ({ email, password }: { email: string; password: string }, { rejectWithValue }) => {
+  async ({ email, pwd }: { email: string; pwd: string }, { rejectWithValue }) => {
     try {
-      console.log('🔐 Redux Auth: Starting email/password login...');
 
       const response = await authService.emailLogin({
         email,
-        pwd: password
+        pwd
       });
 
       if (response.status === 1 && response.data) {
@@ -42,13 +37,11 @@ export const loginUser = createAsyncThunk(
         localStorage.setItem('petcare_user_email', response.data.user.email);
         localStorage.setItem('petcare_user_name', response.data.user.name);
 
-        console.log('✅ Redux Auth: Login successful');
         return response.data;
       } else {
         throw new Error(response.message || 'Login failed');
       }
     } catch (error: any) {
-      console.error('❌ Redux Auth: Login failed:', error);
       return rejectWithValue(error.message || 'Login failed');
     }
   }
@@ -58,7 +51,6 @@ export const signupUser = createAsyncThunk(
   'auth/signupUser',
   async ({ name, email, pwd }: { name: string; email: string; pwd: string }, { rejectWithValue }) => {
     try {
-      console.log('📝 Redux Auth: Starting user registration...');
 
       const response = await userService.createUser({
         name,
@@ -66,10 +58,8 @@ export const signupUser = createAsyncThunk(
         pwd
       });
 
-      console.log('✅ Redux Auth: Registration successful');
       return response;
     } catch (error: any) {
-      console.error('❌ Redux Auth: Registration failed:', error);
       return rejectWithValue(error.message || 'Registration failed');
     }
   }
@@ -79,25 +69,18 @@ export const initializeAuth = createAsyncThunk(
   'auth/initializeAuth',
   async (_, { rejectWithValue }) => {
     try {
-      console.log('🔄 Redux Auth: Initializing authentication...');
 
       const token = localStorage.getItem('petcare_token');
-      const savedUserStr = localStorage.getItem('petcare_user');
-      const savedUser = savedUserStr ? JSON.parse(savedUserStr) : null;
-      const savedPet = localStorage.getItem('petcare_selected_pet');
+      const userId = localStorage.getItem('petcare_user_id');
+      const userEmail = localStorage.getItem('petcare_user_email');
+      const userName = localStorage.getItem('petcare_user_name');
 
-      if (token && savedUser) {
-        console.log('🔍 Redux Auth: Found existing session');
-        return {
-          user: savedUser,
-          selectedPet: savedPet ? JSON.parse(savedPet) : null,
-        };
+      if (token && userId && userEmail && userName) {
+        return { user: { id: userId, email: userEmail, name: userName } };
       } else {
-        console.log('ℹ️ Redux Auth: No existing session found');
         return null;
       }
     } catch (error: any) {
-      console.error('❌ Redux Auth: Initialization failed:', error);
       return rejectWithValue(error.message || 'Initialization failed');
     }
   }
@@ -109,8 +92,6 @@ const authSlice = createSlice({
   initialState,
   reducers: {
     logout: (state) => {
-      console.log('🚪 Redux Auth: Starting logout...');
-
       // Clear localStorage
       localStorage.removeItem('petcare_token');
       localStorage.removeItem('petcare_user_id');
@@ -120,25 +101,10 @@ const authSlice = createSlice({
 
       // Reset state
       state.user = null;
-      state.selectedPet = null;
-      state.userPets = null;
       state.isAuthenticated = false;
       state.isLoading = false;
       state.error = null;
-
-      console.log('✅ Redux Auth: Logout completed');
-    },
-    selectPet: (state, action: PayloadAction<Pet>) => {
-      console.log('🐕 Redux Auth: Selecting pet:', action.payload.name);
-      state.selectedPet = action.payload;
-      localStorage.setItem('petcare_selected_pet', JSON.stringify(action.payload));
-    },
-    clearError: (state) => {
-      state.error = null;
-    },
-    setUserPets: (state, action: PayloadAction<PetAccess[]>) => {
-      state.userPets = action.payload;
-    },
+    }
   },
   extraReducers: (builder) => {
     // Login User
@@ -182,7 +148,6 @@ const authSlice = createSlice({
         state.isLoading = false;
         if (action.payload) {
           state.user = action.payload.user;
-          state.selectedPet = action.payload.selectedPet;
           state.isAuthenticated = true;
         }
       })
@@ -193,5 +158,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { logout, selectPet, clearError, setUserPets } = authSlice.actions;
+export const { logout } = authSlice.actions;
 export default authSlice.reducer;
