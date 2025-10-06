@@ -1,6 +1,7 @@
 import { createAsyncThunk, createSlice, type PayloadAction } from '@reduxjs/toolkit';
 import type { Pet, CreatePetRequest, PetInfo, UserRole } from '../../types';
 import { petService } from '../../api';
+import { logout } from './authSlice';
 
 // PetAccess interface for pet selection page
 export interface PetAccess {
@@ -80,12 +81,13 @@ const petSlice = createSlice({
     initialState,
     reducers: {
         selectPet: (state, action: PayloadAction<Pet>) => {
-            console.log('🐕 Redux Pet: Selecting pet:', action.payload.name);
             state.selectedPet = action.payload;
         },
-        clearSelectedPet: (state) => {
-            console.log('🚫 Redux Pet: Clearing selected pet');
+        clearPetState: (state) => {
             state.selectedPet = null;
+            state.userPets = null;
+            state.isLoading = false;
+            state.error = null;
         },
         clearError: (state) => {
             state.error = null;
@@ -114,14 +116,20 @@ const petSlice = createSlice({
             .addCase(fetchAccessiblePets.fulfilled, (state, action) => {
                 state.isLoading = false;
                 state.userPets = action.payload;
-                console.log('✅ Redux Pet: Pets loaded:', action.payload.length);
             })
             .addCase(fetchAccessiblePets.rejected, (state, action) => {
                 state.isLoading = false;
                 state.error = action.payload as string;
+            })
+            // Handle logout from auth slice - clear pet state
+            .addCase(logout, (state) => {
+                state.selectedPet = null;
+                state.userPets = null;
+                state.isLoading = false;
+                state.error = null;
             });
     }
 });
 
-export const { selectPet, clearSelectedPet, clearError } = petSlice.actions;
+export const { selectPet, clearPetState, clearError } = petSlice.actions;
 export default petSlice.reducer;

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { PawPrint, X } from 'lucide-react';
 import { usePet } from '../../hooks';
-import type { CreatePetRequest } from '../../types';
+import type { CreatePetRequest, PetType, PetGender } from '../../types';
 
 interface CreatePetFormProps {
   isOpen: boolean;
@@ -19,8 +19,8 @@ export const CreatePetForm: React.FC<CreatePetFormProps> = ({
   const { create, isLoading } = usePet();
   const [formData, setFormData] = useState<CreatePetRequest>({
     name: '',
-    pet_type: 'Dog',
-    gender: 'Male',
+    pet_type: 'dog',
+    gender: 'male',
     breed: '',
     birth_date: undefined,
     current_weight_kg: undefined,
@@ -71,7 +71,17 @@ export const CreatePetForm: React.FC<CreatePetFormProps> = ({
     if (!validateForm()) return;
 
     try {
-      await create(formData);
+      const submitData: CreatePetRequest = {
+        ...formData,
+        pet_type: formData.pet_type.toLowerCase() as PetType,
+        gender: formData.gender.toLowerCase() as PetGender,
+        breed: formData.breed?.trim() || undefined,
+        microchip_id: formData.microchip_id?.trim() || undefined,
+        notes: formData.notes?.trim() || undefined,
+      };
+
+      console.log('🐕 CreatePetForm: Submitting data:', submitData);
+      await create(submitData);
       onSuccess?.('Pet created successfully!');
       handleClose();
     } catch (error) {
@@ -83,8 +93,8 @@ export const CreatePetForm: React.FC<CreatePetFormProps> = ({
   const handleClose = () => {
     setFormData({
       name: '',
-      pet_type: 'Dog',
-      gender: 'Male',
+      pet_type: 'dog',
+      gender: 'male',
       breed: '',
       birth_date: undefined,
       current_weight_kg: undefined,
@@ -161,12 +171,12 @@ export const CreatePetForm: React.FC<CreatePetFormProps> = ({
                 }`}
                 disabled={isLoading}
               >
-                <option value="Dog">Dog</option>
-                <option value="Cat">Cat</option>
-                <option value="Bird">Bird</option>
-                <option value="Fish">Fish</option>
-                <option value="Rabbit">Rabbit</option>
-                <option value="Other">Other</option>
+                <option value="dog">Dog</option>
+                <option value="cat">Cat</option>
+                <option value="bird">Bird</option>
+                <option value="fish">Fish</option>
+                <option value="rabbit">Rabbit</option>
+                <option value="other">Other</option>
               </select>
               {errors.pet_type && <p className="text-red-600 text-xs mt-1">{errors.pet_type}</p>}
             </div>
@@ -183,8 +193,9 @@ export const CreatePetForm: React.FC<CreatePetFormProps> = ({
                 }`}
                 disabled={isLoading}
               >
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="unknown">Unknown</option>
               </select>
               {errors.gender && <p className="text-red-600 text-xs mt-1">{errors.gender}</p>}
             </div>

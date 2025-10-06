@@ -6,6 +6,7 @@ import type { CreatePetRequest, Pet } from "../../types";
 export const usePet = () => {
     const dispatch = useAppDispatch();
     const petState = useAppSelector((state) => state.pet);
+    const { isAuthenticated } = useAppSelector((state) => state.auth);
 
     // 創建寵物
     const create = useCallback(async (request: CreatePetRequest) => {
@@ -17,23 +18,23 @@ export const usePet = () => {
 
     // 獲取可訪問的寵物
     const getAvailablePets = useCallback(async () => {
-        console.log('🔄 usePet: Manually calling fetchAccessiblePets');
+        if (!isAuthenticated) return;
+
         const result = await dispatch(fetchAccessiblePets());
         if (fetchAccessiblePets.rejected.match(result)) {
             throw new Error(result.payload as string);
         }
-    }, [dispatch]);
+    }, [dispatch, isAuthenticated]);
 
     // 選擇寵物
     const selectPet = useCallback((pet: Pet) => {
-        console.log('🐕 usePet: Selecting pet:', pet.name);
         dispatch(selectPetAction(pet));
     }, [dispatch]);
 
     return {
         // 狀態
         selectedPet: petState.selectedPet,
-        userPets: petState.userPets || [], // 直接返回狀態，確保穩定的引用
+        userPets: petState.userPets || [],
         isLoading: petState.isLoading,
         error: petState.error,
 
@@ -47,10 +48,12 @@ export const usePet = () => {
 export const usePetInitialization = () => {
     const dispatch = useAppDispatch();
     const { userPets, isLoading } = useAppSelector((state) => state.pet);
+    const { isAuthenticated } = useAppSelector((state) => state.auth);
 
     useEffect(() => {
-        if (!userPets && !isLoading) {
+        // 只有在用戶已認證且沒有寵物數據時才獲取
+        if (isAuthenticated && !userPets && !isLoading) {
             dispatch(fetchAccessiblePets());
         }
-    }, [dispatch, userPets, isLoading]);
+    }, [dispatch, userPets, isLoading, isAuthenticated]);
 }

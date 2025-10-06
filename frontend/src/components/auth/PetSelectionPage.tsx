@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Crown, Users, Eye, ArrowRight, LogOut, PawPrint, Plus } from 'lucide-react';
 import { useAuth, usePet } from '../../hooks';
 import { CreatePetForm } from '../forms';
@@ -34,9 +34,6 @@ export const PetSelectionPage: React.FC = () => {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
 
-  useEffect(() => {
-    console.log('PetSelectionPage: Pets data changed, count:', userPets?.length || 0);
-  }, [userPets?.length]);
 
   const handlePetSelect = (petAccess: any) => {
     selectPet(petAccess.pet);
@@ -109,7 +106,7 @@ export const PetSelectionPage: React.FC = () => {
               <p className="text-gray-600">Loading pets...</p>
             </div>
           </div>
-        ) : userPets.length === 0 ? (
+        ) : (!userPets || userPets.length === 0) ? (
           <div className="card-3d p-6 text-center">
             <div className="w-16 h-16 mx-auto mb-4 bg-orange/20 rounded-full flex items-center justify-center">
               <PawPrint className="w-8 h-8 text-orange" />
@@ -132,7 +129,7 @@ export const PetSelectionPage: React.FC = () => {
             </button>
           </div>
         ) : (
-          userPets.map((petAccess) => (
+          userPets?.map((petAccess) => (
             <div
               key={petAccess.petId}
               className="card-3d p-4 cursor-pointer group hover:shadow-3d-hover transition-all duration-200"

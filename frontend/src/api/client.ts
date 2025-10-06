@@ -55,6 +55,7 @@ class ApiClient {
                 cleaned[key] = value;
             }
         }
+        console.log(cleaned);
         return cleaned;
     }
 }

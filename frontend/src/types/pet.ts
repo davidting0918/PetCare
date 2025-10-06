@@ -1,6 +1,3 @@
-// ===== Pet Types =====
-
-// Core Pet Interface
 export interface Pet {
   id: string;
   name: string;
@@ -22,7 +19,6 @@ export interface Pet {
   photo_url?: string;
   notes?: string;
 
-  // Computed fields for backward compatibility
   age?: number;
   weight?: number;
   targetWeight?: number;
@@ -31,13 +27,16 @@ export interface Pet {
   ownerId?: string;
 }
 
+export type PetType = 'dog' | 'cat' | 'bird' | 'fish' | 'rabbit' | 'other';
+export type PetGender = 'male' | 'female' | 'unknown';
+
 // Pet API Types
 export interface CreatePetRequest {
   name: string;
-  pet_type: string;
+  pet_type: PetType;
   breed?: string;
-  gender: string;
-  birth_date?: string;  // 改為字符串格式 (ISO date string)
+  gender: PetGender;
+  birth_date?: string;
   current_weight_kg?: number;
   target_weight_kg?: number;
   height_cm?: number;
@@ -58,8 +57,8 @@ export interface PetInfo {
   owner_name: string;
   group_id?: string;
   group_name?: string;
-  created_at: string;  // 改為字符串格式 (ISO date string)
-  updated_at: string;  // 改為字符串格式 (ISO date string)
+  created_at: string;
+  updated_at: string;
   is_active: boolean;
   user_permission?: string;
 }
