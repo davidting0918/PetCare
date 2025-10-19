@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Crown, Users, Eye, ArrowRight, LogOut, PawPrint, Plus, Trash2, X } from 'lucide-react';
 import { useAuth, usePet } from '../../hooks';
 import { CreatePetForm } from '../forms';
@@ -28,7 +29,7 @@ const getRoleColor = (role: UserRole) => {
 
 export const PetSelectionPage: React.FC = () => {
   const { user, logout } = useAuth();
-
+  const navigate = useNavigate();
   const { selectPet, userPets, isLoading, getAvailablePets, removePet } = usePet();
 
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -40,6 +41,7 @@ export const PetSelectionPage: React.FC = () => {
 
   const handlePetSelect = (petAccess: any) => {
     selectPet(petAccess.pet);
+    navigate('/dashboard');
   };
 
   const handleCreateSuccess = async (message: string) => {

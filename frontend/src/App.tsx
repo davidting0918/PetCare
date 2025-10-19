@@ -4,6 +4,7 @@ import { useAuth, useAuthInitialization, usePet, usePetInitialization } from './
 import { LoginPage } from './components/auth/LoginPage';
 import { SignUpPage } from './components/auth/SignupPage';
 import { PetSelectionPage } from './components/auth/PetSelectionPage';
+import { DashboardPage } from './components/dashboard';
 import { MainLayout } from './components/layout/MainLayout';
 import { ComingSoon } from './components/common/ComingSoon';
 import type { NavigationTab } from './types';
@@ -98,12 +99,7 @@ const AppLayout: React.FC = () => {
       <Routes>
         <Route
           path="/dashboard"
-          element={
-            <ComingSoon
-              title="Dashboard"
-              description="Your pet's health overview and daily summary will be displayed here."
-            />
-          }
+          element={<DashboardPage />}
         />
         <Route
           path="/meal"
