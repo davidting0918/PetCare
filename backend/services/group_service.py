@@ -281,21 +281,37 @@ class GroupService:
             is_active=group.is_active,
         )
 
-    async def create_invitation(self, group_id: str, user: UserInfo) -> Dict[str, Any]:
+    async def create_invitation(
+        self, group_id: str, user: UserInfo, role: GroupRole = GroupRole.VIEWER
+    ) -> Dict[str, Any]:
         """
         Create an invitation for someone to join the group.
-        Any group member can create invitations.
+        Only CREATOR and MEMBER can create invitations.
 
         Args:
             group_id: Target group
             user: User creating the invitation
+            role: Role to assign to the invited user (default: VIEWER)
 
         Returns:
             Dict containing invitation info and invite code
         """
-        # Check user is a member of the group
-        if not await self._is_group_member(group_id, user.id):
+        # Check user is a member of the group with appropriate role
+        membership = await self._get_user_membership(group_id, user.id)
+        if not membership:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are not a member of this group")
+
+        # Only CREATOR and MEMBER can create invitations
+        if membership.role == GroupRole.VIEWER:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Only CREATOR and MEMBER can create invitations"
+            )
+
+        # Cannot create invitation for CREATOR role
+        if role == GroupRole.CREATOR:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot create invitation for CREATOR role"
+            )
 
         # Generate invitation ID
         invitation_id = self._generate_invitation_id()  # Reuse the same secure ID generator
@@ -308,6 +324,7 @@ class GroupService:
             group_id=group_id,
             invited_by=user.id,
             invite_code=invite_code,
+            role=role,
             status=InvitationStatus.PENDING,
             created_at=current_time,
             expires_at=expires_at,
@@ -367,10 +384,13 @@ class GroupService:
                 status_code=status.HTTP_400_BAD_REQUEST, detail="You are already a member of this group"
             )
 
-        # Add user to group atomically with default MEMBER role
+        # Get the role from invitation
+        role = GroupRole(invitation_dict["role"])
+
+        # Add user to group atomically with the role specified in invitation
         # The invited_by field is retrieved from the invitation
         invited_by = invitation_dict.get("invited_by")  # Who created this invitation
-        await self._add_user_to_group(group_id=group_id, user_id=user_id, role=GroupRole.MEMBER, invited_by=invited_by)
+        await self._add_user_to_group(group_id=group_id, user_id=user_id, role=role, invited_by=invited_by)
 
         # Update invitation status
         sql = f"""

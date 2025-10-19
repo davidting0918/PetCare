@@ -51,7 +51,7 @@ export const fetchAccessiblePets = createAsyncThunk(
                 const petAccessList: PetAccess[] = response.data.map((petInfo: PetInfo) => ({
                     petId: petInfo.id,
                     userId: petInfo.owner_id,
-                    role: (petInfo.user_permission as UserRole) || 'Viewer',
+                    role: petInfo.user_permission as UserRole,
                     pet: {
                         id: petInfo.id,
                         name: petInfo.name,
@@ -59,6 +59,8 @@ export const fetchAccessiblePets = createAsyncThunk(
                         breed: petInfo.breed,
                         gender: petInfo.gender,
                         current_weight_kg: petInfo.current_weight_kg,
+                        target_weight_kg: petInfo.target_weight_kg,
+                        daily_calorie_target: petInfo.daily_calorie_target,
                         owner_id: petInfo.owner_id,
                         group_id: petInfo.group_id,
                         created_at: petInfo.created_at,

@@ -94,6 +94,7 @@ CREATE TABLE group_invitations (
 	invite_code varchar(255) NOT NULL,
 	status varchar(20) DEFAULT 'pending'::character varying NULL,
 	accepted_by varchar(8) NULL,
+	role varchar(20) DEFAULT 'viewer'::character varying NOT NULL,
 	expires_at timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
 	created_at timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
 	updated_at timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,

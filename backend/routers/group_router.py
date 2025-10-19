@@ -2,7 +2,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
-from backend.models.group import CreateGroupRequest, JoinGroupRequest, RemoveMemberRequest, UpdateMemberRoleRequest
+from backend.models.group import (
+    CreateGroupRequest,
+    CreateInvitationRequest,
+    JoinGroupRequest,
+    RemoveMemberRequest,
+    UpdateMemberRoleRequest,
+)
 from backend.models.user import UserInfo
 from backend.services.auth_service import get_current_user
 from backend.services.group_service import GroupService
@@ -36,17 +42,27 @@ async def create_group(
 
 
 @router.post("/{group_id}/invite", response_model=dict)
-async def create_invitation(group_id: str, current_user: Annotated[UserInfo, Depends(get_current_user)]) -> dict:
+async def create_invitation(
+    group_id: str, request: CreateInvitationRequest, current_user: Annotated[UserInfo, Depends(get_current_user)]
+) -> dict:
     """
     Create an invitation code for someone to join the group.
-    Any group member can create invitations.
+    Only CREATOR and MEMBER can create invitations.
+    VIEWER role cannot create invitations.
+
+    Body:
+    - role: Role to assign to the invited user (member or viewer)
+
+    Restrictions:
+    - Cannot create invitations for CREATOR role
+
     Invitations expire after 7 days.
 
     Returns:
     - Invitation information and shareable invite code
     """
     try:
-        invitation_data = await group_service.create_invitation(group_id, current_user)
+        invitation_data = await group_service.create_invitation(group_id, current_user, request.role)
         return {"status": 1, "data": invitation_data, "message": "Invitation created successfully"}
     except Exception as e:
         raise e
