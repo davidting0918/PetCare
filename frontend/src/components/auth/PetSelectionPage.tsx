@@ -49,7 +49,7 @@ export const PetSelectionPage: React.FC = () => {
   };
 
   const handleDeleteClick = (petAccess: any, event: React.MouseEvent) => {
-    event.stopPropagation(); // 防止觸發卡片的點擊事件
+    event.stopPropagation(); // Prevents card click
     setPetToDelete(petAccess);
     setShowDeleteModal(true);
     setDeleteError('');
@@ -235,7 +235,7 @@ export const PetSelectionPage: React.FC = () => {
                   {/* Delete Button */}
                   <button
                     onClick={(e) => handleDeleteClick(petAccess, e)}
-                    className="btn-3d p-2 bg-red-500 hover:bg-red-600 text-white transition-all duration-200 opacity-0 group-hover:opacity-100 ml-3"
+                    className="btn-3d p-2 bg-red-500 hover:bg-red-600 text-white transition-all duration-200 ml-3"
                     style={{
                       backgroundColor: '#ef4444',
                       minWidth: '32px',

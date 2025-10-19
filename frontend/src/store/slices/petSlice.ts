@@ -66,6 +66,7 @@ export const fetchAccessiblePets = createAsyncThunk(
                         created_at: petInfo.created_at,
                         updated_at: petInfo.updated_at,
                         is_active: petInfo.is_active,
+                        photo_url: petInfo.photo_url,
                     }
                 }));
                 return petAccessList;

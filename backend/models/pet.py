@@ -140,6 +140,7 @@ class PetInfo(BaseModel):
     group_name: Optional[str]
     created_at: dt
     updated_at: dt
+    photo_url: Optional[str]
     is_active: bool
     user_permission: Optional[str] = None
 
