@@ -53,12 +53,15 @@ export interface PetInfo {
   breed?: string;
   gender: string;
   current_weight_kg?: number;
+  target_weight_kg?: number;
+  daily_calorie_target: number;
   owner_id: string;
   owner_name: string;
   group_id?: string;
   group_name?: string;
   created_at: string;
   updated_at: string;
+  photo_url?: string;
   is_active: boolean;
   user_permission?: string;
 }

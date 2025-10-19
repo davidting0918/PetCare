@@ -73,6 +73,7 @@ class GroupInvitation(BaseModel):
     group_id: str
     invited_by: str  # User ID who sent invitation
     invite_code: str  # Unique code for joining
+    role: GroupRole = GroupRole.VIEWER  # Role to assign when invitation is accepted
     status: InvitationStatus = InvitationStatus.PENDING
     created_at: dt
     expires_at: dt  # Invitations expire after 7 days
@@ -105,6 +106,12 @@ class RemoveMemberRequest(BaseModel):
     """Request to remove a member from the group"""
 
     user_id: str
+
+
+class CreateInvitationRequest(BaseModel):
+    """Request to create a group invitation with role specification"""
+
+    role: GroupRole = GroupRole.VIEWER
 
 
 # ================== Response Models ==================

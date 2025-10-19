@@ -132,12 +132,15 @@ class PetInfo(BaseModel):
     breed: Optional[str]
     gender: PetGender
     current_weight_kg: Optional[float]
+    daily_calorie_target: Optional[int]
+    target_weight_kg: Optional[float]
     owner_id: str
     owner_name: str
     group_id: Optional[str]
     group_name: Optional[str]
     created_at: dt
     updated_at: dt
+    photo_url: Optional[str]
     is_active: bool
     user_permission: Optional[str] = None
 

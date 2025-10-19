@@ -49,7 +49,7 @@ export const PetSelectionPage: React.FC = () => {
   };
 
   const handleDeleteClick = (petAccess: any, event: React.MouseEvent) => {
-    event.stopPropagation(); // 防止觸發卡片的點擊事件
+    event.stopPropagation(); // Prevents card click
     setPetToDelete(petAccess);
     setShowDeleteModal(true);
     setDeleteError('');
@@ -213,15 +213,9 @@ export const PetSelectionPage: React.FC = () => {
                 <div className="flex items-end justify-between">
                   <div className="grid grid-cols-3 gap-4 text-center text-xs flex-1">
                     <div>
-                      <p className="text-gray-500">Weight</p>
+                      <p className="text-gray-500">Current</p>
                       <p className="font-semibold text-gray-700">
                         {petAccess.pet.current_weight_kg ? `${petAccess.pet.current_weight_kg} kg` : '-'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500">Daily Calories</p>
-                      <p className="font-semibold text-gray-700">
-                        {petAccess.pet.daily_calorie_target || '-'}
                       </p>
                     </div>
                     <div>
@@ -230,15 +224,20 @@ export const PetSelectionPage: React.FC = () => {
                         {petAccess.pet.target_weight_kg ? `${petAccess.pet.target_weight_kg} kg` : '-'}
                       </p>
                     </div>
+                    <div>
+                      <p className="text-gray-500">Daily Calories</p>
+                      <p className="font-semibold text-gray-700">
+                        {`${petAccess.pet.daily_calorie_target} kcal` || '-'}
+                      </p>
+                    </div>
                   </div>
 
                   {/* Delete Button */}
                   <button
                     onClick={(e) => handleDeleteClick(petAccess, e)}
-                    className="btn-3d p-2 bg-red-500 hover:bg-red-600 text-white transition-all duration-200 opacity-0 group-hover:opacity-100 ml-3"
+                    className="btn-3d p-2 bg-red-500 hover:bg-red-600 text-white transition-all duration-200 ml-3"
                     style={{
                       backgroundColor: '#ef4444',
-                      border: '2px solid #dc2626',
                       minWidth: '32px',
                       minHeight: '32px'
                     }}
@@ -317,17 +316,15 @@ export const PetSelectionPage: React.FC = () => {
                 className="flex-1 btn-3d btn-3d-gray px-4 py-3 text-gray-700 bg-gray-100 hover:bg-gray-200"
                 style={{
                   backgroundColor: '#f3f4f6',
-                  border: '2px solid #e5e7eb'
                 }}
               >
-                取消
+                Cancel
               </button>
               <button
                 onClick={handleDeleteConfirm}
                 className="flex-1 btn-3d px-4 py-3 text-white bg-red-500 hover:bg-red-600"
                 style={{
                   backgroundColor: '#ef4444',
-                  border: '2px solid #dc2626'
                 }}
                 disabled={isLoading}
               >
