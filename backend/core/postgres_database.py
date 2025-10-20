@@ -241,5 +241,5 @@ class PostgresAsyncClient:
             Any: The returned value from the RETURNING clause
         """
         async with self.get_connection() as conn:
-            result = await conn.fetchval(query, *args)
-            return result
+            result = await conn.fetchrow(query, *args)
+            return dict(result) if result else None

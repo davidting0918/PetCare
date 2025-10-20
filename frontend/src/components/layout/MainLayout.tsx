@@ -77,31 +77,6 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
               </div>
             )}
           </div>
-
-          {/* Pet Info Bar */}
-          {selectedPet && (
-            <div className="mt-3 pt-3 border-t border-gray-100">
-              <div className="flex items-center text-sm text-gray-600">
-                <div className="w-8 h-8 rounded-full bg-orange/20 flex items-center justify-center mr-3">
-                  {selectedPet.photo ? (
-                    <img
-                      src={selectedPet.photo}
-                      alt={selectedPet.name}
-                      className="w-full h-full object-cover rounded-full"
-                    />
-                  ) : (
-                    <span className="text-orange font-semibold text-sm">
-                      {selectedPet.name.charAt(0)}
-                    </span>
-                  )}
-                </div>
-                <div>
-                  <div className="font-medium text-gray-800">{selectedPet.name}</div>
-                  <div className="text-xs">{selectedPet.breed} • {selectedPet.age} years old</div>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Overlay to close pet selector */}

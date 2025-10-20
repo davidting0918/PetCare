@@ -16,6 +16,7 @@ from backend.routers.group_router import router as group_router
 from backend.routers.meal_router import router as meal_router
 from backend.routers.pet_router import router as pet_router
 from backend.routers.user_router import router as user_router
+from backend.routers.weight_router import router as weight_router
 
 logging.basicConfig(
     level=getattr(logging, get_config("log_level")), format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -75,6 +76,7 @@ app.include_router(group_router)
 app.include_router(pet_router)
 app.include_router(food_router)
 app.include_router(meal_router)
+app.include_router(weight_router)
 
 storage_path = os.path.join(os.path.dirname(__file__), "storage")
 app.mount("/static", StaticFiles(directory=storage_path), name="static")

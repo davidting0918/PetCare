@@ -235,3 +235,32 @@ create trigger update_api_keys_updated_at before
 update
     on
     public.api_keys for each row execute function update_updated_at_column();
+
+
+-- weight records table
+CREATE TABLE weight_records (
+	id varchar(11) NOT NULL,
+	pet_id varchar(8) NOT NULL,
+	weight numeric(5, 2) NOT NULL,
+	user_id varchar(8) NOT NULL,
+	"timestamp" timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	notes text NULL,
+	created_at timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	updated_at timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	is_active bool DEFAULT true NOT NULL,
+	CONSTRAINT weight_records_pkey PRIMARY KEY (id),
+	CONSTRAINT weight_records_weight_valid CHECK (((weight >= 0.1) AND (weight <= (200)::numeric))),
+	CONSTRAINT weight_records_notes_check CHECK ((length(notes) <= 500)),
+	CONSTRAINT fk_weight_records_pet FOREIGN KEY (pet_id) REFERENCES public.pets(id) ON DELETE CASCADE ON UPDATE CASCADE,
+	CONSTRAINT fk_weight_records_user FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE SET NULL ON UPDATE CASCADE
+);
+CREATE INDEX idx_weight_records_pet_id ON public.weight_records USING btree (pet_id) WHERE (is_active = true);
+CREATE INDEX idx_weight_records_timestamp ON public.weight_records USING btree (timestamp) WHERE (is_active = true);
+CREATE INDEX idx_weight_records_created_at ON public.weight_records USING btree (created_at);
+CREATE INDEX idx_weight_records_user_id ON public.weight_records USING btree (user_id);
+CREATE INDEX idx_weight_records_pet_timestamp ON public.weight_records USING btree (pet_id, timestamp) WHERE (is_active = true);
+
+create trigger update_weight_records_updated_at before
+update
+    on
+    public.weight_records for each row execute function update_updated_at_column();

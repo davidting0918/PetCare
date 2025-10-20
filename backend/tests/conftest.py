@@ -28,6 +28,7 @@ from backend.models.group import group_invitation_table, group_member_table, gro
 from backend.models.meal import meal_table
 from backend.models.pet import pet_table
 from backend.models.user import user_table
+from backend.models.weight import weight_table
 
 
 @pytest.fixture(scope="session")
@@ -64,6 +65,7 @@ async def test_db():
         pet_table,
         food_table,
         meal_table,
+        weight_table,
     ]
 
     try:

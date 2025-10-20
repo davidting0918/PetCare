@@ -36,5 +36,12 @@
             "daily_calorie_target": 350,
             "notes": "personal dog note"
         }
+    ],
+    "weight": [
+        {
+            "pet_id": "a91a9a94",
+            "weight": 5.5,
+            "notes": "Scalar test record"
+        }
     ]
 }
