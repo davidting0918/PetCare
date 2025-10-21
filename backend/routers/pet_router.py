@@ -272,7 +272,7 @@ async def get_pet_details(pet_id: str, current_user: Annotated[UserInfo, Depends
 async def upload_pet_photo(
     pet_id: str,
     current_user: Annotated[UserInfo, Depends(get_current_user)],
-    file: UploadFile = File(..., description="Pet photo image file"),
+    file: UploadFile = File(..., description="Pet photo image file (JPEG, PNG, GIF, WebP)"),
 ) -> dict:
     """
     Uploads or replaces a pet's photo for visual identification.
