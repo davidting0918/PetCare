@@ -11,6 +11,7 @@ from fastapi import HTTPException, status
 from backend.core.db_manager import get_db
 from backend.models.group import (
     CreateGroupRequest,
+    CreateInvitationRequest,
     Group,
     GroupInfo,
     GroupInvitation,
@@ -23,11 +24,8 @@ from backend.models.group import (
     JoinGroupRequest,
     RemoveMemberRequest,
     UpdateMemberRoleRequest,
-    group_invitation_table,
-    group_member_table,
-    group_table,
 )
-from backend.models.user import UserInfo, user_table
+from backend.models.user import UserInfo
 
 
 class GroupService:
@@ -80,8 +78,8 @@ class GroupService:
         """Get user's membership info if they are a member of the group"""
 
         sql = f"""
-        select * from {group_member_table}
-        where group_id = '{group_id}' and user_id = '{user_id}' and is_active = True"""
+        select * from group_members gm
+        where gm.group_id = '{group_id}' and gm.user_id = '{user_id}' and gm.is_active = True"""
         membership_dict = await self.db.read_one(sql)
         return GroupMember(**membership_dict) if membership_dict else None
 
@@ -123,7 +121,7 @@ class GroupService:
         )
 
         # Insert membership record
-        await self.db.insert_one(group_member_table, membership.model_dump())
+        await self.db.insert_one("group_members", membership.model_dump())
 
     # ================== Permission Management Functions (CREATOR Only) ==================
 
@@ -172,9 +170,9 @@ class GroupService:
 
         # Update the member's role
         sql = f"""
-        update {group_member_table}
-        set role = '{request.new_role.value}'
-        where group_id = '{group_id}' and user_id = '{request.user_id}'
+        update group_members gm
+        set gm.role = '{request.new_role.value}'
+        where gm.group_id = '{group_id}' and gm.user_id = '{request.user_id}'
         """
         await self.db.execute(sql)
 
@@ -218,9 +216,9 @@ class GroupService:
 
         # Deactivate the membership
         sql = f"""
-        update {group_member_table}
-        set is_active = False
-        where group_id = '{group_id}' and user_id = '{request.user_id}'
+        update group_members gm
+        set gm.is_active = False
+        where gm.group_id = '{group_id}' and gm.user_id = '{request.user_id}'
         """
         await self.db.execute(sql)
 
@@ -245,7 +243,7 @@ class GroupService:
             GroupInfo: Created group information
         """
         # first need to check if the user has created more than 10 groups
-        sql = f"""select * from {group_table} where creator_id = '{creator_id}'"""
+        sql = f"""select * from groups g where g.creator_id = '{creator_id}' and g.is_active = True"""
         user_groups = await self.db.read(sql)
         if len(user_groups) >= 10:
             raise HTTPException(
@@ -265,7 +263,7 @@ class GroupService:
         )
 
         # Save group to database
-        await self.db.insert_one(group_table, group.model_dump())
+        await self.db.insert_one("groups", group.model_dump())
 
         # Add creator as first member with CREATOR role
         await self._add_user_to_group(group_id=group_id, user_id=creator_id, role=GroupRole.CREATOR)
@@ -282,7 +280,7 @@ class GroupService:
         )
 
     async def create_invitation(
-        self, group_id: str, user: UserInfo, role: GroupRole = GroupRole.VIEWER
+        self, group_id: str, user: UserInfo, request: CreateInvitationRequest
     ) -> Dict[str, Any]:
         """
         Create an invitation for someone to join the group.
@@ -291,7 +289,7 @@ class GroupService:
         Args:
             group_id: Target group
             user: User creating the invitation
-            role: Role to assign to the invited user (default: VIEWER)
+            request: Request containing the role to assign to the invited user
 
         Returns:
             Dict containing invitation info and invite code
@@ -308,7 +306,7 @@ class GroupService:
             )
 
         # Cannot create invitation for CREATOR role
-        if role == GroupRole.CREATOR:
+        if request.role == GroupRole.CREATOR:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot create invitation for CREATOR role"
             )
@@ -324,17 +322,17 @@ class GroupService:
             group_id=group_id,
             invited_by=user.id,
             invite_code=invite_code,
-            role=role,
+            role=request.role,
             status=InvitationStatus.PENDING,
             created_at=current_time,
             expires_at=expires_at,
         )
 
         # Save invitation
-        await self.db.insert_one(group_invitation_table, invitation.model_dump())
+        await self.db.insert_one("group_invitations", invitation.model_dump())
 
         # Get group and user info for response
-        sql = f"""select * from {group_table} where id = '{group_id}'"""
+        sql = f"""select * from groups g where g.id = '{group_id}'"""
         group_dict = await self.db.read_one(sql)
 
         return {
@@ -345,6 +343,7 @@ class GroupService:
                 invite_code=invite_code,
                 created_at=invitation.created_at,
                 expires_at=invitation.expires_at,
+                role=request.role,
             ).model_dump(),
             "invite_code": invite_code,
             "share_message": f"Join my pet care group '{group_dict['name']}' with code: {invite_code}",
@@ -365,11 +364,11 @@ class GroupService:
 
         # Find valid invitation
         sql = f"""
-        select * from {group_invitation_table}
+        select * from group_invitations gi
         where
-            invite_code = '{request.invite_code}'
-            and status = '{InvitationStatus.PENDING.value}'
-            and expires_at > '{current_time}'
+            gi.invite_code = '{request.invite_code}'
+            and gi.status = '{InvitationStatus.PENDING.value}'
+            and gi.expires_at > '{current_time}'
         """
         invitation_dict = await self.db.read_one(sql)
 
@@ -395,21 +394,21 @@ class GroupService:
         # Update invitation status
         sql = f"""
         update
-            {group_invitation_table}
+            group_invitations
         set status = '{InvitationStatus.ACCEPTED.value}', accepted_by = '{user_id}', updated_at = '{current_time}'
         where id = '{invitation_dict['id']}'
         """
         await self.db.execute(sql)
 
         # Get updated group info
-        sql = f"""select * from {group_table} where id = '{group_id}' and is_active = True"""
+        sql = f"""select * from groups g where g.id = '{group_id}' and g.is_active = True"""
         group_dict = await self.db.read_one(sql)
 
         if not group_dict:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to join group")
 
         sql = f"""
-        select count(*) from {group_member_table} where group_id = '{group_id}' and is_active = True
+        select count(*) from group_members gm where gm.group_id = '{group_id}' and gm.is_active = True
         """
         member_count = await self.db.read_one(sql)
 
@@ -438,27 +437,27 @@ class GroupService:
         """
         sql = f"""
         select
-            {group_member_table}.group_id,
-            {group_table}.name as group_name,
-            user_id,
-            {user_table}.name as user_name,
-            {user_table}.email as user_email,
-            {group_member_table}.role,
-            {group_member_table}.created_at,
-            {group_member_table}.updated_at,
-            {group_member_table}.invited_by,
+            gm.group_id,
+            g.name as group_name,
+            gm.user_id,
+            u1.name as user_name,
+            u1.email as user_email,
+            gm.role,
+            gm.created_at,
+            gm.updated_at,
+            gm.invited_by,
             u2.name as invited_by_name,
-            {group_member_table}.is_active
+            gm.is_active
         from
-            {group_member_table}
-        left join {group_table} on ({group_member_table}.group_id = {group_table}.id)
-        left join {user_table} on ({group_member_table}.user_id = {user_table}.id)
-        left join {user_table} u2 on ({group_member_table}.invited_by = {user_table}.id)
+            group_members gm
+        left join groups g on (gm.group_id = g.id)
+        left join users u1 on (gm.user_id = u1.id)
+        left join users u2 on (gm.invited_by = u2.id)
         where
-            {group_member_table}.user_id = '{user_id}'
-            and {group_member_table}.is_active = true
-            and {group_table}.is_active = true
-            and {user_table}.is_active = true
+            gm.user_id = '{user_id}'
+            and gm.is_active = true
+            and g.is_active = true
+            and u1.is_active = true
         """
         memberships = await self.db.read(sql)
 
@@ -485,18 +484,18 @@ class GroupService:
 
         sql = f"""
         select
-            {group_member_table}.*,
-            {user_table}.name as user_name,
-            {user_table}.email as user_email,
-            {group_table}.name as group_name
-        from {group_member_table}
-        left join {user_table} on ({group_member_table}.user_id = {user_table}.id)
-        left join {group_table} on ({group_member_table}.group_id = {group_table}.id)
+            gm.*,
+            u.name as user_name,
+            u.email as user_email,
+            g.name as group_name
+        from group_members gm
+        left join users u on (gm.user_id = u.id)
+        left join groups g on (gm.group_id = g.id)
         where
-            {group_member_table}.group_id = '{group_id}'
-            and {group_member_table}.is_active = True
-            and {user_table}.is_active = True
-            and {group_table}.is_active = True
+            gm.group_id = '{group_id}'
+            and gm.is_active = True
+            and u.is_active = True
+            and g.is_active = True
         """
         members = await self.db.read(sql)
 

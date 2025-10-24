@@ -62,7 +62,7 @@ async def create_invitation(
     - Invitation information and shareable invite code
     """
     try:
-        invitation_data = await group_service.create_invitation(group_id, current_user, request.role)
+        invitation_data = await group_service.create_invitation(group_id, current_user, request)
         return {"status": 1, "data": invitation_data, "message": "Invitation created successfully"}
     except Exception as e:
         raise e

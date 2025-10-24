@@ -4,10 +4,6 @@ from typing import Optional, Set
 
 from pydantic import BaseModel, Field
 
-group_table = "groups"
-group_invitation_table = "group_invitations"
-group_member_table = "group_members"
-
 
 class GroupRole(str, Enum):
     """Enhanced group member roles with granular permissions"""
@@ -54,6 +50,7 @@ class GroupMember(BaseModel):
 class Group(BaseModel):
     """
     Enhanced Group model using dedicated GroupMember relationships.
+    Members are now managed through the GroupMember collection for better flexibility.
     """
 
     id: str
@@ -73,7 +70,6 @@ class GroupInvitation(BaseModel):
     group_id: str
     invited_by: str  # User ID who sent invitation
     invite_code: str  # Unique code for joining
-    role: GroupRole = GroupRole.VIEWER  # Role to assign when invitation is accepted
     status: InvitationStatus = InvitationStatus.PENDING
     created_at: dt
     expires_at: dt  # Invitations expire after 7 days
@@ -99,7 +95,7 @@ class UpdateMemberRoleRequest(BaseModel):
     """Request to update a member's role in the group"""
 
     user_id: str
-    new_role: GroupRole = GroupRole.VIEWER
+    new_role: GroupRole
 
 
 class RemoveMemberRequest(BaseModel):
@@ -109,9 +105,9 @@ class RemoveMemberRequest(BaseModel):
 
 
 class CreateInvitationRequest(BaseModel):
-    """Request to create a group invitation with role specification"""
+    """Request to create an invitation for a user to join the group"""
 
-    role: GroupRole = GroupRole.VIEWER
+    role: GroupRole
 
 
 # ================== Response Models ==================
@@ -140,7 +136,6 @@ class GroupMemberInfo(BaseModel):
     user_email: str
     role: GroupRole
     created_at: dt  # When the user joined the group
-    updated_at: dt
     invited_by: Optional[str] = None  # Who invited this user (user_id)
     invited_by_name: Optional[str] = None  # Name of the person who invited (for display)
     is_active: bool = True
@@ -155,6 +150,7 @@ class InvitationInfo(BaseModel):
     invite_code: str
     created_at: dt
     expires_at: dt
+    role: GroupRole
 
 
 # ================== Permission Management ==================
