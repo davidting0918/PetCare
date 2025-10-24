@@ -170,9 +170,9 @@ class GroupService:
 
         # Update the member's role
         sql = f"""
-        update group_members gm
-        set gm.role = '{request.new_role.value}'
-        where gm.group_id = '{group_id}' and gm.user_id = '{request.user_id}'
+        update group_members
+        set role = '{request.new_role.value}'
+        where group_id = '{group_id}' and user_id = '{request.user_id}'
         """
         await self.db.execute(sql)
 
@@ -216,9 +216,9 @@ class GroupService:
 
         # Deactivate the membership
         sql = f"""
-        update group_members gm
-        set gm.is_active = False
-        where gm.group_id = '{group_id}' and gm.user_id = '{request.user_id}'
+        update group_members
+        set is_active = False
+        where group_id = '{group_id}' and user_id = '{request.user_id}'
         """
         await self.db.execute(sql)
 
