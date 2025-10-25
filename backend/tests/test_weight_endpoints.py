@@ -38,7 +38,9 @@ class TestWeightBasicFunctions:
         "weight3": None,
     }
 
-    PET_ID = None
+    PET_ID = {
+        "pet1": None,
+    }
 
     @pytest.mark.asyncio
     async def test_setup_create_pet(self, async_client: AsyncClient, session_auth_headers_user1, test_helper):
@@ -48,7 +50,7 @@ class TestWeightBasicFunctions:
 
         assert response.status_code == 200
         data = response.json()
-        self.PET_ID = data["data"]["id"]
+        self.PET_ID["pet1"] = data["data"]["id"]
         test_helper.assert_response_structure(data, expected_status=1)
 
         pet_details = data["data"]
@@ -64,7 +66,7 @@ class TestWeightBasicFunctions:
         self, async_client: AsyncClient, session_auth_headers_user1, test_helper
     ):
         """Test creating a weight record"""
-        weight_data = {"pet_id": self.PET_ID, **self.WEIGHT_RECORDS["weight1"]}
+        weight_data = {"pet_id": self.PET_ID["pet1"], **self.WEIGHT_RECORDS["weight1"]}
         response = await async_client.post("/weights/create", headers=session_auth_headers_user1, json=weight_data)
 
         assert response.status_code == 200
@@ -77,7 +79,6 @@ class TestWeightBasicFunctions:
         # Verify prefixed ID format: wt_{8-char-id}
         assert weight_details["id"].startswith("wt_")
         assert len(weight_details["id"]) == 11  # "wt_" (3) + 8 chars
-        assert weight_details["pet_id"] == self.PET_ID
+        assert weight_details["pet_id"] == self.PET_ID["pet1"]
         assert weight_details["weight"] == self.WEIGHT_RECORDS["weight1"]["weight"]
         assert weight_details["notes"] == self.WEIGHT_RECORDS["weight1"]["notes"]
-        assert weight_details["pet_name"] == "Weight Test Pet"

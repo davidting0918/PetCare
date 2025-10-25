@@ -56,7 +56,7 @@ async def create_weight_record(
         return {
             "status": 1,
             "data": weight_details.model_dump(),
-            "message": f"Weight record for {weight_details.pet_name} created successfully",
+            "message": f"Weight record for {weight_details.pet_id} created successfully",
         }
     except Exception as e:
         raise e
