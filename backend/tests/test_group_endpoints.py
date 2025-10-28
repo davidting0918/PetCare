@@ -53,7 +53,9 @@ class TestGroupBasicFunctions:
         group_id = group_data["id"]
 
         # Step 2: User1 creates an invitation
-        invite_response = await async_client.post(f"/groups/{group_id}/invite", headers=session_auth_headers_user1)
+        invite_response = await async_client.post(
+            f"/groups/{group_id}/invite", headers=session_auth_headers_user1, json={"role": "member"}
+        )
 
         assert invite_response.status_code == 200
         invite_data = invite_response.json()["data"]
@@ -84,7 +86,9 @@ class TestGroupBasicFunctions:
         group_id = create_response.json()["data"]["id"]
 
         # Create invite and join
-        invite_response = await async_client.post(f"/groups/{group_id}/invite", headers=session_auth_headers_user1)
+        invite_response = await async_client.post(
+            f"/groups/{group_id}/invite", headers=session_auth_headers_user1, json={"role": "member"}
+        )
         invite_code = invite_response.json()["data"]["invite_code"]
 
         await async_client.post("/groups/join", headers=session_auth_headers_user2, json={"invite_code": invite_code})
@@ -156,7 +160,9 @@ class TestGroupLimits:
         )
         group_id = create_response.json()["data"]["id"]
 
-        invite_response = await async_client.post(f"/groups/{group_id}/invite", headers=session_auth_headers_user1)
+        invite_response = await async_client.post(
+            f"/groups/{group_id}/invite", headers=session_auth_headers_user1, json={"role": "member"}
+        )
         invite_code = invite_response.json()["data"]["invite_code"]
 
         # User2 joins successfully first time
@@ -202,7 +208,9 @@ class TestCompleteGroupWorkflow:
 
         # 2. User1 creates an invitation
         print("Step 2: Creating invitation...")
-        invite_response = await async_client.post(f"/groups/{group_id}/invite", headers=session_auth_headers_user1)
+        invite_response = await async_client.post(
+            f"/groups/{group_id}/invite", headers=session_auth_headers_user1, json={"role": "member"}
+        )
         assert invite_response.status_code == 200
         invite_code = invite_response.json()["data"]["invite_code"]
         print(f"✓ Invitation created: {invite_code}")

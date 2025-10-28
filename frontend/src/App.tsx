@@ -7,6 +7,7 @@ import { PetSelectionPage } from './components/auth/PetSelectionPage';
 import { DashboardPage } from './components/dashboard';
 import { MainLayout } from './components/layout/MainLayout';
 import { ComingSoon } from './components/common/ComingSoon';
+import { SettingsPage } from './components/settings';
 import type { NavigationTab } from './types';
 
 // Loading component
@@ -130,12 +131,7 @@ const AppLayout: React.FC = () => {
         />
         <Route
           path="/settings"
-          element={
-            <ComingSoon
-              title="Settings"
-              description="Manage your account, pet profiles, and app preferences."
-            />
-          }
+          element={<SettingsPage />}
         />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>

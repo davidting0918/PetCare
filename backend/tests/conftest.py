@@ -20,15 +20,27 @@ from httpx import AsyncClient
 os.environ["PYTEST_RUNNING"] = "1"
 os.environ["APP_ENV"] = "test"
 
-from backend.core.db_manager import DatabaseManager, close_database, get_db, init_database
+from backend.core.db_manager import close_database, get_db, init_database
 from backend.main import app
 from backend.models.auth import access_token_table, api_key_table
 from backend.models.food import food_table
-from backend.models.group import group_invitation_table, group_member_table, group_table
 from backend.models.meal import meal_table
 from backend.models.pet import pet_table
 from backend.models.user import user_table
 from backend.models.weight import weight_table
+
+tables = [
+    user_table,
+    api_key_table,
+    access_token_table,
+    "groups",
+    "group_invitations",
+    "group_members",
+    pet_table,
+    food_table,
+    meal_table,
+    weight_table,
+]
 
 
 @pytest.fixture(scope="session")
@@ -49,28 +61,20 @@ async def test_db():
     """
     # Initialize test database
     await init_database(environment="test")
-    db_manager = DatabaseManager()
-    db = db_manager.get_client()
 
-    yield db
+    # clean up table before test
+    test_db = get_db()
+    try:
+        for table in tables:
+            await test_db.execute(f"DELETE FROM {table}")
+    except Exception as e:
+        print(f"Warning: Error cleaning up table {table}: {e}")
 
-    # Clean up all test tables
-    tables = [
-        user_table,
-        api_key_table,
-        access_token_table,
-        group_table,
-        group_invitation_table,
-        group_member_table,
-        pet_table,
-        food_table,
-        meal_table,
-        weight_table,
-    ]
+    yield test_db
 
     try:
         for table in tables:
-            await db.execute(f"DELETE FROM {table}")
+            await test_db.execute(f"DELETE FROM {table}")
     except Exception as e:
         print(f"Warning: Error cleaning up table {table}: {e}")
 
@@ -94,9 +98,9 @@ async def clean_db_per_test(test_db):
     """
     # Tables to clean BETWEEN tests (preserve session data)
     test_data_tables = [
-        group_table,
-        group_invitation_table,
-        group_member_table,
+        "groups",
+        "group_invitations",
+        "group_members",
         pet_table,
         food_table,
         meal_table,
@@ -144,9 +148,9 @@ async def auto_clean_per_test(request, test_db):
     if request.node.get_closest_marker("clean_per_test"):
         # Apply the same logic as clean_db_per_test
         test_data_tables = [
-            group_table,
-            group_invitation_table,
-            group_member_table,
+            "groups",
+            "group_invitations",
+            "group_members",
             pet_table,
             food_table,
             meal_table,
@@ -204,9 +208,9 @@ async def clean_db_session_only():
     db = get_db()
 
     session_tables = [
-        group_table,
-        group_invitation_table,
-        group_member_table,
+        "groups",
+        "group_invitations",
+        "group_members",
         pet_table,
         food_table,
         meal_table,
@@ -248,9 +252,9 @@ async def cleanup_session_data():
         user_table,  # Clean user data at session end
         api_key_table,  # Clean API keys at session end
         access_token_table,  # Clean all tokens at session end
-        group_table,  # Final cleanup (also done by clean_db_session_only)
-        group_invitation_table,
-        group_member_table,
+        "groups",  # Final cleanup (also done by clean_db_session_only)
+        "group_invitations",
+        "group_members",
         pet_table,
         food_table,
         meal_table,
@@ -520,14 +524,11 @@ def test_helper() -> TestHelper:
 
 
 @pytest_asyncio.fixture(scope="session")
-async def session_api_key() -> Dict[str, str]:
+async def session_api_key(test_db) -> Dict[str, str]:
     """
     Create a session-wide API key that persists across all tests.
     This reduces API key creation overhead.
     """
-
-    await init_database(environment="test")
-    db = get_db()
     api_key = f"session_key_{str(uuid.uuid4())[:8]}"
     api_secret = f"session_secret_{str(uuid.uuid4())[:8]}"
 
@@ -539,7 +540,7 @@ async def session_api_key() -> Dict[str, str]:
         "is_active": True,
     }
 
-    await db.insert_one(api_key_table, api_key_data)
+    await test_db.insert_one(api_key_table, api_key_data)
     print(f"✅ Session API key created: {api_key}")
 
     yield {
@@ -551,7 +552,7 @@ async def session_api_key() -> Dict[str, str]:
 
     # Cleanup after all tests
     try:
-        await db.execute(f"DELETE FROM {api_key_table} WHERE api_key = '{api_key}'")
+        await test_db.execute(f"DELETE FROM {api_key_table} WHERE api_key = '{api_key}'")
         print(f"🧹 Session API key cleaned up: {api_key}")
     except Exception as e:
         print(f"⚠️  Failed to cleanup session API key: {e}")
@@ -580,7 +581,7 @@ async def session_users(session_api_key: Dict[str, str]) -> Dict[str, Dict[str, 
         for user_data in users_data:
             print(f"🏗️  Creating session user: {user_data['name']}")
 
-            # Create user
+            # Try to create user
             create_response = await client.post(
                 "/user/create",
                 headers={
@@ -590,33 +591,71 @@ async def session_users(session_api_key: Dict[str, str]) -> Dict[str, Dict[str, 
                 json={"email": user_data["email"], "name": user_data["name"], "pwd": user_data["pwd"]},
             )
 
-            if create_response.status_code != 200:
-                print(f"❌ Failed to create user: {create_response.text}")
-                continue
+            user_created = False
+            # Handle user creation response
+            if create_response.status_code == 200:
+                # User created successfully
+                created_user = create_response.json()["data"]
+                user_created = True
+                print(f"✅ Session user created: {user_data['name']} (ID: {created_user['id']})")
+            elif create_response.status_code == 400 and "already exists" in create_response.text.lower():
+                # User already exists from previous test run - this is OK
+                print(f"⚠️  User already exists, will use existing user: {user_data['email']}")
+            else:
+                # Other error - fail fast
+                error_msg = f"Failed to create session user {user_data['name']}: {create_response.text}"
+                print(f"❌ {error_msg}")
+                raise Exception(error_msg)
 
-            created_user = create_response.json()["data"]
-
-            # Login to get JWT token
+            # Login to get JWT token (works for both new and existing users)
             login_response = await client.post(
                 "/auth/email/login", json={"email": user_data["email"], "pwd": user_data["pwd"]}
             )
 
             if login_response.status_code != 200:
-                print(f"❌ Failed to login user: {login_response.text}")
-                continue
+                error_msg = f"Failed to login session user {user_data['name']}: {login_response.text}"
+                print(f"❌ {error_msg}")
+                raise Exception(error_msg)
 
             token_data = login_response.json()["data"]
 
+            # Get user info - either from creation or fetch it
+            if user_created:
+                user_info = created_user
+            else:
+                # For existing users, fetch user info using the token
+                me_response = await client.get(
+                    "/user/me",
+                    headers={
+                        "Authorization": f"Bearer {token_data['access_token']}",
+                        "Content-Type": "application/json",
+                    },
+                )
+                if me_response.status_code != 200:
+                    error_msg = f"Failed to get user info for {user_data['name']}: {me_response.text}"
+                    print(f"❌ {error_msg}")
+                    raise Exception(error_msg)
+                user_info = me_response.json()["data"]
+                print(f"✅ Session user ready (existing): {user_data['name']} (ID: {user_info['id']})")
+
             created_users[user_data["key"]] = {
-                "id": created_user["id"],
+                "id": user_info["id"],
                 "email": user_data["email"],
                 "name": user_data["name"],
                 "pwd": user_data["pwd"],
                 "access_token": token_data["access_token"],
-                "group_id": created_user["personal_group_id"],
+                "group_id": user_info["personal_group_id"],
             }
 
-            print(f"✅ Session user created: {user_data['name']} (ID: {created_user['id']})")
+    # Ensure all users were set up successfully
+    if len(created_users) != len(users_data):
+        missing_users = [u["key"] for u in users_data if u["key"] not in created_users]
+        raise Exception(
+            f"Failed to setup all session users. Expected {len(users_data)}, got {len(created_users)}. "
+            f"Missing: {missing_users}"
+        )
+
+    print(f"✅ All {len(created_users)} session users are ready")
 
     yield created_users
 
@@ -637,7 +676,9 @@ async def session_test_group(
         assert group_response.status_code == 200
         group_id = group_response.json()["data"]["id"]
 
-        invite_response = await client.post(f"/groups/{group_id}/invite", headers=session_auth_headers_user1)
+        invite_response = await client.post(
+            f"/groups/{group_id}/invite", headers=session_auth_headers_user1, json={"role": "member"}
+        )
         assert invite_response.status_code == 200
         invite_code = invite_response.json()["data"]["invite_code"]
 
@@ -646,7 +687,9 @@ async def session_test_group(
         )
         assert join_response.status_code == 200
 
-        invite_response = await client.post(f"/groups/{group_id}/invite", headers=session_auth_headers_user1)
+        invite_response = await client.post(
+            f"/groups/{group_id}/invite", headers=session_auth_headers_user1, json={"role": "viewer"}
+        )
         assert invite_response.status_code == 200
         invite_code = invite_response.json()["data"]["invite_code"]
 
@@ -655,13 +698,6 @@ async def session_test_group(
         )
         assert join_response.status_code == 200
 
-        # update user3 to viewer
-        update_response = await client.post(
-            f"/groups/{group_id}/update_role",
-            headers=session_auth_headers_user1,
-            json={"user_id": session_user3["id"], "new_role": "viewer"},
-        )
-        assert update_response.status_code == 200
         return group_id
 
 
