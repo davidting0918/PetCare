@@ -22,8 +22,9 @@ class WeightService:
 
     Key Principles:
     - Group-Based Permissions: Access controlled through group membership roles
-    - Creator/Member Can Record: Only creators and members can create/edit weight records
-    - All Members Can View: All group members (including viewers) can view weight records
+    - Creator/Member Can Manage: Creators and members can create, update, and delete ANY weight records in their group
+    - Viewers Can View Only: Viewers can only view weight records, no modifications allowed
+    - Simplified Model: No individual ownership - group role determines all permissions
     - Prefixed ID: Uses wt_{8-char-id} format for clear type identification
     """
 
@@ -35,6 +36,7 @@ class WeightService:
     # ================== Permission Helpers ==================
 
     async def _get_user_role(self, user_id: str, pet_id: str) -> str:
+        """Get user's role for a pet's group"""
         sql = f"""
         select
             gm."role" as role
@@ -50,15 +52,62 @@ class WeightService:
         role = await self.db.read_one(sql)
         return role["role"] if role else "none"
 
-    async def _can_record_weight(self, pet_id: str, user_id: str) -> bool:
-        """Check if user can record weight in the group (creator and member only)"""
+    async def _has_edit_permission(self, pet_id: str, user_id: str) -> bool:
+        """
+        Check if user has EDIT permission (creator or member).
+        Used for: create, update, delete operations.
+        """
         role = await self._get_user_role(user_id, pet_id)
         return role in ["creator", "member"]
 
-    async def _can_view_weight(self, pet_id: str, user_id: str) -> bool:
-        """Check if user can view weight records in the group (all roles can view)"""
+    async def _has_view_permission(self, pet_id: str, user_id: str) -> bool:
+        """
+        Check if user has VIEW permission (creator, member, or viewer).
+        Used for: read and search operations.
+        """
         role = await self._get_user_role(user_id, pet_id)
         return role in ["creator", "member", "viewer"]
+
+    async def _get_weight_record_pet_id(self, weight_id: str) -> str:
+        """
+        Get pet_id from a weight record for permission checking.
+
+        Returns:
+            str: The pet_id associated with this weight record
+        """
+        sql = f"""
+        SELECT w.pet_id
+        FROM {weight_table} w
+        JOIN pets p ON w.pet_id = p.id
+        WHERE w.id = '{weight_id}' AND w.is_active = TRUE AND p.is_active = TRUE
+        """
+        record = await self.db.read_one(sql)
+        if not record:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Weight record not found")
+        return record["pet_id"]
+
+    async def _get_pet_group_context(self, pet_id: str) -> dict:
+        """
+        Get pet's group context for permission checking.
+
+        Returns:
+            Dict containing pet and group information
+        """
+        sql = f"""
+        SELECT
+            p.id as pet_id,
+            p.name as pet_name,
+            p.owner_id,
+            p.group_id,
+            g.name as group_name
+        FROM pets p
+        LEFT JOIN groups g ON p.group_id = g.id
+        WHERE p.id = '{pet_id}' AND p.is_active = TRUE AND g.is_active = TRUE
+        """
+        context = await self.db.read_one(sql)
+        if not context:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pet not found or not accessible")
+        return context
 
     # ================== ID Generation ==================
 
@@ -77,9 +126,9 @@ class WeightService:
         """
         Create a new weight record for a pet.
 
-        Only creators and members can create weight records.
+        Requires EDIT permission (creator or member).
         """
-        if not await self._can_record_weight(request.pet_id, user_id):
+        if not await self._has_edit_permission(request.pet_id, user_id):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have permission to record weight measurements for this pet",
@@ -99,9 +148,9 @@ class WeightService:
         """
         Get detailed information about a specific weight record.
 
-        All group members (including viewers) can view weight records.
+        Requires VIEW permission (creator, member, or viewer).
         """
-        sql = """
+        sql = f"""
         SELECT
             w.*,
             p.name as pet_name,
@@ -111,14 +160,14 @@ class WeightService:
         FROM weight_records w
         JOIN pets p ON w.pet_id = p.id
         JOIN users u ON w.user_id = u.id
-        WHERE w.id = {weight_id} AND w.is_active = TRUE AND p.is_active = TRUE
+        WHERE w.id = '{weight_id}' AND w.is_active = TRUE AND p.is_active = TRUE
         """
         record = await self.db.read_one(sql)
         if not record:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Weight record not found")
 
         # Check view permission
-        if not await self._can_view_weight(user_id, record["group_id"]):
+        if not await self._has_view_permission(record["pet_id"], user_id):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="You don't have permission to view this weight record"
             )
@@ -144,19 +193,18 @@ class WeightService:
         """
         Update an existing weight record.
 
-        Only the user who created the record can update it.
+        Requires EDIT permission (creator or member).
         """
-        # Check permission
-        can_modify, weight_info = await self._can_modify_weight_record(weight_id, user_id)
-        if not can_modify:
+        # Get pet_id from weight record and check edit permission
+        pet_id = await self._get_weight_record_pet_id(weight_id)
+        if not await self._has_edit_permission(pet_id, user_id):
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="You can only update your own weight records"
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only group creators and members can update weight records",
             )
 
         # Build update query dynamically based on provided fields
         update_fields = []
-        params = []
-
         if request.weight is not None:
             update_fields.append(f"weight = {request.weight}")
 
@@ -169,13 +217,10 @@ class WeightService:
         if not update_fields:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No fields to update")
 
-        # Add weight_id as the last parameter
-        params.append(weight_id)
-
         sql = f"""
-        UPDATE {weight_table}
+        UPDATE weight_records
         SET {', '.join(update_fields)}
-        WHERE id = {weight_id}
+        WHERE id = '{weight_id}'
         RETURNING *
         """
 
@@ -192,19 +237,20 @@ class WeightService:
         """
         Soft delete a weight record.
 
-        Only the user who created the record can delete it.
+        Requires EDIT permission (creator or member).
         """
-        # Check permission
-        can_modify, weight_info = await self._can_modify_weight_record(weight_id, user_id)
-        if not can_modify:
+        # Get pet_id from weight record and check edit permission
+        pet_id = await self._get_weight_record_pet_id(weight_id)
+        if not await self._has_edit_permission(pet_id, user_id):
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="You can only delete your own weight records"
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only group creators and members can delete weight records",
             )
 
         sql = f"""
-        UPDATE {weight_table}
+        UPDATE weight_records
         SET is_active = FALSE
-        WHERE id = {weight_id}
+        WHERE id = '{weight_id}'
         RETURNING id
         """
         result = await self.db.execute_returning(sql)
@@ -224,7 +270,7 @@ class WeightService:
         """
         Search weight records with various filters and pagination.
 
-        All group members (including viewers) can search weight records.
+        Requires VIEW permission (creator, member, or viewer).
         """
         # Build WHERE clause
         where_conditions = ["w.is_active = TRUE", "p.is_active = TRUE"]
@@ -232,38 +278,36 @@ class WeightService:
         # Filter by pet_id
         if request.pet_id:
             # Validate pet access
-            pet_context = await self._get_pet_group_context(request.pet_id)
-            group_id = pet_context["group_id"]
 
             # Check view permission
-            if not await self._can_view_weight(user_id, group_id):
+            if not await self._has_view_permission(request.pet_id, user_id):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="You don't have permission to view weight records for this pet",
                 )
 
-            where_conditions.append(f"w.pet_id = {request.pet_id}")
+            where_conditions.append(f"w.pet_id = '{request.pet_id}'")
         else:
             # If no pet_id specified, only show records from pets in groups the user has access to
             where_conditions.append(
                 f"""
                 p.group_id IN (
                     SELECT group_id FROM group_members
-                    WHERE user_id = {user_id} AND is_active = TRUE
+                    WHERE user_id = '{user_id}' AND is_active = TRUE
                 )
             """
             )
 
         # Filter by user_id
         if request.user_id:
-            where_conditions.append(f"w.user_id = {request.user_id}")
+            where_conditions.append(f"w.user_id = '{request.user_id}'")
 
         # Filter by timestamp range
         if request.start:
-            where_conditions.append(f"w.timestamp >= {request.start}")
+            where_conditions.append(f"w.timestamp >= '{request.start}'")
 
         if request.end:
-            where_conditions.append(f"w.timestamp <= {request.end}")
+            where_conditions.append(f"w.timestamp <= '{request.end}'")
 
         where_clause = " AND ".join(where_conditions)
 
