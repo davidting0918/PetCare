@@ -45,7 +45,7 @@ class UpdateWeightRecordRequest(BaseModel):
     """Request to update an existing weight record (partial update)"""
 
     weight: Optional[float] = Field(None, ge=0.1, le=200, description="Updated weight in kg")
-    timestamp: Optional[dt] = Field(None, description="Updated measurement time")
+    timestamp: Optional[dt] = Field(dt.now(), description="Updated measurement time")
     notes: Optional[str] = Field(None, max_length=500, description="Updated notes")
 
 

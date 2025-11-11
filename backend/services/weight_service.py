@@ -206,13 +206,13 @@ class WeightService:
         # Build update query dynamically based on provided fields
         update_fields = []
         if request.weight is not None:
-            update_fields.append(f"weight = {request.weight}")
+            update_fields.append(f"weight = {request.weight:.2f}")
 
         if request.timestamp is not None:
-            update_fields.append(f"timestamp = {request.timestamp}")
+            update_fields.append(f"timestamp = '{request.timestamp}'")
 
         if request.notes is not None:
-            update_fields.append(f"notes = {request.notes}")
+            update_fields.append(f"notes = '{request.notes}'")
 
         if not update_fields:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No fields to update")
