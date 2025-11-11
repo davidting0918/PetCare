@@ -62,44 +62,6 @@ async def create_weight_record(
         raise e
 
 
-@router.get("/{weight_id}", response_model=dict)
-async def get_weight_record(
-    weight_id: str,
-    current_user: Annotated[UserInfo, Depends(get_current_user)],
-) -> dict:
-    """
-    Retrieves detailed information about a specific weight measurement record.
-
-    Authorization: All group members (including viewers) can view weight records
-
-    This endpoint provides complete details about a single weight measurement,
-    including pet information, measurement details, and who recorded it.
-
-    Path Parameters:
-    - weight_id: The prefixed ID of the weight record (format: wt_{8-char-id})
-
-    Returns:
-    - Complete weight record details
-    - Pet information (name, type)
-    - User who recorded the measurement
-    - Measurement timestamp and notes
-    - Record metadata (created_at, updated_at, is_active)
-
-    Permission Requirements:
-    - Must be a member of the pet's associated group (any role)
-    - Viewers have read-only access
-    """
-    try:
-        weight_details = await weight_service.get_weight_record(weight_id, current_user.id)
-        return {
-            "status": 1,
-            "data": weight_details.model_dump(),
-            "message": "Weight record retrieved successfully",
-        }
-    except Exception as e:
-        raise e
-
-
 @router.post("/update/{weight_id}", response_model=dict)
 async def update_weight_record(
     weight_id: str,

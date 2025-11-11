@@ -84,25 +84,6 @@ class TestWeightBasicFunctions:
         assert weight_details["notes"] == self.WEIGHT_RECORDS["weight1"]["notes"]
 
     @pytest.mark.asyncio
-    async def test_get_weight_record_success(self, async_client: AsyncClient, session_auth_headers_user1, test_helper):
-        """Test retrieving a weight record by ID"""
-        weight_id = self.WEIGHT_IDS["weight1"]
-        response = await async_client.get(f"/weights/{weight_id}", headers=session_auth_headers_user1)
-
-        assert response.status_code == 200
-        data = response.json()
-        test_helper.assert_response_structure(data, expected_status=1)
-
-        weight_details = data["data"]
-        assert weight_details["id"] == weight_id
-        assert weight_details["pet_id"] == self.PET_ID["pet1"]
-        assert weight_details["weight"] == self.WEIGHT_RECORDS["weight1"]["weight"]
-        assert weight_details["notes"] == self.WEIGHT_RECORDS["weight1"]["notes"]
-        assert "created_at" in weight_details
-        assert "updated_at" in weight_details
-        assert weight_details["is_active"] is True
-
-    @pytest.mark.asyncio
     async def test_create_multiple_weight_records(
         self, async_client: AsyncClient, session_auth_headers_user1, test_helper
     ):
