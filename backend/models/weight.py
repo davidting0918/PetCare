@@ -67,7 +67,8 @@ class OrderDirection(str, Enum):
 class SearchWeightRecordsRequest(BaseModel):
     """Request to search weight records with various filters"""
 
-    pet_id: str = Field(..., description="Filter by pet ID (required)")
+    weight_id: Optional[str] = Field(None, description="Filter by weight record ID (optional)")
+    pet_id: Optional[str] = Field(None, description="Filter by pet ID (optional)")
     user_id: Optional[str] = Field(None, description="Filter by user who recorded the weight")
     start: Optional[dt] = Field(None, description="Start of timestamp range (inclusive)")
     end: Optional[dt] = Field(None, description="End of timestamp range (inclusive)")

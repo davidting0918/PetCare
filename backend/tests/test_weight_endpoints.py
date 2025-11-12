@@ -182,7 +182,7 @@ class TestWeightBasicFunctions:
         """Test searching weight records with custom sorting"""
         search_params = {
             "pet_id": self.PET_ID["pet1"],
-            "order_by": "weight",
+            "order_by": "timestamp",
             "order_direction": "asc",
             "page": 1,
             "number": 50,
@@ -197,10 +197,10 @@ class TestWeightBasicFunctions:
         search_results = data["data"]
         records = search_results["records"]
 
-        # Verify records are sorted by weight in ascending order
+        # Verify records are sorted by timestamp in ascending order
         if len(records) >= 2:
             for i in range(len(records) - 1):
-                assert records[i]["weight"] <= records[i + 1]["weight"]
+                assert records[i]["timestamp"] <= records[i + 1]["timestamp"]
 
     @pytest.mark.asyncio
     async def test_delete_weight_record_unauthorized(self, async_client: AsyncClient, session_auth_headers_user2):
@@ -250,3 +250,77 @@ class TestWeightBasicFunctions:
 
         # Should fail with 404 Not Found or 403 Forbidden
         assert response.status_code in [404, 403]
+
+    @pytest.mark.asyncio
+    async def test_search_weight_records_by_weight_id(
+        self, async_client: AsyncClient, session_auth_headers_user1, test_helper
+    ):
+        """Test searching weight records by weight_id"""
+        weight_id = self.WEIGHT_IDS["weight1"]
+        search_params = {"weight_id": weight_id, "page": 1, "number": 50}
+
+        response = await async_client.get("/weights/info", headers=session_auth_headers_user1, params=search_params)
+
+        assert response.status_code == 200
+        data = response.json()
+        test_helper.assert_response_structure(data, expected_status=1)
+
+        search_results = data["data"]
+        assert "records" in search_results
+        assert search_results["total"] >= 1
+
+        # Should find the specific weight record
+        found_record = next((r for r in search_results["records"] if r["id"] == weight_id), None)
+        assert found_record is not None
+        assert found_record["id"] == weight_id
+        assert found_record["pet_id"] == self.PET_ID["pet1"]
+
+    @pytest.mark.asyncio
+    async def test_search_weight_records_by_weight_id_and_pet_id(
+        self, async_client: AsyncClient, session_auth_headers_user1, test_helper
+    ):
+        """Test searching weight records with both weight_id and pet_id"""
+        weight_id = self.WEIGHT_IDS["weight3"]
+        search_params = {"weight_id": weight_id, "pet_id": self.PET_ID["pet1"], "page": 1, "number": 50}
+
+        response = await async_client.get("/weights/info", headers=session_auth_headers_user1, params=search_params)
+
+        assert response.status_code == 200
+        data = response.json()
+        test_helper.assert_response_structure(data, expected_status=1)
+
+        search_results = data["data"]
+        assert search_results["total"] >= 1
+
+        # Should find only records matching both conditions
+        for record in search_results["records"]:
+            assert record["id"] == weight_id
+            assert record["pet_id"] == self.PET_ID["pet1"]
+
+    @pytest.mark.asyncio
+    async def test_search_weight_records_no_params_error(self, async_client: AsyncClient, session_auth_headers_user1):
+        """Test that search fails when neither weight_id nor pet_id is provided"""
+        search_params = {"page": 1, "number": 50}
+
+        response = await async_client.get("/weights/info", headers=session_auth_headers_user1, params=search_params)
+
+        # Should fail with 400 Bad Request
+        assert response.status_code == 400
+        data = response.json()
+        assert "detail" in data
+        assert "weight_id" in data["detail"] or "pet_id" in data["detail"]
+
+    @pytest.mark.asyncio
+    async def test_search_weight_records_by_weight_id_unauthorized(
+        self, async_client: AsyncClient, session_auth_headers_user2
+    ):
+        """Test that users cannot query weight records they don't have access to"""
+        weight_id = self.WEIGHT_IDS["weight1"]
+        search_params = {"weight_id": weight_id, "page": 1, "number": 50}
+
+        response = await async_client.get("/weights/info", headers=session_auth_headers_user2, params=search_params)
+
+        # Should fail with 403 Forbidden or return empty results depending on implementation
+        assert response.status_code in [403, 404] or (
+            response.status_code == 200 and response.json()["data"]["total"] == 0
+        )

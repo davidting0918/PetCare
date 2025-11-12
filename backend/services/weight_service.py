@@ -272,13 +272,32 @@ class WeightService:
 
         Requires VIEW permission (creator, member, or viewer).
         """
+        # Validate that at least one of weight_id or pet_id is provided
+        if not request.weight_id and not request.pet_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="At least one of 'weight_id' or 'pet_id' must be provided",
+            )
+
         # Build WHERE clause
         where_conditions = ["w.is_active = TRUE", "p.is_active = TRUE"]
 
+        # Filter by weight_id
+        if request.weight_id:
+            where_conditions.append(f"w.id = '{request.weight_id}'")
+
+            # If only weight_id is provided (no pet_id), we need to validate permission
+            # by first getting the pet_id from the weight record
+            if not request.pet_id:
+                pet_id = await self._get_weight_record_pet_id(request.weight_id)
+                if not await self._has_view_permission(pet_id, user_id):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="You don't have permission to view this weight record",
+                    )
+
         # Filter by pet_id
         if request.pet_id:
-            # Validate pet access
-
             # Check view permission
             if not await self._has_view_permission(request.pet_id, user_id):
                 raise HTTPException(
@@ -287,16 +306,6 @@ class WeightService:
                 )
 
             where_conditions.append(f"w.pet_id = '{request.pet_id}'")
-        else:
-            # If no pet_id specified, only show records from pets in groups the user has access to
-            where_conditions.append(
-                f"""
-                p.group_id IN (
-                    SELECT group_id FROM group_members
-                    WHERE user_id = '{user_id}' AND is_active = TRUE
-                )
-            """
-            )
 
         # Filter by user_id
         if request.user_id:
@@ -334,16 +343,14 @@ class WeightService:
         SELECT
             w.id,
             w.pet_id,
-            p.name as pet_name,
             w.weight,
             w.user_id,
-            u.name as user_name,
             w.timestamp,
             w.notes,
-            w.created_at
+            w.created_at,
+            w.updated_at
         FROM {weight_table} w
         JOIN pets p ON w.pet_id = p.id
-        JOIN users u ON w.user_id = u.id
         WHERE {where_clause}
         ORDER BY w.{order_field} {order_dir}
         LIMIT {request.number} OFFSET {offset}
@@ -356,13 +363,12 @@ class WeightService:
             WeightRecordInfo(
                 id=record["id"],
                 pet_id=record["pet_id"],
-                pet_name=record["pet_name"],
                 weight=float(record["weight"]),
                 user_id=record["user_id"],
-                user_name=record["user_name"],
                 timestamp=record["timestamp"],
-                notes=record["notes"],
                 created_at=record["created_at"],
+                updated_at=record["updated_at"],
+                notes=record["notes"],
             )
             for record in records
         ]
