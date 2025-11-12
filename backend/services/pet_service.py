@@ -468,13 +468,23 @@ class PetService:
         if not await self._is_owner(pet_id, user_id):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only pet owners can upload photos")
 
-        # Validate file type
-        if not file.content_type or not file.content_type.startswith("image/"):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only image files are allowed")
-
+        # Read file content to validate size
+        content = await file.read()
+        actual_size = len(content)
+        
+        # Validate file has content
+        if actual_size == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="File is empty. Please upload a valid image file with content."
+            )
+        
         # Validate file size (max 10MB)
-        if file.size and file.size > 10 * 1024 * 1024:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File size must be less than 10MB")
+        if actual_size > 10 * 1024 * 1024:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"File size ({actual_size / 1024 / 1024:.2f}MB) exceeds maximum allowed size of 10MB"
+            )
 
         # Generate unique photo ID and file path (secure random filename)
 
@@ -484,9 +494,8 @@ class PetService:
         photo_url = f"/static/pet_photos/{file_name}"
 
         try:
-            # Save file to storage
+            # Save file to storage (content already read for validation)
             async with aiofiles.open(file_path, "wb") as f:
-                content = await file.read()
                 await f.write(content)
 
             sql = f"""
@@ -499,7 +508,7 @@ class PetService:
             return {
                 "photo_url": photo_url,
                 "photo_name": file_name,
-                "photo_size": file.size,
+                "photo_size": actual_size,
                 "photo_type": file.content_type,
                 "photo_uploaded_at": int(dt.now().timestamp()),
             }

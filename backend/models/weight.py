@@ -45,7 +45,7 @@ class UpdateWeightRecordRequest(BaseModel):
     """Request to update an existing weight record (partial update)"""
 
     weight: Optional[float] = Field(None, ge=0.1, le=200, description="Updated weight in kg")
-    timestamp: Optional[dt] = Field(None, description="Updated measurement time")
+    timestamp: Optional[dt] = Field(dt.now(), description="Updated measurement time")
     notes: Optional[str] = Field(None, max_length=500, description="Updated notes")
 
 
@@ -67,7 +67,8 @@ class OrderDirection(str, Enum):
 class SearchWeightRecordsRequest(BaseModel):
     """Request to search weight records with various filters"""
 
-    pet_id: str = Field(..., description="Filter by pet ID (required)")
+    weight_id: Optional[str] = Field(None, description="Filter by weight record ID (optional)")
+    pet_id: Optional[str] = Field(None, description="Filter by pet ID (optional)")
     user_id: Optional[str] = Field(None, description="Filter by user who recorded the weight")
     start: Optional[dt] = Field(None, description="Start of timestamp range (inclusive)")
     end: Optional[dt] = Field(None, description="End of timestamp range (inclusive)")

@@ -62,44 +62,6 @@ async def create_weight_record(
         raise e
 
 
-@router.get("/{weight_id}", response_model=dict)
-async def get_weight_record(
-    weight_id: str,
-    current_user: Annotated[UserInfo, Depends(get_current_user)],
-) -> dict:
-    """
-    Retrieves detailed information about a specific weight measurement record.
-
-    Authorization: All group members (including viewers) can view weight records
-
-    This endpoint provides complete details about a single weight measurement,
-    including pet information, measurement details, and who recorded it.
-
-    Path Parameters:
-    - weight_id: The prefixed ID of the weight record (format: wt_{8-char-id})
-
-    Returns:
-    - Complete weight record details
-    - Pet information (name, type)
-    - User who recorded the measurement
-    - Measurement timestamp and notes
-    - Record metadata (created_at, updated_at, is_active)
-
-    Permission Requirements:
-    - Must be a member of the pet's associated group (any role)
-    - Viewers have read-only access
-    """
-    try:
-        weight_details = await weight_service.get_weight_record(weight_id, current_user.id)
-        return {
-            "status": 1,
-            "data": weight_details.model_dump(),
-            "message": "Weight record retrieved successfully",
-        }
-    except Exception as e:
-        raise e
-
-
 @router.post("/update/{weight_id}", response_model=dict)
 async def update_weight_record(
     weight_id: str,
@@ -190,7 +152,7 @@ async def delete_weight_record(
 
 @router.get("/info", response_model=dict)
 async def get_weight_records_info(
-    request: SearchWeightRecordsRequest,
+    request: Annotated[SearchWeightRecordsRequest, Depends()],
     current_user: Annotated[UserInfo, Depends(get_current_user)],
 ) -> dict:
     """
@@ -202,8 +164,11 @@ async def get_weight_records_info(
     supporting various filtering, sorting, and pagination options. Users can only
     access records for pets in groups they belong to.
 
+    **Required**: At least one of weight_id or pet_id must be provided
+
     Body:
-    - pet_id: Filter for specific pet (optional)
+    - weight_id: Filter for specific weight record by ID (optional, but required if pet_id not provided)
+    - pet_id: Filter for specific pet (optional, but required if weight_id not provided)
     - user_id: Filter by who recorded the weight (optional)
     - start: Start of timestamp range filter (optional)
     - end: End of timestamp range filter (optional)
@@ -213,10 +178,11 @@ async def get_weight_records_info(
     - number: Records per page (default: 50, max: 500)
 
     Query Scenarios:
-    1. Pet weight history: Provide pet_id, sort by timestamp desc
-    2. Recent measurements: Use start/end dates, sort by timestamp
-    3. User's recordings: Filter by user_id to see who recorded what
-    4. All accessible pets: No pet_id filter shows all pets in user's groups
+    1. Specific weight record: Provide weight_id to retrieve a single record
+    2. Pet weight history: Provide pet_id, sort by timestamp desc
+    3. Recent measurements: Use start/end dates with pet_id, sort by timestamp
+    4. User's recordings: Filter by user_id with pet_id to see who recorded what
+    5. Combined filter: Provide both weight_id and pet_id for strict matching
 
     Sorting Options:
     - timestamp: Sort by actual measurement time (recommended for tracking)
@@ -232,7 +198,7 @@ async def get_weight_records_info(
 
     Permission Requirements:
     - If pet_id specified: Must have access to that pet's group
-    - If no pet_id: Returns records from all accessible pets in user's groups
+    - If weight_id specified: Must have access to the pet's group associated with that weight record
     - All group roles (creator, member, viewer) can search
 
     Example Response:
