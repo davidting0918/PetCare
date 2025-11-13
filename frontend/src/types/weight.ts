@@ -1,0 +1,48 @@
+// Weight Record Types
+
+export interface WeightRecord {
+  id: string;
+  pet_id: string;
+  weight: number; // Weight in kg
+  user_id: string;
+  user_name?: string; // Optional user name for display
+  timestamp: string; // ISO date string
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+  is_active?: boolean;
+}
+
+export interface CreateWeightRequest {
+  pet_id: string;
+  weight: number; // Weight in kg, 0.1-200
+  timestamp?: string; // ISO date string, defaults to current time
+  notes?: string; // Optional notes, max 500 characters
+}
+
+export interface UpdateWeightRequest {
+  weight?: number;
+  timestamp?: string;
+  notes?: string;
+}
+
+// Time Interval Types
+export type TimeIntervalType =
+  | 'last_7_days'
+  | 'last_30_days'
+  | 'last_90_days'
+  | 'this_week'
+  | 'this_month'
+  | 'custom';
+
+export interface TimeInterval {
+  type: TimeIntervalType;
+  label: string;
+  startDate?: Date;
+  endDate?: Date;
+}
+
+export interface CustomDateRange {
+  startDate: Date;
+  endDate: Date;
+}

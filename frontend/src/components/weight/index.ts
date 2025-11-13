@@ -1,0 +1,1 @@
+export { WeightPage } from './WeightPage';
