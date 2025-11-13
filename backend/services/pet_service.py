@@ -471,19 +471,19 @@ class PetService:
         # Read file content to validate size
         content = await file.read()
         actual_size = len(content)
-        
+
         # Validate file has content
         if actual_size == 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="File is empty. Please upload a valid image file with content."
+                detail="File is empty. Please upload a valid image file with content.",
             )
-        
+
         # Validate file size (max 10MB)
         if actual_size > 10 * 1024 * 1024:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"File size ({actual_size / 1024 / 1024:.2f}MB) exceeds maximum allowed size of 10MB"
+                detail=f"File size ({actual_size / 1024 / 1024:.2f}MB) exceeds maximum allowed size of 10MB",
             )
 
         # Generate unique photo ID and file path (secure random filename)
