@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Crown, Users, Eye, ArrowRight, LogOut, PawPrint, Plus, Trash2, X } from 'lucide-react';
 import { useAuth, usePet } from '../../hooks';
 import { CreatePetForm } from '../forms';
+import { getPhotoUrl } from '../../api';
 import type { UserRole } from '../../types';
 
 const getRoleIcon = (role: UserRole) => {
@@ -162,7 +163,9 @@ export const PetSelectionPage: React.FC = () => {
             </button>
           </div>
         ) : (
-          userPets?.map((petAccess) => (
+          userPets?.map((petAccess) => {
+            const petPhotoUrl = getPhotoUrl(petAccess.pet.photo_url);
+            return (
             <div
               key={petAccess.petId}
               className="card-3d p-4 cursor-pointer group hover:shadow-3d-hover transition-all duration-200 relative"
@@ -172,9 +175,9 @@ export const PetSelectionPage: React.FC = () => {
               <div className="flex items-center">
                 {/* Pet Photo */}
                 <div className="w-16 h-16 rounded-full bg-gray-200 flex-shrink-0 overflow-hidden shadow-3d">
-                  {petAccess.pet.photo_url ? (
+                  {petPhotoUrl ? (
                     <img
-                      src={petAccess.pet.photo_url}
+                      src={petPhotoUrl}
                       alt={petAccess.pet.name}
                       className="w-full h-full object-cover"
                     />
@@ -250,7 +253,8 @@ export const PetSelectionPage: React.FC = () => {
                 </div>
               </div>
             </div>
-          ))
+            );
+          })
         )}
       </div>
 
@@ -278,17 +282,20 @@ export const PetSelectionPage: React.FC = () => {
             <div className="mb-6">
               <div className="flex items-center mb-4">
                 <div className="w-12 h-12 rounded-full bg-gray-200 flex-shrink-0 overflow-hidden">
-                  {petToDelete.pet.photo_url ? (
-                    <img
-                      src={petToDelete.pet.photo_url}
-                      alt={petToDelete.pet.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-orange/30 flex items-center justify-center text-earth font-semibold text-sm">
-                      {petToDelete.pet.name.charAt(0)}
-                    </div>
-                  )}
+                  {(() => {
+                    const deletePetPhotoUrl = getPhotoUrl(petToDelete.pet.photo_url);
+                    return deletePetPhotoUrl ? (
+                      <img
+                        src={deletePetPhotoUrl}
+                        alt={petToDelete.pet.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-orange/30 flex items-center justify-center text-earth font-semibold text-sm">
+                        {petToDelete.pet.name.charAt(0)}
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div className="ml-3">
                   <h4 className="font-semibold text-gray-800">{petToDelete.pet.name}</h4>

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Activity, TrendingUp, Utensils, Calendar, BarChart3, LineChart } from 'lucide-react';
 import { usePet } from '../../hooks';
+import { getPhotoUrl } from '../../api';
 
 export const DashboardPage: React.FC = () => {
   const { selectedPet } = usePet();
@@ -9,15 +10,17 @@ export const DashboardPage: React.FC = () => {
     return null;
   }
 
+  const petPhotoUrl = getPhotoUrl(selectedPet.photo_url);
+
   return (
     <div className="p-4 space-y-4">
       {/* Pet Summary Card */}
       <div className="card-3d p-6">
         <div className="flex items-center mb-4">
           <div className="w-20 h-20 rounded-full bg-gray-200 flex-shrink-0 overflow-hidden shadow-3d">
-            {selectedPet.photo_url ? (
+            {petPhotoUrl ? (
               <img
-                src={selectedPet.photo_url}
+                src={petPhotoUrl}
                 alt={selectedPet.name}
                 className="w-full h-full object-cover"
               />
