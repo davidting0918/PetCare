@@ -9,3 +9,7 @@ export {
   usePet,
   usePetInitialization
 } from './pets';
+
+export {
+  useGroup
+} from './groups';
