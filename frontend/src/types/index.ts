@@ -4,6 +4,7 @@ export * from './auth';
 export * from './user';
 export * from './pet';
 export * from './group';
+export * from './weight';
 
 // Common API Types
 export interface ApiResponse<T> {

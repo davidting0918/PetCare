@@ -8,6 +8,7 @@ import { DashboardPage } from './components/dashboard';
 import { MainLayout } from './components/layout/MainLayout';
 import { ComingSoon } from './components/common/ComingSoon';
 import { SettingsPage } from './components/settings';
+import { WeightPage } from './components/weight';
 import type { NavigationTab } from './types';
 
 // Loading component
@@ -122,12 +123,7 @@ const AppLayout: React.FC = () => {
         />
         <Route
           path="/weight"
-          element={
-            <ComingSoon
-              title="Weight Tracking"
-              description="Monitor your pet's weight progress and set health goals."
-            />
-          }
+          element={<WeightPage />}
         />
         <Route
           path="/settings"
