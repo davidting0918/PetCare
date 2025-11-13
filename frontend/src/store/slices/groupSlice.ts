@@ -33,6 +33,24 @@ export const createGroup = createAsyncThunk(
     }
 );
 
+// Async thunk to delete a group
+export const deleteGroup = createAsyncThunk(
+    'group/deleteGroup',
+    async (groupId: string, { rejectWithValue }) => {
+        try {
+            const response = await groupService.deleteGroup(groupId);
+
+            if (response.status !== 1 || !response.data) {
+                throw new Error(response.message || 'Failed to delete group');
+            }
+
+            return groupId; // Return the groupId to remove it from state
+        } catch (error: any) {
+            return rejectWithValue(error.message || 'Failed to delete group');
+        }
+    }
+);
+
 // Async thunk to fetch groups with their members
 export const fetchMyGroupsWithMembers = createAsyncThunk(
     'group/fetchMyGroupsWithMembers',
@@ -134,6 +152,20 @@ const groupSlice = createSlice({
                 // Don't add the new group here, let fetchMyGroupsWithMembers handle it
             })
             .addCase(createGroup.rejected, (state, action) => {
+                state.isLoading = false;
+                state.error = action.payload as string;
+            })
+            // Handle deleteGroup
+            .addCase(deleteGroup.pending, (state) => {
+                state.isLoading = true;
+                state.error = null;
+            })
+            .addCase(deleteGroup.fulfilled, (state, action) => {
+                state.isLoading = false;
+                // Remove the deleted group from the state
+                state.groups = state.groups.filter(group => group.id !== action.payload);
+            })
+            .addCase(deleteGroup.rejected, (state, action) => {
                 state.isLoading = false;
                 state.error = action.payload as string;
             })

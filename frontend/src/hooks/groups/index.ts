@@ -1,1 +1,1 @@
-export * from './useGroup';
+export { useGroup, useGroupInitialization } from './useGroup';
