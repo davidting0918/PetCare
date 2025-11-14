@@ -179,7 +179,7 @@ async def remove_member(
         raise e
 
 
-@router.delete("/{group_id}", response_model=dict)
+@router.post("/delete/{group_id}", response_model=dict)
 async def delete_group(group_id: str, current_user: Annotated[UserInfo, Depends(get_current_user)]) -> dict:
     """
     Soft delete a group by setting is_active to False.

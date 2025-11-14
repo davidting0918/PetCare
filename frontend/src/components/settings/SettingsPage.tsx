@@ -47,7 +47,7 @@ const getRoleColor = (role: UserRole) => {
 
 export const SettingsPage: React.FC = () => {
   const { user, logout } = useAuth();
-  const { groups, isLoading, error, fetchGroups, removeGroup } = useGroup();
+  const { groups, isLoading, error, fetchGroups, removeGroup, join } = useGroup();
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [showJoinGroup, setShowJoinGroup] = useState(false);
   const [inviteCode, setInviteCode] = useState('');
@@ -57,6 +57,8 @@ export const SettingsPage: React.FC = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [selectedGroupForDelete, setSelectedGroupForDelete] = useState<{ id: string; name: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isJoining, setIsJoining] = useState(false);
+  const [joinError, setJoinError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const toggleGroup = (groupId: string) => {
@@ -123,8 +125,32 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
-  const handleJoinGroup = () => {
-    console.log('Join group with code:', inviteCode);
+  const handleJoinGroup = async () => {
+    // Validate input
+    const trimmedCode = inviteCode.trim().toUpperCase();
+    if (!trimmedCode) {
+      setJoinError('Please enter an invite code');
+      return;
+    }
+
+    setIsJoining(true);
+    setJoinError(null);
+    setSuccessMessage(null);
+
+    try {
+      await join({ invite_code: trimmedCode });
+      setSuccessMessage('Successfully joined the group!');
+      setInviteCode(''); // Clear input
+      setShowJoinGroup(false); // Collapse the section
+      // Groups list will be automatically refreshed by the thunk
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (error) {
+      console.error('Failed to join group:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to join group. Please check the invite code and try again.';
+      setJoinError(errorMessage);
+    } finally {
+      setIsJoining(false);
+    }
   };
 
   if (!user) return null;
@@ -332,19 +358,36 @@ export const SettingsPage: React.FC = () => {
               <input
                 type="text"
                 value={inviteCode}
-                onChange={(e) => setInviteCode(e.target.value)}
-                placeholder="Enter invite code"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-mint/50 focus:border-mint mb-3"
+                onChange={(e) => {
+                  setInviteCode(e.target.value);
+                  setJoinError(null); // Clear error when user types
+                }}
+                placeholder="Enter invite code (e.g., ABC123)"
+                className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-mint/50 focus:border-mint mb-3 ${
+                  joinError ? 'border-red-300' : 'border-gray-300'
+                }`}
+                disabled={isJoining}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter' && !isJoining) {
+                    handleJoinGroup();
+                  }
+                }}
               />
+              {joinError && (
+                <div className="mb-3 bg-red-50 border border-red-200 rounded-lg p-2">
+                  <p className="text-red-600 text-sm">{joinError}</p>
+                </div>
+              )}
               <button
                 onClick={handleJoinGroup}
-                className="btn-3d w-full py-2 text-sm text-white bg-mint hover:bg-mint/90 transition-colors"
+                disabled={isJoining}
+                className="btn-3d w-full py-2 text-sm text-white bg-mint hover:bg-mint/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{
                   backgroundColor: '#B8D8D8',
                   border: '2px solid #a8c8c8'
                 }}
               >
-                Join Group
+                {isJoining ? 'Joining...' : 'Join Group'}
               </button>
             </div>
           )}

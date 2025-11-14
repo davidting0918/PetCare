@@ -1,5 +1,5 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
-import type { GroupWithMembers, CreateGroupRequest } from '../../types';
+import type { GroupWithMembers, CreateGroupRequest, JoinGroupRequest } from '../../types';
 import { groupService } from '../../api';
 import { logout } from './authSlice';
 
@@ -47,6 +47,27 @@ export const deleteGroup = createAsyncThunk(
             return groupId; // Return the groupId to remove it from state
         } catch (error: any) {
             return rejectWithValue(error.message || 'Failed to delete group');
+        }
+    }
+);
+
+// Async thunk to join a group using invitation code
+export const joinGroup = createAsyncThunk(
+    'group/joinGroup',
+    async (request: JoinGroupRequest, { rejectWithValue, dispatch }) => {
+        try {
+            const response = await groupService.joinGroup(request);
+
+            if (response.status !== 1 || !response.data) {
+                throw new Error(response.message || 'Failed to join group');
+            }
+
+            // After successfully joining, refresh the groups list
+            await dispatch(fetchMyGroupsWithMembers());
+
+            return response.data;
+        } catch (error: any) {
+            return rejectWithValue(error.message || 'Failed to join group');
         }
     }
 );
@@ -179,6 +200,19 @@ const groupSlice = createSlice({
                 state.groups = action.payload;
             })
             .addCase(fetchMyGroupsWithMembers.rejected, (state, action) => {
+                state.isLoading = false;
+                state.error = action.payload as string;
+            })
+            // Handle joinGroup
+            .addCase(joinGroup.pending, (state) => {
+                state.isLoading = true;
+                state.error = null;
+            })
+            .addCase(joinGroup.fulfilled, (state) => {
+                state.isLoading = false;
+                // Groups list will be refreshed by fetchMyGroupsWithMembers called in the thunk
+            })
+            .addCase(joinGroup.rejected, (state, action) => {
                 state.isLoading = false;
                 state.error = action.payload as string;
             })

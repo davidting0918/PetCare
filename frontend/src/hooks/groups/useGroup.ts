@@ -1,8 +1,8 @@
 import { useCallback, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import type { AppDispatch, RootState } from '../../store';
-import type { CreateGroupRequest } from '../../types';
-import { createGroup, deleteGroup, fetchMyGroupsWithMembers, clearGroupState, clearError } from '../../store/slices/groupSlice';
+import type { CreateGroupRequest, JoinGroupRequest } from '../../types';
+import { createGroup, deleteGroup, joinGroup, fetchMyGroupsWithMembers, clearGroupState, clearError } from '../../store/slices/groupSlice';
 
 export const useGroup = () => {
     const dispatch = useDispatch<AppDispatch>();
@@ -28,6 +28,10 @@ export const useGroup = () => {
         return dispatch(deleteGroup(groupId)).unwrap();
     }, [dispatch]);
 
+    const join = useCallback(async (request: JoinGroupRequest) => {
+        return dispatch(joinGroup(request)).unwrap();
+    }, [dispatch]);
+
     return {
         groups,
         isLoading,
@@ -37,6 +41,7 @@ export const useGroup = () => {
         clearGroups,
         clearGroupError,
         removeGroup,
+        join,
     };
 };
 

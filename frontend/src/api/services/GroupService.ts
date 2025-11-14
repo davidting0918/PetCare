@@ -1,5 +1,5 @@
 import { apiClient } from "../client";
-import type { MyGroupResponse, GroupMemberInfo, ApiResponse, CreateGroupRequest, GroupRole } from "../../types";
+import type { MyGroupResponse, GroupMemberInfo, ApiResponse, CreateGroupRequest, GroupRole, JoinGroupRequest, GroupInfo } from "../../types";
 
 interface CreateInvitationRequest {
     role: GroupRole;
@@ -39,7 +39,12 @@ class GroupService {
     }
 
     async deleteGroup(groupId: string): Promise<ApiResponse<any>> {
-        const response = await apiClient.delete(`${this.basePath}/${groupId}`);
+        const response = await apiClient.post(`${this.basePath}/delete/${groupId}`);
+        return response.data;
+    }
+
+    async joinGroup(request: JoinGroupRequest): Promise<ApiResponse<GroupInfo>> {
+        const response = await apiClient.post(`${this.basePath}/join`, request);
         return response.data;
     }
 }

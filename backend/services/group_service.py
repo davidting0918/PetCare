@@ -258,7 +258,7 @@ class GroupService:
         from groups
         where id = '{group_id}'
         """
-        result = await self.db.fetch_one(sql)
+        result = await self.db.read_one(sql)
         if not result:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
 
@@ -365,7 +365,7 @@ class GroupService:
 
         # Generate invitation ID
         invitation_id = self._generate_invitation_id()  # Reuse the same secure ID generator
-        invite_code = secrets.token_urlsafe(8)  # Shorter, user-friendly code
+        invite_code = "".join(secrets.choice(string.ascii_uppercase) for _ in range(6))  # 6 uppercase letters
         current_time = dt.now()
         expires_at = dt.now() + td(days=7)  # 7 days expiry
 
