@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { GoogleLogin } from '@react-oauth/google';
+import { GoogleLogin, type CredentialResponse } from '@react-oauth/google';
 import { Mail, Heart, PawPrint, Lock, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../hooks';
 
@@ -12,18 +12,20 @@ export const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
 
-  const handleGoogleLoginSuccess = async (credentialResponse: { credential: string }) => {
-    try {
-      setError('');
-      if (credentialResponse.credential) {
-        await googleLogin(credentialResponse.credential);
-        navigate('/select-pet');
-      } else {
-        setError('Google login failed. No credential received.');
-      }
-    } catch (error) {
-      setError('Google login failed. Please try again.');
+  const handleGoogleLoginSuccess = (credentialResponse: CredentialResponse) => {
+    if (!credentialResponse.credential) {
+      setError('Google login failed. No credential received.');
+      return;
     }
+
+    setError('');
+    googleLogin(credentialResponse.credential)
+      .then(() => {
+        navigate('/select-pet');
+      })
+      .catch(() => {
+        setError('Google login failed. Please try again.');
+      });
   };
 
   const handleGoogleLoginError = () => {
@@ -171,11 +173,10 @@ export const LoginPage: React.FC = () => {
           </div>
 
           {/* Google Login Button */}
-          <div className="flex justify-center">
+          <div className={`flex justify-center ${isLoading ? 'pointer-events-none opacity-50' : ''}`}>
             <GoogleLogin
               onSuccess={handleGoogleLoginSuccess}
               onError={handleGoogleLoginError}
-              disabled={isLoading}
               useOneTap={false}
             />
           </div>
