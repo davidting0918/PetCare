@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from 'react';
 import { useAppDispatch, useAppSelector } from '../redux';
-import { loginUser, signupUser, logout, initializeAuth } from '../../store';
+import { loginUser, loginGoogleUser, signupUser, logout, initializeAuth } from '../../store';
 
 export const useAuth = () => {
   const dispatch = useAppDispatch();
@@ -11,6 +11,15 @@ export const useAuth = () => {
     const result = await dispatch(loginUser({ email, pwd }));
 
     if (loginUser.rejected.match(result)) {
+      throw new Error(result.payload as string);
+    }
+  }, [dispatch]);
+
+  // 🔐 Google 登入
+  const googleLogin = useCallback(async (token: string): Promise<void> => {
+    const result = await dispatch(loginGoogleUser({ token }));
+
+    if (loginGoogleUser.rejected.match(result)) {
       throw new Error(result.payload as string);
     }
   }, [dispatch]);
@@ -48,6 +57,7 @@ export const useAuth = () => {
 
     // 操作
     login,
+    googleLogin,
     signup,
     logout: handleLogout,
   };

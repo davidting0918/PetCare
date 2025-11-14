@@ -1,15 +1,34 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { GoogleLogin } from '@react-oauth/google';
 import { Mail, Heart, PawPrint, Lock, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../hooks';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const { login, isLoading } = useAuth();
+  const { login, googleLogin, isLoading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+
+  const handleGoogleLoginSuccess = async (credentialResponse: { credential: string }) => {
+    try {
+      setError('');
+      if (credentialResponse.credential) {
+        await googleLogin(credentialResponse.credential);
+        navigate('/select-pet');
+      } else {
+        setError('Google login failed. No credential received.');
+      }
+    } catch (error) {
+      setError('Google login failed. Please try again.');
+    }
+  };
+
+  const handleGoogleLoginError = () => {
+    setError('Google login was cancelled or failed. Please try again.');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -140,6 +159,26 @@ export const LoginPage: React.FC = () => {
               )}
             </button>
           </form>
+
+          {/* Divider */}
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-300"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-white text-gray-500">Or</span>
+            </div>
+          </div>
+
+          {/* Google Login Button */}
+          <div className="flex justify-center">
+            <GoogleLogin
+              onSuccess={handleGoogleLoginSuccess}
+              onError={handleGoogleLoginError}
+              disabled={isLoading}
+              useOneTap={false}
+            />
+          </div>
 
           {/* Sign Up Link */}
           <div className="mt-6 text-center">
