@@ -33,7 +33,7 @@ export const useGroup = () => {
     }, [dispatch]);
 
     return {
-        groups,
+        groups: groups || [],
         isLoading,
         error,
         create,
@@ -56,8 +56,8 @@ export const useGroupInitialization = () => {
 
     useEffect(() => {
         // 只有在用戶已認證且沒有群組數據時才獲取
-        if (isAuthenticated && groups.length === 0 && !isLoading) {
+        if (isAuthenticated && !groups && !isLoading) {
             dispatch(fetchMyGroupsWithMembers());
         }
-    }, [dispatch, groups.length, isLoading, isAuthenticated]);
+    }, [dispatch, groups, isLoading, isAuthenticated]);
 };

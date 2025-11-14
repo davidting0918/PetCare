@@ -4,13 +4,13 @@ import { groupService } from '../../api';
 import { logout } from './authSlice';
 
 interface GroupState {
-    groups: GroupWithMembers[];
+    groups: GroupWithMembers[] | null;
     isLoading: boolean;
     error: string | null;
 }
 
 const initialState: GroupState = {
-    groups: [],
+    groups: null,
     isLoading: false,
     error: null,
 };
@@ -153,7 +153,7 @@ const groupSlice = createSlice({
     initialState,
     reducers: {
         clearGroupState: (state) => {
-            state.groups = [];
+            state.groups = null;
             state.isLoading = false;
             state.error = null;
         },
@@ -184,7 +184,9 @@ const groupSlice = createSlice({
             .addCase(deleteGroup.fulfilled, (state, action) => {
                 state.isLoading = false;
                 // Remove the deleted group from the state
-                state.groups = state.groups.filter(group => group.id !== action.payload);
+                if (state.groups) {
+                    state.groups = state.groups.filter(group => group.id !== action.payload);
+                }
             })
             .addCase(deleteGroup.rejected, (state, action) => {
                 state.isLoading = false;
@@ -218,7 +220,7 @@ const groupSlice = createSlice({
             })
             // Handle logout from auth slice - clear group state
             .addCase(logout, (state) => {
-                state.groups = [];
+                state.groups = null;
                 state.isLoading = false;
                 state.error = null;
             });
