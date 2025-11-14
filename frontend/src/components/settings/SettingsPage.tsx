@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   User,
   Mail,
@@ -9,11 +9,13 @@ import {
   ChevronUp,
   Plus,
   LogOut,
-  UserPlus
+  UserPlus,
+  Trash2
 } from 'lucide-react';
 import { useAuth, useGroup } from '../../hooks';
 import type { UserRole, GroupRole } from '../../types';
-import { CreateGroupForm } from '../forms';
+import { CreateGroupForm, CreateInvitationForm } from '../forms';
+import { DeleteConfirmDialog } from '../common/DeleteConfirmDialog';
 
 // Helper function to convert API role to UI role
 const normalizeRole = (role: GroupRole): UserRole => {
@@ -45,24 +47,19 @@ const getRoleColor = (role: UserRole) => {
 
 export const SettingsPage: React.FC = () => {
   const { user, logout } = useAuth();
-  const { groups, isLoading, error, fetchGroups } = useGroup();
+  const { groups, isLoading, error, fetchGroups, removeGroup, join } = useGroup();
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [showJoinGroup, setShowJoinGroup] = useState(false);
   const [inviteCode, setInviteCode] = useState('');
   const [showCreateGroupForm, setShowCreateGroupForm] = useState(false);
+  const [showInvitationForm, setShowInvitationForm] = useState(false);
+  const [selectedGroupForInvite, setSelectedGroupForInvite] = useState<{ id: string; name: string } | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [selectedGroupForDelete, setSelectedGroupForDelete] = useState<{ id: string; name: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isJoining, setIsJoining] = useState(false);
+  const [joinError, setJoinError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-
-  // Fetch user's groups on component mount
-  useEffect(() => {
-    const loadGroups = async () => {
-      try {
-        await fetchGroups();
-      } catch (error) {
-        console.error('Failed to fetch groups:', error);
-      }
-    };
-    loadGroups();
-  }, []);
 
   const toggleGroup = (groupId: string) => {
     const newExpanded = new Set(expandedGroups);
@@ -94,12 +91,66 @@ export const SettingsPage: React.FC = () => {
     logout();
   };
 
-  const handleInviteToGroup = (groupId: string) => {
-    console.log('Invite to group:', groupId);
+  const handleInviteToGroup = (groupId: string, groupName: string) => {
+    setSelectedGroupForInvite({ id: groupId, name: groupName });
+    setShowInvitationForm(true);
   };
 
-  const handleJoinGroup = () => {
-    console.log('Join group with code:', inviteCode);
+  const handleInvitationSuccess = (message: string) => {
+    setSuccessMessage(message);
+    setTimeout(() => setSuccessMessage(null), 3000);
+  };
+
+  const handleDeleteGroup = (groupId: string, groupName: string) => {
+    setSelectedGroupForDelete({ id: groupId, name: groupName });
+    setShowDeleteConfirm(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!selectedGroupForDelete) return;
+
+    setIsDeleting(true);
+    try {
+      await removeGroup(selectedGroupForDelete.id);
+      setSuccessMessage(`Group "${selectedGroupForDelete.name}" has been deleted`);
+      setShowDeleteConfirm(false);
+      setSelectedGroupForDelete(null);
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (error) {
+      console.error('Failed to delete group:', error);
+      setSuccessMessage('Failed to delete group. Please try again.');
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleJoinGroup = async () => {
+    // Validate input
+    const trimmedCode = inviteCode.trim().toUpperCase();
+    if (!trimmedCode) {
+      setJoinError('Please enter an invite code');
+      return;
+    }
+
+    setIsJoining(true);
+    setJoinError(null);
+    setSuccessMessage(null);
+
+    try {
+      await join({ invite_code: trimmedCode });
+      setSuccessMessage('Successfully joined the group!');
+      setInviteCode(''); // Clear input
+      setShowJoinGroup(false); // Collapse the section
+      // Groups list will be automatically refreshed by the thunk
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (error) {
+      console.error('Failed to join group:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to join group. Please check the invite code and try again.';
+      setJoinError(errorMessage);
+    } finally {
+      setIsJoining(false);
+    }
   };
 
   if (!user) return null;
@@ -235,19 +286,44 @@ export const SettingsPage: React.FC = () => {
                           </div>
                         </div>
 
-                        {/* Invite Button */}
-                        <button
-                          onClick={() => handleInviteToGroup(group.id)}
-                          className="btn-3d w-full py-2 text-sm bg-orange/10 text-orange hover:bg-orange/20 transition-colors flex items-center justify-center gap-2"
-                          style={{
-                            backgroundColor: '#F4C2A1',
-                            opacity: 0.3,
-                            border: '2px solid #e8b690'
-                          }}
-                        >
-                          <UserPlus className="w-4 h-4" />
-                          <span>Invite to Group</span>
-                        </button>
+                        {/* Action Buttons - Based on Role */}
+                        {(normalizedRole === 'Creator' || normalizedRole === 'Member') && (
+                          <div className="flex gap-2">
+                            {/* Invite Button - For Creator and Member */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleInviteToGroup(group.id, group.name);
+                              }}
+                              className="btn-3d flex-1 py-2 text-sm text-white hover:bg-mint/90 transition-colors flex items-center justify-center gap-2"
+                              style={{
+                                backgroundColor: '#B8D8D8',
+                                border: '2px solid #a8c8c8'
+                              }}
+                            >
+                              <UserPlus className="w-4 h-4" />
+                              <span>Invite</span>
+                            </button>
+
+                            {/* Delete Button - Only for Creator */}
+                            {normalizedRole === 'Creator' && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteGroup(group.id, group.name);
+                                }}
+                                className="btn-3d flex-1 py-2 text-sm text-white hover:bg-red-600 transition-colors flex items-center justify-center gap-2"
+                                style={{
+                                  backgroundColor: '#EF4444',
+                                  border: '2px solid #DC2626'
+                                }}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                                <span>Delete</span>
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -282,19 +358,36 @@ export const SettingsPage: React.FC = () => {
               <input
                 type="text"
                 value={inviteCode}
-                onChange={(e) => setInviteCode(e.target.value)}
-                placeholder="Enter invite code"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-mint/50 focus:border-mint mb-3"
+                onChange={(e) => {
+                  setInviteCode(e.target.value);
+                  setJoinError(null); // Clear error when user types
+                }}
+                placeholder="Enter invite code (e.g., ABC123)"
+                className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-mint/50 focus:border-mint mb-3 ${
+                  joinError ? 'border-red-300' : 'border-gray-300'
+                }`}
+                disabled={isJoining}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter' && !isJoining) {
+                    handleJoinGroup();
+                  }
+                }}
               />
+              {joinError && (
+                <div className="mb-3 bg-red-50 border border-red-200 rounded-lg p-2">
+                  <p className="text-red-600 text-sm">{joinError}</p>
+                </div>
+              )}
               <button
                 onClick={handleJoinGroup}
-                className="btn-3d w-full py-2 text-sm text-white bg-mint hover:bg-mint/90 transition-colors"
+                disabled={isJoining}
+                className="btn-3d w-full py-2 text-sm text-white bg-mint hover:bg-mint/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{
                   backgroundColor: '#B8D8D8',
                   border: '2px solid #a8c8c8'
                 }}
               >
-                Join Group
+                {isJoining ? 'Joining...' : 'Join Group'}
               </button>
             </div>
           )}
@@ -349,6 +442,36 @@ export const SettingsPage: React.FC = () => {
         onClose={() => setShowCreateGroupForm(false)}
         onSuccess={handleGroupCreated}
       />
+
+      {/* Create Invitation Form Modal */}
+      {selectedGroupForInvite && (
+        <CreateInvitationForm
+          isOpen={showInvitationForm}
+          onClose={() => {
+            setShowInvitationForm(false);
+            setSelectedGroupForInvite(null);
+          }}
+          groupId={selectedGroupForInvite.id}
+          groupName={selectedGroupForInvite.name}
+          onSuccess={handleInvitationSuccess}
+        />
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      {selectedGroupForDelete && (
+        <DeleteConfirmDialog
+          isOpen={showDeleteConfirm}
+          onClose={() => {
+            setShowDeleteConfirm(false);
+            setSelectedGroupForDelete(null);
+          }}
+          onConfirm={handleConfirmDelete}
+          title="Delete Group"
+          message="Are you sure you want to delete this group? This action cannot be undone. All group data will be marked as inactive."
+          itemName={selectedGroupForDelete.name}
+          isLoading={isDeleting}
+        />
+      )}
     </div>
   );
 };

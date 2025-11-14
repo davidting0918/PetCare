@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { useAuth, useAuthInitialization, usePet, usePetInitialization } from './hooks';
+import { useAuth, useAuthInitialization, usePet, usePetInitialization, useGroupInitialization } from './hooks';
 import { LoginPage } from './components/auth/LoginPage';
 import { SignUpPage } from './components/auth/SignupPage';
 import { PetSelectionPage } from './components/auth/PetSelectionPage';
@@ -191,6 +191,7 @@ const AppContent: React.FC = () => {
 const App: React.FC = () => {
   useAuthInitialization();
   usePetInitialization();
+  useGroupInitialization();
   return <AppContent />;
 };
 

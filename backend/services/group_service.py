@@ -229,6 +229,58 @@ class GroupService:
             "updated_at": dt.now(),
         }
 
+    async def delete_group(self, group_id: str, actor_user_id: str) -> Dict[str, Any]:
+        """
+        Soft delete a group (CREATOR only).
+        Sets is_active to False for the group instead of physically deleting it.
+
+        Args:
+            group_id: Target group ID to delete
+            actor_user_id: User performing the action (must be CREATOR)
+
+        Returns:
+            dict: Success message with deleted group info
+        """
+        # Get actor's membership - only CREATOR can delete group
+        actor_membership = await self._get_user_membership(group_id, actor_user_id)
+        if not actor_membership:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are not a member of this group")
+
+        # Only CREATOR can delete the group
+        if actor_membership.role != GroupRole.CREATOR:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Only group creators can delete the group"
+            )
+
+        # Check if group exists and is active
+        sql = f"""
+        select id, name, creator_id, is_active
+        from groups
+        where id = '{group_id}'
+        """
+        result = await self.db.read_one(sql)
+        if not result:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
+
+        if not result["is_active"]:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Group is already deleted")
+
+        # Soft delete the group by setting is_active to False
+        sql = f"""
+        update groups
+        set is_active = False, updated_at = '{dt.now(tz.utc).isoformat()}'
+        where id = '{group_id}'
+        """
+        await self.db.execute(sql)
+
+        return {
+            "deleted_group_id": group_id,
+            "group_name": result["name"],
+            "deleted_by": actor_user_id,
+            "deleted_at": dt.now(tz.utc),
+            "message": "Group has been successfully deleted",
+        }
+
     # ================== Core Functions ==================
 
     async def create_group(self, request: CreateGroupRequest, creator_id: str) -> GroupInfo:
@@ -313,7 +365,7 @@ class GroupService:
 
         # Generate invitation ID
         invitation_id = self._generate_invitation_id()  # Reuse the same secure ID generator
-        invite_code = secrets.token_urlsafe(8)  # Shorter, user-friendly code
+        invite_code = "".join(secrets.choice(string.ascii_uppercase) for _ in range(6))  # 6 uppercase letters
         current_time = dt.now()
         expires_at = dt.now() + td(days=7)  # 7 days expiry
 
@@ -428,6 +480,7 @@ class GroupService:
     async def get_user_groups(self, user_id: str) -> List[Dict[str, Any]]:
         """
         Get all groups where user is an active member.
+        Excludes the user's personal default group.
 
         Args:
             user_id: User ID to get groups for
@@ -435,6 +488,11 @@ class GroupService:
         Returns:
             List[Dict[str, Any]]
         """
+        # First, get user's personal_group_id to exclude it
+        user_sql = f"select personal_group_id from users where id = '{user_id}'"
+        user_result = await self.db.read_one(user_sql)
+        personal_group_id = user_result.get("personal_group_id") if user_result else None
+
         sql = f"""
         select
             gm.group_id,
@@ -458,6 +516,7 @@ class GroupService:
             and gm.is_active = true
             and g.is_active = true
             and u1.is_active = true
+            {f"and gm.group_id != '{personal_group_id}'" if personal_group_id else ""}
         """
         memberships = await self.db.read(sql)
 

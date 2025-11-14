@@ -37,6 +37,22 @@ export interface CreateGroupRequest {
     name: string;
 }
 
+export interface JoinGroupRequest {
+    invite_code: string;
+}
+
+// API Response from /groups/join
+export interface GroupInfo {
+    id: string;
+    name: string;
+    creator_id: string;
+    created_at: string;
+    updated_at: string;
+    member_count: number;
+    is_creator: boolean;
+    is_active: boolean;
+}
+
 // API Response from /groups/my_groups
 export interface MyGroupResponse {
     group_id: string;

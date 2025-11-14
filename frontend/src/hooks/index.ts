@@ -11,5 +11,6 @@ export {
 } from './pets';
 
 export {
-  useGroup
+  useGroup,
+  useGroupInitialization
 } from './groups';
