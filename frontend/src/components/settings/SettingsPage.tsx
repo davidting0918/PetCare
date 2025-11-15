@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   User,
   Mail,
@@ -11,14 +11,17 @@ import {
   LogOut,
   UserPlus,
   Trash2,
-  MoreVertical
+  MoreVertical,
+  PawPrint
 } from 'lucide-react';
-import { useAuth, useGroup } from '../../hooks';
+import { useAuth, useGroup, usePet } from '../../hooks';
 import { useAppDispatch } from '../../hooks/redux';
 import { refreshCurrentUser } from '../../store/slices/authSlice';
-import type { UserRole, GroupRole } from '../../types';
-import { CreateGroupForm, CreateInvitationForm, EditUserInfoModal } from '../forms';
+import { fetchAccessiblePets } from '../../store/slices/petSlice';
+import type { UserRole, GroupRole, PetInfo } from '../../types';
+import { CreateGroupForm, CreateInvitationForm, EditUserInfoModal, CreatePetForm, AssignPetToGroupModal } from '../forms';
 import { DeleteConfirmDialog } from '../common/DeleteConfirmDialog';
+import { GroupPetsList } from './GroupPetsList';
 import { getPhotoUrl } from '../../api';
 // Helper function to convert API role to UI role
 const normalizeRole = (role: GroupRole): UserRole => {
@@ -51,8 +54,10 @@ const getRoleColor = (role: UserRole) => {
 export const SettingsPage: React.FC = () => {
   const { user, logout } = useAuth();
   const { groups, isLoading, error, fetchGroups, removeGroup, join } = useGroup();
+  const { userPets, getAvailablePets } = usePet();
   const dispatch = useAppDispatch();
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [groupTabs, setGroupTabs] = useState<Record<string, 'members' | 'pets'>>({});
   const [showJoinGroup, setShowJoinGroup] = useState(false);
   const [inviteCode, setInviteCode] = useState('');
   const [showCreateGroupForm, setShowCreateGroupForm] = useState(false);
@@ -65,6 +70,18 @@ export const SettingsPage: React.FC = () => {
   const [joinError, setJoinError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showCreatePetForm, setShowCreatePetForm] = useState(false);
+  const [showMyPets, setShowMyPets] = useState(false);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [petToAssign, setPetToAssign] = useState<PetInfo | null>(null);
+
+  // Ensure pet data is loaded when component mounts
+  useEffect(() => {
+    if (!userPets) {
+      console.log('📋 SettingsPage: Loading pet data...');
+      getAvailablePets();
+    }
+  }, [userPets, getAvailablePets]);
 
   const toggleGroup = (groupId: string) => {
     const newExpanded = new Set(expandedGroups);
@@ -72,12 +89,32 @@ export const SettingsPage: React.FC = () => {
       newExpanded.delete(groupId);
     } else {
       newExpanded.add(groupId);
+      // Initialize tab to 'members' if not set
+      if (!groupTabs[groupId]) {
+        setGroupTabs(prev => ({ ...prev, [groupId]: 'members' }));
+      }
     }
     setExpandedGroups(newExpanded);
   };
 
+  const setGroupTab = (groupId: string, tab: 'members' | 'pets') => {
+    setGroupTabs(prev => ({ ...prev, [groupId]: tab }));
+  };
+
+  const getGroupTab = (groupId: string): 'members' | 'pets' => {
+    return groupTabs[groupId] || 'members';
+  };
+
   const handleCreatePet = () => {
-    console.log('Create new pet - to be implemented');
+    setShowCreatePetForm(true);
+  };
+
+  const handlePetCreated = async (message: string) => {
+    setSuccessMessage(message);
+    // Refresh the pets list using Redux
+    await dispatch(fetchAccessiblePets());
+    // Clear success message after 3 seconds
+    setTimeout(() => setSuccessMessage(null), 3000);
   };
 
   const handleCreateGroup = () => {
@@ -169,6 +206,46 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
+  const handleAssignPetClick = (pet: PetInfo) => {
+    setPetToAssign(pet);
+    setShowAssignModal(true);
+  };
+
+  const handleAssignSuccess = async (message: string) => {
+    setSuccessMessage(message);
+    // Refresh pets and groups to update the UI
+    await dispatch(fetchAccessiblePets());
+    await fetchGroups();
+    setTimeout(() => setSuccessMessage(null), 3000);
+  };
+
+  const handleAssignClose = () => {
+    setShowAssignModal(false);
+    setPetToAssign(null);
+  };
+
+  // Filter user's owned pets (where user is the owner)
+  const myOwnedPets = userPets?.filter(petAccess => {
+    const isOwner = petAccess.pet.owner_id === user?.id;
+    return isOwner;
+  }) || [];
+
+  // Debug logging
+  useEffect(() => {
+    if (showMyPets && userPets) {
+      console.log('📊 SettingsPage Debug:');
+      console.log('  Total userPets:', userPets?.length);
+      console.log('  Current user ID:', user?.id);
+      console.log('  My owned pets:', myOwnedPets.length);
+      console.log('  Pets data:', userPets?.map(pa => ({
+        name: pa.pet.name,
+        owner_id: pa.pet.owner_id,
+        role: pa.role,
+        isOwner: pa.pet.owner_id === user?.id
+      })));
+    }
+  }, [showMyPets, userPets, user?.id, myOwnedPets.length]);
+
   if (!user) return null;
 
   return (
@@ -222,6 +299,103 @@ export const SettingsPage: React.FC = () => {
           >
             <MoreVertical className="w-5 h-5 text-gray-600" />
           </button>
+        </div>
+      </div>
+      {/* Section 3: My Pets */}
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold text-earth px-2">My Pets</h3>
+
+        <div className="card-3d p-4">
+          <div
+            className="flex items-center justify-between cursor-pointer"
+            onClick={() => setShowMyPets(!showMyPets)}
+          >
+            <div className="flex items-center">
+              <PawPrint className="w-5 h-5 text-orange mr-2" />
+              <h4 className="font-semibold text-earth">My Pets</h4>
+            </div>
+            {showMyPets ? (
+              <ChevronUp className="w-5 h-5 text-gray-500" />
+            ) : (
+              <ChevronDown className="w-5 h-5 text-gray-500" />
+            )}
+          </div>
+
+          {showMyPets && (
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <p className="text-sm text-gray-600 mb-3">
+                Assign your pets to groups to collaborate with family and friends
+              </p>
+
+              {myOwnedPets.length === 0 ? (
+                <div className="text-center py-6 text-gray-500">
+                  <PawPrint className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">You don't own any pets yet</p>
+                  <p className="text-xs mt-1">Create a pet to get started</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {myOwnedPets.map((petAccess) => {
+                    const pet = petAccess.pet;
+                    const petPhotoUrl = getPhotoUrl(pet.photo_url);
+                    return (
+                      <div
+                        key={pet.id}
+                        className="border border-gray-200 rounded-lg p-3 bg-white hover:shadow-md transition-shadow"
+                      >
+                        <div className="flex items-center justify-between">
+                          {/* Pet Info */}
+                          <div className="flex items-center flex-1">
+                            <div className="w-12 h-12 rounded-full bg-gray-200 flex-shrink-0 overflow-hidden">
+                              {petPhotoUrl ? (
+                                <img
+                                  src={petPhotoUrl}
+                                  alt={pet.name}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-full h-full bg-orange/30 flex items-center justify-center text-earth font-semibold text-sm">
+                                  {pet.name.charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                            </div>
+                            <div className="ml-3 flex-1">
+                              <h5 className="font-semibold text-gray-800">{pet.name}</h5>
+                              <p className="text-xs text-gray-600">
+                                {pet.breed || pet.pet_type} • {pet.gender || 'Unknown'}
+                              </p>
+                              {pet.group_name ? (
+                                <div className="inline-flex items-center px-2 py-0.5 rounded-full bg-mint/20 text-mint text-xs mt-1">
+                                  <Users className="w-3 h-3 mr-1" />
+                                  {pet.group_name}
+                                </div>
+                              ) : (
+                                <p className="text-xs text-gray-500 mt-1">Personal Pet</p>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Assign Button */}
+                          <button
+                            onClick={() => handleAssignPetClick(pet as PetInfo)}
+                            className="btn-3d p-2 bg-mint hover:bg-mint/90 text-white transition-all duration-200"
+                            style={{
+                              backgroundColor: '#B8D8D8',
+                              minWidth: '32px',
+                              minHeight: '32px'
+                            }}
+                            title="Assign to Group"
+                          >
+                            <Users className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -288,36 +462,87 @@ export const SettingsPage: React.FC = () => {
                     {/* Group Details - Expandable */}
                     {expandedGroups.has(group.id) && (
                       <div className="p-4 bg-white border-t border-gray-200">
-                        {/* Members List */}
-                        <div className="mb-4">
-                          <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Members</p>
-                          <div className="space-y-2">
-                            {group.members.map((member: { id: string; name: string; email: string; role: GroupRole }) => {
-                              const memberNormalizedRole = normalizeRole(member.role);
-                              return (
-                                <div key={member.id} className="flex items-center justify-between py-2">
-                                  <div className="flex items-center flex-1">
-                                    <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-semibold text-earth">
-                                      {member.name.charAt(0).toUpperCase()}
-                                    </div>
-                                    <div className="ml-3">
-                                      <p className="text-sm font-medium text-gray-800">{member.name}</p>
-                                      <p className="text-xs text-gray-500">{member.email}</p>
-                                    </div>
-                                  </div>
-                                  <div className={`inline-flex items-center px-2 py-1 rounded-full border text-xs ${getRoleColor(memberNormalizedRole)}`}>
-                                    {getRoleIcon(memberNormalizedRole)}
-                                    <span className="ml-1">{memberNormalizedRole}</span>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
+                        {/* Tab Navigation */}
+                        <div className="flex border-b border-gray-200 mb-4">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setGroupTab(group.id, 'members');
+                            }}
+                            className={`px-4 py-2 text-sm font-medium transition-colors ${
+                              getGroupTab(group.id) === 'members'
+                                ? 'text-mint border-b-2 border-mint'
+                                : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <Users className="w-4 h-4" />
+                              <span>Members ({group.memberCount})</span>
+                            </div>
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setGroupTab(group.id, 'pets');
+                            }}
+                            className={`px-4 py-2 text-sm font-medium transition-colors ${
+                              getGroupTab(group.id) === 'pets'
+                                ? 'text-mint border-b-2 border-mint'
+                                : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <PawPrint className="w-4 h-4" />
+                              <span>Pets</span>
+                            </div>
+                          </button>
                         </div>
+
+                        {/* Tab Content */}
+                        {getGroupTab(group.id) === 'members' ? (
+                          <>
+                            {/* Members List */}
+                            <div className="mb-4">
+                              <div className="space-y-2">
+                                {group.members.map((member: { id: string; name: string; email: string; role: GroupRole }) => {
+                                  const memberNormalizedRole = normalizeRole(member.role);
+                                  return (
+                                    <div key={member.id} className="flex items-center justify-between py-2">
+                                      <div className="flex items-center flex-1">
+                                        <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-semibold text-earth">
+                                          {member.name.charAt(0).toUpperCase()}
+                                        </div>
+                                        <div className="ml-3">
+                                          <p className="text-sm font-medium text-gray-800">{member.name}</p>
+                                          <p className="text-xs text-gray-500">{member.email}</p>
+                                        </div>
+                                      </div>
+                                      <div className={`inline-flex items-center px-2 py-1 rounded-full border text-xs ${getRoleColor(memberNormalizedRole)}`}>
+                                        {getRoleIcon(memberNormalizedRole)}
+                                        <span className="ml-1">{memberNormalizedRole}</span>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            {/* Pets List */}
+                            <div className="mb-4">
+                              <GroupPetsList
+                                groupId={group.id}
+                                groupName={group.name}
+                                userRole={group.role}
+                              />
+                            </div>
+                          </>
+                        )}
 
                         {/* Action Buttons - Based on Role */}
                         {(normalizedRole === 'Creator' || normalizedRole === 'Member') && (
-                          <div className="flex gap-2">
+                          <div className="flex gap-2 pt-2 border-t border-gray-200">
                             {/* Invite Button - For Creator and Member */}
                             <button
                               onClick={(e) => {
@@ -423,7 +648,8 @@ export const SettingsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Section 3: Action Buttons */}
+
+      {/* Section 4: Action Buttons */}
       <div className="space-y-3 pt-4 border-t border-gray-200">
         <h3 className="text-lg font-semibold text-earth px-2">Quick Actions</h3>
 
@@ -509,6 +735,23 @@ export const SettingsPage: React.FC = () => {
         onSuccess={handleEditSuccess}
         user={user}
       />
+
+      {/* Create Pet Form Modal */}
+      <CreatePetForm
+        isOpen={showCreatePetForm}
+        onClose={() => setShowCreatePetForm(false)}
+        onSuccess={handlePetCreated}
+      />
+
+      {/* Assign Pet to Group Modal */}
+      {showAssignModal && petToAssign && (
+        <AssignPetToGroupModal
+          isOpen={showAssignModal}
+          onClose={handleAssignClose}
+          pet={petToAssign}
+          onSuccess={handleAssignSuccess}
+        />
+      )}
     </div>
   );
 };

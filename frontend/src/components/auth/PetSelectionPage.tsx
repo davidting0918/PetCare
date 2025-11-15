@@ -203,12 +203,18 @@ export const PetSelectionPage: React.FC = () => {
                     </p>
                   </div>
 
-                  {/* Role Badge */}
-                  <div className="flex items-center mt-2">
+                  {/* Role Badge and Group Badge */}
+                  <div className="flex items-center gap-2 mt-2 flex-wrap">
                     <div className={`inline-flex items-center px-2 py-1 rounded-full border text-xs font-medium ${getRoleColor(petAccess.role)}`}>
                       {getRoleIcon(petAccess.role)}
                       <span className="ml-1">{petAccess.role}</span>
                     </div>
+                    {petAccess.pet.group_name && (
+                      <div className="inline-flex items-center px-2 py-1 rounded-full bg-mint/20 text-mint border border-mint/30 text-xs font-medium">
+                        <Users className="w-3 h-3 mr-1" />
+                        <span>{petAccess.pet.group_name}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

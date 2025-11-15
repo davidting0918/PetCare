@@ -29,7 +29,6 @@ export const loginUser = createAsyncThunk(
         email,
         pwd
       });
-      console.log(response);
 
       if (response.status === 1 && response.data) {
         // Store token in localStorage

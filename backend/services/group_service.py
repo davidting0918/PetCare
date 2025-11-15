@@ -584,4 +584,57 @@ class GroupService:
         Returns:
             List[Dict]: Pets assigned to the group with owner and permission context
         """
-        return
+        # Check if user is a member of the group
+        if not await self._is_group_member(group_id, user_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="You must be a member of this group to view its pets"
+            )
+
+        # Get user's role in the group
+        membership = await self._get_user_membership(group_id, user_id)
+        user_role = membership.role if membership else None
+
+        # Query all pets assigned to this group with owner information
+        sql = f"""
+        select
+            p.id,
+            p.name,
+            p.pet_type,
+            p.breed,
+            p.gender,
+            p.current_weight_kg,
+            p.target_weight_kg,
+            p.daily_calorie_target,
+            p.photo_url,
+            p.owner_id,
+            u.name as owner_name,
+            u.email as owner_email,
+            p.created_at,
+            p.updated_at
+        from pets p
+        left join users u on p.owner_id = u.id
+        where
+            p.group_id = '{group_id}'
+            and p.is_active = true
+            and u.is_active = true
+        order by p.created_at desc
+        """
+
+        pets = await self.db.read(sql)
+
+        # Add permission context for each pet
+        result = []
+        for pet in pets:
+            # Determine user's permission level for this pet
+            if pet["owner_id"] == user_id:
+                permission = "owner"
+            elif user_role == GroupRole.CREATOR:
+                permission = "creator"
+            elif user_role == GroupRole.MEMBER:
+                permission = "member"
+            else:
+                permission = "viewer"
+
+            result.append({**pet, "user_permission": permission})
+
+        return result

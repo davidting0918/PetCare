@@ -13,6 +13,7 @@ export interface Pet {
   daily_calorie_target?: number;
   owner_id: string;
   group_id?: string | null;
+  group_name?: string | null;
   created_at?: string;
   updated_at?: string;
   is_active?: boolean;
@@ -57,8 +58,8 @@ export interface PetInfo {
   daily_calorie_target: number;
   owner_id: string;
   owner_name: string;
-  group_id?: string;
-  group_name?: string;
+  group_id?: string | null;
+  group_name?: string | null;
   created_at: string;
   updated_at: string;
   photo_url?: string;

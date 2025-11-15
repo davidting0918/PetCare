@@ -2,11 +2,22 @@ import { useCallback, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import type { AppDispatch, RootState } from '../../store';
 import type { CreateGroupRequest, JoinGroupRequest } from '../../types';
-import { createGroup, deleteGroup, joinGroup, fetchMyGroupsWithMembers, clearGroupState, clearError } from '../../store/slices/groupSlice';
+import {
+    createGroup,
+    deleteGroup,
+    joinGroup,
+    fetchMyGroupsWithMembers,
+    fetchGroupPets,
+    refreshGroupPets,
+    clearGroupState,
+    clearError,
+    clearGroupPetsCache,
+    clearAllGroupPetsCache
+} from '../../store/slices/groupSlice';
 
 export const useGroup = () => {
     const dispatch = useDispatch<AppDispatch>();
-    const { groups, isLoading, error } = useSelector((state: RootState) => state.group);
+    const { groups, groupPets, isLoading, isLoadingPets, error, petsError } = useSelector((state: RootState) => state.group);
 
     const create = useCallback(async (request: CreateGroupRequest) => {
         return dispatch(createGroup(request)).unwrap();
@@ -32,6 +43,42 @@ export const useGroup = () => {
         return dispatch(joinGroup(request)).unwrap();
     }, [dispatch]);
 
+    // Get pets for a group (already loaded during initial fetch)
+    const getGroupPets = useCallback((groupId: string) => {
+        // Pets are already loaded with fetchMyGroupsWithMembers
+        // If somehow not available, fetch it (fallback)
+        if (!groupPets[groupId] && !isLoadingPets[groupId]) {
+            console.log(`⚠️ Pets not found for group ${groupId}, fetching...`);
+            dispatch(fetchGroupPets(groupId));
+        }
+        return groupPets[groupId] || [];
+    }, [dispatch, groupPets, isLoadingPets]);
+
+    // Force refresh pets for a group
+    const refreshPets = useCallback(async (groupId: string) => {
+        return dispatch(refreshGroupPets(groupId)).unwrap();
+    }, [dispatch]);
+
+    // Clear pets cache for a specific group
+    const clearPetsCache = useCallback((groupId: string) => {
+        dispatch(clearGroupPetsCache(groupId));
+    }, [dispatch]);
+
+    // Clear all pets cache
+    const clearAllPetsCache = useCallback(() => {
+        dispatch(clearAllGroupPetsCache());
+    }, [dispatch]);
+
+    // Get loading state for a specific group's pets
+    const isLoadingGroupPets = useCallback((groupId: string) => {
+        return isLoadingPets[groupId] || false;
+    }, [isLoadingPets]);
+
+    // Get error for a specific group's pets
+    const getGroupPetsError = useCallback((groupId: string) => {
+        return petsError[groupId] || null;
+    }, [petsError]);
+
     return {
         groups: groups || [],
         isLoading,
@@ -42,6 +89,13 @@ export const useGroup = () => {
         clearGroupError,
         removeGroup,
         join,
+        // Group pets methods
+        getGroupPets,
+        refreshPets,
+        clearPetsCache,
+        clearAllPetsCache,
+        isLoadingGroupPets,
+        getGroupPetsError,
     };
 };
 

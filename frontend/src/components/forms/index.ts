@@ -3,3 +3,4 @@ export { CreateGroupForm } from './CreateGroupForm';
 export { CreateWeightForm } from './CreateWeightForm';
 export { CreateInvitationForm } from './CreateInvitationForm';
 export { EditUserInfoModal } from './EditUserInfoModal';
+export { AssignPetToGroupModal } from './AssignPetToGroupModal';
