@@ -36,3 +36,16 @@ export interface CreateUserRequest {
   name: string;
   pwd: string;
 }
+
+export interface UpdateUserInfoRequest {
+  name?: string;
+  picture?: string;
+}
+
+export interface PhotoUploadResponse {
+  photo_url: string;
+  photo_name: string;
+  photo_size: number;
+  photo_type: string;
+  photo_uploaded_at: number;
+}

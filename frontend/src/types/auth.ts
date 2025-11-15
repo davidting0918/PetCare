@@ -21,11 +21,7 @@ export interface SignupRequest {
 export interface LoginResponse {
   access_token: string;
   token_type: string;
-  user: {
-    id: string;
-    email: string;
-    name: string;
-  }
+  user: User;
 }
 
 // App Auth State

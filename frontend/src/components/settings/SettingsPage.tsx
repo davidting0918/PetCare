@@ -10,13 +10,16 @@ import {
   Plus,
   LogOut,
   UserPlus,
-  Trash2
+  Trash2,
+  MoreVertical
 } from 'lucide-react';
 import { useAuth, useGroup } from '../../hooks';
+import { useAppDispatch } from '../../hooks/redux';
+import { refreshCurrentUser } from '../../store/slices/authSlice';
 import type { UserRole, GroupRole } from '../../types';
-import { CreateGroupForm, CreateInvitationForm } from '../forms';
+import { CreateGroupForm, CreateInvitationForm, EditUserInfoModal } from '../forms';
 import { DeleteConfirmDialog } from '../common/DeleteConfirmDialog';
-
+import { getPhotoUrl } from '../../api';
 // Helper function to convert API role to UI role
 const normalizeRole = (role: GroupRole): UserRole => {
   return (role.charAt(0).toUpperCase() + role.slice(1)) as UserRole;
@@ -48,6 +51,7 @@ const getRoleColor = (role: UserRole) => {
 export const SettingsPage: React.FC = () => {
   const { user, logout } = useAuth();
   const { groups, isLoading, error, fetchGroups, removeGroup, join } = useGroup();
+  const dispatch = useAppDispatch();
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [showJoinGroup, setShowJoinGroup] = useState(false);
   const [inviteCode, setInviteCode] = useState('');
@@ -60,6 +64,7 @@ export const SettingsPage: React.FC = () => {
   const [isJoining, setIsJoining] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
 
   const toggleGroup = (groupId: string) => {
     const newExpanded = new Set(expandedGroups);
@@ -89,6 +94,17 @@ export const SettingsPage: React.FC = () => {
 
   const handleLogout = () => {
     logout();
+  };
+
+  const handleEditProfile = () => {
+    setShowEditModal(true);
+  };
+
+  const handleEditSuccess = async (message: string) => {
+    setSuccessMessage(message);
+    // Refresh user data
+    await dispatch(refreshCurrentUser());
+    setTimeout(() => setSuccessMessage(null), 3000);
   };
 
   const handleInviteToGroup = (groupId: string, groupName: string) => {
@@ -166,12 +182,16 @@ export const SettingsPage: React.FC = () => {
 
       {/* Section 1: User Info Card */}
       <div className="card-3d p-6">
-        <div className="flex items-center">
+        <div className="flex items-center relative">
           {/* User Avatar */}
           <div className="w-20 h-20 rounded-full bg-gray-200 flex-shrink-0 overflow-hidden shadow-3d">
             {user.picture ? (
               <img
-                src={user.picture}
+                src={
+                  user.picture.startsWith('http')
+                    ? user.picture
+                    : getPhotoUrl(user.picture) || ''
+                }
                 alt={user.name}
                 className="w-full h-full object-cover"
               />
@@ -193,6 +213,15 @@ export const SettingsPage: React.FC = () => {
               <p className="text-sm">{user.email}</p>
             </div>
           </div>
+
+          {/* Three-dot Menu Button */}
+          <button
+            onClick={handleEditProfile}
+            className="absolute top-0 right-0 p-2 hover:bg-gray-100 rounded-full transition-colors"
+            title="Edit Profile"
+          >
+            <MoreVertical className="w-5 h-5 text-gray-600" />
+          </button>
         </div>
       </div>
 
@@ -472,6 +501,14 @@ export const SettingsPage: React.FC = () => {
           isLoading={isDeleting}
         />
       )}
+
+      {/* Edit User Info Modal */}
+      <EditUserInfoModal
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        onSuccess={handleEditSuccess}
+        user={user}
+      />
     </div>
   );
 };

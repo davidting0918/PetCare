@@ -14,3 +14,7 @@ export {
   useGroup,
   useGroupInitialization
 } from './groups';
+
+export {
+  useUser
+} from './user';

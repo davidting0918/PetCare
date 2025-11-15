@@ -41,8 +41,8 @@ class CreateUserRequest(BaseModel):
 
 
 class UpdateUserInfoRequest(BaseModel):
-    name: str
-    picture: Optional[str] = ""  # not supported yet
+    name: Optional[str] = None
+    picture: Optional[str] = None
 
 
 class ResetPasswordRequest(BaseModel):

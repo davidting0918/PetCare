@@ -17,9 +17,8 @@ class ApiClient {
         this.client = axios.create({
             baseURL: this.baseUrl,
             timeout: 10000,
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            // Don't set default Content-Type here
+            // Let axios automatically set it based on request data
         });
 
         this.setupInterceptors();
@@ -27,15 +26,25 @@ class ApiClient {
 
     private setupInterceptors() {
         this.client.interceptors.request.use((config) => {
+            // Add auth token if not present
             if (!config.headers.Authorization) {
                 const token = localStorage.getItem('petcare_token');
                 if (token) {
                     config.headers.Authorization = `Bearer ${token}`;
                 }
             }
-            if (config.data && ['post'].includes(config.method?.toLowerCase() || '')) {
-                config.data = this.removeUndefined(config.data);
+
+            // Only process JSON data, skip FormData (for file uploads)
+            if (config.data && ['post', 'put', 'patch'].includes(config.method?.toLowerCase() || '')) {
+                // Check if data is FormData (for file uploads)
+                if (!(config.data instanceof FormData)) {
+                    // Set Content-Type for JSON and clean undefined values
+                    config.headers['Content-Type'] = 'application/json';
+                    config.data = this.removeUndefined(config.data);
+                }
+                // If it's FormData, axios will automatically set the correct Content-Type with boundary
             }
+
             return config;
         }, (error) => {
             return Promise.reject(error);

@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, UploadFile
 
 from backend.models.user import CreateUserRequest, ResetPasswordRequest, UpdateUserInfoRequest, User
 from backend.services.auth_service import get_current_user, verify_api_key
@@ -60,5 +60,31 @@ async def reset_password(
     try:
         user_info = await user_service.reset_password(request, current_user.id)
         return {"status": 1, "data": user_info.model_dump(), "message": "Password reset successfully"}
+    except Exception as e:
+        raise e
+
+
+@router.post("/photo/upload", response_model=dict)
+async def upload_user_photo(
+    current_user: Annotated[User, Depends(get_current_user)], file: UploadFile = File(...)
+) -> dict:
+    """
+    Upload or replace user's profile photo
+
+    Authorization: JWT token required
+
+    File Requirements:
+    - Image files only (JPEG, PNG, GIF, WebP)
+    - Maximum size: 10MB
+    - Single photo per user (replaces existing if present)
+
+    Returns:
+    - Photo information including URL for display (/static/user_photos/filename)
+    - File metadata (size, type, upload timestamp)
+    - Photo URL can be accessed directly via the static files endpoint
+    """
+    try:
+        upload_info = await user_service.upload_user_photo(current_user.id, file)
+        return {"status": 1, "data": upload_info, "message": "Photo uploaded successfully"}
     except Exception as e:
         raise e

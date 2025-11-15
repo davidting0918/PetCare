@@ -23,7 +23,12 @@ async def validate_email_login_route(request: EmailAuthRequest) -> dict:
         "data": {
             "access_token": token_info["access_token"],
             "token_type": token_info["token_type"],
-            "user": {"id": user.id, "email": user.email, "name": user.name},
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "name": user.name,
+                "picture": user.picture if hasattr(user, "picture") else None,
+            },
         },
         "message": "Email login successful",
     }
@@ -42,7 +47,12 @@ async def validate_google_login_route(request: GoogleAuthRequest) -> dict:
         "data": {
             "access_token": token_info["access_token"],
             "token_type": token_info["token_type"],
-            "user": {"id": user.id, "email": user.email, "name": user.name},
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "name": user.name,
+                "picture": user.picture if hasattr(user, "picture") else None,
+            },
         },
         "message": "Google login successful",
     }

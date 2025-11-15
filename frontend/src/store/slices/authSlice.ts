@@ -29,6 +29,7 @@ export const loginUser = createAsyncThunk(
         email,
         pwd
       });
+      console.log(response);
 
       if (response.status === 1 && response.data) {
         // Store token in localStorage
@@ -36,6 +37,9 @@ export const loginUser = createAsyncThunk(
         localStorage.setItem('petcare_user_id', response.data.user.id);
         localStorage.setItem('petcare_user_email', response.data.user.email);
         localStorage.setItem('petcare_user_name', response.data.user.name);
+        if (response.data.user.picture) {
+          localStorage.setItem('petcare_user_picture', response.data.user.picture);
+        }
 
         return response.data;
       } else {
@@ -61,6 +65,9 @@ export const loginGoogleUser = createAsyncThunk(
         localStorage.setItem('petcare_user_id', response.data.user.id);
         localStorage.setItem('petcare_user_email', response.data.user.email);
         localStorage.setItem('petcare_user_name', response.data.user.name);
+        if (response.data.user.picture) {
+          localStorage.setItem('petcare_user_picture', response.data.user.picture);
+        }
 
         return response.data;
       } else {
@@ -94,19 +101,53 @@ export const initializeAuth = createAsyncThunk(
   'auth/initializeAuth',
   async (_, { rejectWithValue }) => {
     try {
-
       const token = localStorage.getItem('petcare_token');
       const userId = localStorage.getItem('petcare_user_id');
       const userEmail = localStorage.getItem('petcare_user_email');
       const userName = localStorage.getItem('petcare_user_name');
+      const userPicture = localStorage.getItem('petcare_user_picture');
 
       if (token && userId && userEmail && userName) {
-        return { user: { id: userId, email: userEmail, name: userName } };
+        return {
+          user: {
+            id: userId,
+            email: userEmail,
+            name: userName,
+            picture: userPicture || undefined
+          }
+        };
       } else {
         return null;
       }
     } catch (error: any) {
       return rejectWithValue(error.message || 'Initialization failed');
+    }
+  }
+);
+
+export const refreshCurrentUser = createAsyncThunk(
+  'auth/refreshCurrentUser',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await userService.getCurrentUser();
+
+      if (response.status === 1 && response.data) {
+        // Update localStorage with all user info including picture
+        localStorage.setItem('petcare_user_id', response.data.id);
+        localStorage.setItem('petcare_user_email', response.data.email);
+        localStorage.setItem('petcare_user_name', response.data.name);
+        if (response.data.picture) {
+          localStorage.setItem('petcare_user_picture', response.data.picture);
+        } else {
+          localStorage.removeItem('petcare_user_picture');
+        }
+
+        return response.data;
+      } else {
+        throw new Error(response.message || 'Failed to refresh user data');
+      }
+    } catch (error: any) {
+      return rejectWithValue(error.message || 'Failed to refresh user data');
     }
   }
 );
@@ -122,6 +163,7 @@ const authSlice = createSlice({
       localStorage.removeItem('petcare_user_id');
       localStorage.removeItem('petcare_user_email');
       localStorage.removeItem('petcare_user_name');
+      localStorage.removeItem('petcare_user_picture');
       localStorage.removeItem('petcare_selected_pet');
 
       // Reset state
@@ -194,6 +236,21 @@ const authSlice = createSlice({
         }
       })
       .addCase(initializeAuth.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload as string;
+      });
+
+    // Refresh Current User
+    builder
+      .addCase(refreshCurrentUser.pending, (state) => {
+        state.isLoading = true;
+      })
+      .addCase(refreshCurrentUser.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.user = action.payload;
+        state.error = null;
+      })
+      .addCase(refreshCurrentUser.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload as string;
       });
