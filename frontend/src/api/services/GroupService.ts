@@ -47,6 +47,11 @@ class GroupService {
         const response = await apiClient.post(`${this.basePath}/join`, request);
         return response.data;
     }
+
+    async getGroupPets(groupId: string): Promise<ApiResponse<any[]>> {
+        const response = await apiClient.get(`${this.basePath}/${groupId}/pets`);
+        return response.data;
+    }
 }
 
 export const groupService = new GroupService();

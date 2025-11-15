@@ -19,6 +19,14 @@ class PetService {
         const response = await apiClient.post(`${this.basePath}/${petId}/delete`);
         return response.data;
     }
+
+    async assignPetToGroup(petId: string, groupId: string | null): Promise<ApiResponse<any>> {
+        const response = await apiClient.post(
+            `${this.basePath}/${petId}/assign_group`,
+            { group_id: groupId }
+        );
+        return response.data;
+    }
 }
 
 export const petService = new PetService();

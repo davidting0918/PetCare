@@ -41,6 +41,18 @@ export const createPet = createAsyncThunk(
     }
 )
 
+// Helper function to normalize role from backend (lowercase) to frontend (capitalized)
+const normalizeRole = (role: string | undefined): UserRole => {
+    if (!role) return 'Viewer';
+    const roleMap: Record<string, UserRole> = {
+        'owner': 'Creator',    // Backend returns 'owner' for pet owners, treat as Creator
+        'creator': 'Creator',
+        'member': 'Member',
+        'viewer': 'Viewer'
+    };
+    return roleMap[role.toLowerCase()] || 'Viewer';
+};
+
 export const fetchAccessiblePets = createAsyncThunk(
     'pet/fetchAccessiblePets',
     async (_, { rejectWithValue }) => {
@@ -51,7 +63,7 @@ export const fetchAccessiblePets = createAsyncThunk(
                 const petAccessList: PetAccess[] = response.data.map((petInfo: PetInfo) => ({
                     petId: petInfo.id,
                     userId: petInfo.owner_id,
-                    role: petInfo.user_permission as UserRole,
+                    role: normalizeRole(petInfo.user_permission), // Normalize role from backend
                     pet: {
                         id: petInfo.id,
                         name: petInfo.name,
@@ -63,12 +75,14 @@ export const fetchAccessiblePets = createAsyncThunk(
                         daily_calorie_target: petInfo.daily_calorie_target,
                         owner_id: petInfo.owner_id,
                         group_id: petInfo.group_id,
+                        group_name: petInfo.group_name, // Include group_name
                         created_at: petInfo.created_at,
                         updated_at: petInfo.updated_at,
                         is_active: petInfo.is_active,
                         photo_url: petInfo.photo_url,
                     }
                 }));
+                console.log('🐾 fetchAccessiblePets: Loaded', petAccessList.length, 'pets');
                 return petAccessList;
             } else {
                 throw new Error(response.message || 'Failed to fetch accessible pets');

@@ -94,3 +94,22 @@ export interface GroupWithMembers {
         role: GroupRole;
     }[];
 }
+
+// Group pet information from API
+export interface GroupPetInfo {
+    id: string;
+    name: string;
+    pet_type: string;
+    breed?: string;
+    gender?: string;
+    current_weight_kg?: number;
+    target_weight_kg?: number;
+    daily_calorie_target?: number;
+    photo_url?: string;
+    owner_id: string;
+    owner_name: string;
+    owner_email: string;
+    created_at: string;
+    updated_at: string;
+    user_permission: 'owner' | 'creator' | 'member' | 'viewer';
+}
