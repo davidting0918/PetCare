@@ -60,6 +60,7 @@ export interface MyGroupResponse {
     user_id: string;
     user_name: string;
     user_email: string;
+    user_picture: string;
     role: GroupRole;
     created_at: string;
     invited_by: string | null;
@@ -74,6 +75,7 @@ export interface GroupMemberInfo {
     user_id: string;
     user_name: string;
     user_email: string;
+    user_picture: string;
     role: GroupRole;
     created_at: string;
     invited_by: string | null;
@@ -92,6 +94,7 @@ export interface GroupWithMembers {
         name: string;
         email: string;
         role: GroupRole;
+        picture: string;
     }[];
 }
 
@@ -112,4 +115,10 @@ export interface GroupPetInfo {
     created_at: string;
     updated_at: string;
     user_permission: 'owner' | 'creator' | 'member' | 'viewer';
+}
+
+// Type-safe return type for fetchMyGroupsWithMembers thunk
+export interface FetchGroupsWithMembersResult {
+    groups: GroupWithMembers[];
+    groupPets: Record<string, GroupPetInfo[]>;
 }

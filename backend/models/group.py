@@ -135,6 +135,7 @@ class GroupMemberInfo(BaseModel):
     user_id: str
     user_name: str
     user_email: str
+    user_picture: Optional[str] = None  # User's profile picture URL
     role: GroupRole
     created_at: dt  # When the user joined the group
     invited_by: Optional[str] = None  # Who invited this user (user_id)

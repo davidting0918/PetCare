@@ -1,12 +1,14 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAppDispatch, useAppSelector } from "../redux";
 import { createPet, fetchAccessiblePets, selectPet as selectPetAction, deletePet } from "../../store";
-import type { CreatePetRequest, Pet } from "../../types";
+import type { CreatePetRequest, Pet, UpdatePetRequest } from "../../types";
+import { petService } from "../../api";
 
 export const usePet = () => {
     const dispatch = useAppDispatch();
     const petState = useAppSelector((state) => state.pet);
     const { isAuthenticated } = useAppSelector((state) => state.auth);
+    const [isLoading, setIsLoading] = useState(false);
 
     // 創建寵物
     const create = useCallback(async (request: CreatePetRequest) => {
@@ -26,6 +28,34 @@ export const usePet = () => {
         }
     }, [dispatch, isAuthenticated]);
 
+    // 更新寵物資訊
+    const updatePetInfo = useCallback(async (petId: string, request: UpdatePetRequest) => {
+        setIsLoading(true);
+        try {
+            await petService.updatePet(petId, request);
+            // Refresh pets after successful update
+            await dispatch(fetchAccessiblePets());
+        } catch (error) {
+            throw error;
+        } finally {
+            setIsLoading(false);
+        }
+    }, [dispatch]);
+
+    // 上傳寵物照片
+    const uploadPetPhoto = useCallback(async (petId: string, file: File) => {
+        setIsLoading(true);
+        try {
+            await petService.uploadPetPhoto(petId, file);
+            // Refresh pets after successful upload
+            await dispatch(fetchAccessiblePets());
+        } catch (error) {
+            throw error;
+        } finally {
+            setIsLoading(false);
+        }
+    }, [dispatch]);
+
     const selectPet = useCallback((pet: Pet) => {
         dispatch(selectPetAction(pet));
     }, [dispatch]);
@@ -40,12 +70,14 @@ export const usePet = () => {
     return {
         selectedPet: petState.selectedPet,
         userPets: petState.userPets || [],
-        isLoading: petState.isLoading,
+        isLoading: petState.isLoading || isLoading,
         error: petState.error,
 
         // 操作函數
         create,
         getAvailablePets,
+        updatePetInfo,
+        uploadPetPhoto,
         selectPet,
         removePet,
     }

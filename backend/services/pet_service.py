@@ -486,12 +486,33 @@ class PetService:
                 detail=f"File size ({actual_size / 1024 / 1024:.2f}MB) exceeds maximum allowed size of 10MB",
             )
 
-        # Generate unique photo ID and file path (secure random filename)
-
+        # Generate filename using pet_id (deterministic naming)
         file_extension = Path(file.filename).suffix if file.filename else ".jpg"
         file_name = f"{pet_id}{file_extension}"
         file_path = os.path.join(self.photo_storage_path, file_name)
         photo_url = f"/static/pet_photos/{file_name}"
+
+        # Get current pet info to check for existing photo
+        sql = f"""
+        SELECT photo_url FROM pets WHERE id = '{pet_id}' AND is_active = true
+        """
+        pet_info = await self.db.read_one(sql)
+
+        # Delete old photo if it has a different extension
+        # (same extension will be automatically overwritten)
+        if pet_info and pet_info.get("photo_url"):
+            old_photo_url = pet_info["photo_url"]
+            if old_photo_url.startswith("/static/pet_photos/"):
+                old_file_name = old_photo_url.split("/")[-1]
+                # Only delete if it's a different file (different extension)
+                if old_file_name != file_name:
+                    old_file_path = os.path.join(self.photo_storage_path, old_file_name)
+                    if os.path.exists(old_file_path):
+                        try:
+                            os.remove(old_file_path)
+                        except Exception as e:
+                            # Log but don't fail if old photo deletion fails
+                            print(f"Warning: Could not delete old pet photo: {e}")
 
         try:
             # Save file to storage (content already read for validation)

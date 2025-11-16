@@ -89,9 +89,6 @@ export const GroupPetsList: React.FC<GroupPetsListProps> = ({
           <PawPrint className="w-8 h-8 text-gray-400" />
         </div>
         <p className="text-sm text-gray-600 mb-2">No pets in this group yet</p>
-        <p className="text-xs text-gray-500">
-          Pet owners can assign their pets to this group from the pet selection page
-        </p>
       </div>
     );
   }

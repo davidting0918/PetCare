@@ -176,25 +176,27 @@ class UserService:
                 detail=f"File too large. Maximum size: {max_size / 1024 / 1024}MB",
             )
 
-        # Generate unique filename
+        # Generate filename using user_id (deterministic naming)
         file_ext = Path(file.filename).suffix if file.filename else ".jpg"
-        file_name = f"{uuid.uuid4().hex[:8]}{file_ext}"
+        file_name = f"{user_id}{file_ext}"
         file_path = os.path.join(self.photo_storage_path, file_name)
+        photo_url = f"/static/user_photos/{file_name}"
 
-        # Delete old photo if exists
+        # Delete old photo if it has a different extension
+        # (same extension will be automatically overwritten)
         if user_exists.get("picture"):
             old_photo_url = user_exists["picture"]
             if old_photo_url.startswith("/static/user_photos/"):
                 old_file_name = old_photo_url.split("/")[-1]
-                old_file_path = os.path.join(self.photo_storage_path, old_file_name)
-                if os.path.exists(old_file_path):
-                    try:
-                        os.remove(old_file_path)
-                    except Exception as e:
-                        # Log but don't fail if old photo deletion fails
-                        print(f"Warning: Could not delete old photo: {e}")
-
-        photo_url = f"/static/user_photos/{file_name}"
+                # Only delete if it's a different file (different extension)
+                if old_file_name != file_name:
+                    old_file_path = os.path.join(self.photo_storage_path, old_file_name)
+                    if os.path.exists(old_file_path):
+                        try:
+                            os.remove(old_file_path)
+                        except Exception as e:
+                            # Log but don't fail if old photo deletion fails
+                            print(f"Warning: Could not delete old photo: {e}")
 
         try:
             # Save file to storage

@@ -1,5 +1,5 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
-import type { GroupWithMembers, CreateGroupRequest, JoinGroupRequest, GroupPetInfo } from '../../types';
+import type { GroupWithMembers, CreateGroupRequest, JoinGroupRequest, GroupPetInfo, FetchGroupsWithMembersResult } from '../../types';
 import { groupService } from '../../api';
 import { logout } from './authSlice';
 
@@ -22,9 +22,13 @@ const initialState: GroupState = {
 };
 
 // Async thunk to create a new group
-export const createGroup = createAsyncThunk(
+export const createGroup = createAsyncThunk<
+    any,
+    CreateGroupRequest,
+    { rejectValue: string }
+>(
     'group/createGroup',
-    async (request: CreateGroupRequest, { rejectWithValue }) => {
+    async (request, { rejectWithValue }) => {
         try {
             const response = await groupService.createGroup(request);
 
@@ -40,9 +44,13 @@ export const createGroup = createAsyncThunk(
 );
 
 // Async thunk to delete a group
-export const deleteGroup = createAsyncThunk(
+export const deleteGroup = createAsyncThunk<
+    string,
+    string,
+    { rejectValue: string }
+>(
     'group/deleteGroup',
-    async (groupId: string, { rejectWithValue }) => {
+    async (groupId, { rejectWithValue }) => {
         try {
             const response = await groupService.deleteGroup(groupId);
 
@@ -58,9 +66,13 @@ export const deleteGroup = createAsyncThunk(
 );
 
 // Async thunk to join a group using invitation code
-export const joinGroup = createAsyncThunk(
+export const joinGroup = createAsyncThunk<
+    any,
+    JoinGroupRequest,
+    { rejectValue: string }
+>(
     'group/joinGroup',
-    async (request: JoinGroupRequest, { rejectWithValue, dispatch }) => {
+    async (request, { rejectWithValue, dispatch }) => {
         try {
             const response = await groupService.joinGroup(request);
 
@@ -79,7 +91,11 @@ export const joinGroup = createAsyncThunk(
 );
 
 // Async thunk to fetch groups with their members AND pets
-export const fetchMyGroupsWithMembers = createAsyncThunk(
+export const fetchMyGroupsWithMembers = createAsyncThunk<
+    FetchGroupsWithMembersResult,
+    void,
+    { rejectValue: string }
+>(
     'group/fetchMyGroupsWithMembers',
     async (_, { rejectWithValue }) => {
         try {
@@ -102,11 +118,12 @@ export const fetchMyGroupsWithMembers = createAsyncThunk(
                     ]);
 
                     // Process members
-                    let members = [{
+                    let members: GroupWithMembers['members'] = [{
                         id: group.user_id,
                         name: group.user_name,
                         email: group.user_email,
                         role: group.role,
+                        picture: group.user_picture,
                     }];
 
                     if (membersResponse.status === 1 && membersResponse.data) {
@@ -115,43 +132,48 @@ export const fetchMyGroupsWithMembers = createAsyncThunk(
                             name: member.user_name,
                             email: member.user_email,
                             role: member.role,
+                            picture: member.user_picture,
                         }));
                     }
 
                     // Process pets
-                    let pets: any[] = [];
+                    let pets: GroupPetInfo[] = [];
                     if (petsResponse.status === 1 && petsResponse.data) {
                         pets = petsResponse.data;
                     }
 
+                    const groupWithMembers: GroupWithMembers = {
+                        id: group.group_id,
+                        name: group.group_name,
+                        memberCount: members.length,
+                        role: group.role,
+                        members: members,
+                    };
+
                     return {
-                        group: {
-                            id: group.group_id,
-                            name: group.group_name,
-                            memberCount: members.length,
-                            role: group.role,
-                            members: members,
-                        },
+                        group: groupWithMembers,
                         pets: pets,
                         groupId: group.group_id,
                     };
                 } catch (error) {
                     console.error(`Failed to fetch data for group ${group.group_id}:`, error);
                     // Return minimal data on error
-                    return {
-                        group: {
-                            id: group.group_id,
-                            name: group.group_name,
-                            memberCount: 1,
+                    const fallbackGroup: GroupWithMembers = {
+                        id: group.group_id,
+                        name: group.group_name,
+                        memberCount: 1,
+                        role: group.role,
+                        members: [{
+                            id: group.user_id,
+                            name: group.user_name,
+                            email: group.user_email,
                             role: group.role,
-                            members: [{
-                                id: group.user_id,
-                                name: group.user_name,
-                                email: group.user_email,
-                                role: group.role,
-                            }],
-                        },
-                        pets: [],
+                            picture: group.user_picture,
+                        }],
+                    };
+                    return {
+                        group: fallbackGroup,
+                        pets: [] as GroupPetInfo[],
                         groupId: group.group_id,
                     };
                 }
@@ -160,13 +182,18 @@ export const fetchMyGroupsWithMembers = createAsyncThunk(
             const groupsData = await Promise.all(groupsDataPromises);
 
             // Separate groups and pets for storage
-            const groups = groupsData.map(data => data.group);
-            const groupPetsMap: Record<string, any[]> = {};
+            const groups: GroupWithMembers[] = groupsData.map(data => data.group);
+            const groupPetsMap: Record<string, GroupPetInfo[]> = {};
             groupsData.forEach(data => {
                 groupPetsMap[data.groupId] = data.pets;
             });
 
-            return { groups, groupPets: groupPetsMap };
+            const result: FetchGroupsWithMembersResult = {
+                groups,
+                groupPets: groupPetsMap
+            };
+
+            return result;
 
         } catch (error: any) {
             return rejectWithValue(error.message || 'Failed to fetch groups with members');
@@ -174,10 +201,26 @@ export const fetchMyGroupsWithMembers = createAsyncThunk(
     }
 );
 
+// Type for fetchGroupPets result
+interface FetchGroupPetsResult {
+    groupId: string;
+    pets: GroupPetInfo[];
+}
+
+// Type for fetchGroupPets error
+interface FetchGroupPetsError {
+    groupId: string;
+    error: string;
+}
+
 // Async thunk to fetch pets for a specific group
-export const fetchGroupPets = createAsyncThunk(
+export const fetchGroupPets = createAsyncThunk<
+    FetchGroupPetsResult,
+    string,
+    { rejectValue: FetchGroupPetsError }
+>(
     'group/fetchGroupPets',
-    async (groupId: string, { rejectWithValue }) => {
+    async (groupId, { rejectWithValue }) => {
         try {
             const response = await groupService.getGroupPets(groupId);
 
@@ -199,9 +242,12 @@ export const fetchGroupPets = createAsyncThunk(
 );
 
 // Async thunk to refresh pets for a specific group (forces re-fetch)
-export const refreshGroupPets = createAsyncThunk(
+export const refreshGroupPets = createAsyncThunk<
+    FetchGroupPetsResult,
+    string
+>(
     'group/refreshGroupPets',
-    async (groupId: string, { dispatch }) => {
+    async (groupId, { dispatch }) => {
         return dispatch(fetchGroupPets(groupId)).unwrap();
     }
 );
@@ -247,7 +293,7 @@ const groupSlice = createSlice({
             })
             .addCase(createGroup.rejected, (state, action) => {
                 state.isLoading = false;
-                state.error = action.payload as string;
+                state.error = action.payload ?? 'Unknown error';
             })
             // Handle deleteGroup
             .addCase(deleteGroup.pending, (state) => {
@@ -263,7 +309,7 @@ const groupSlice = createSlice({
             })
             .addCase(deleteGroup.rejected, (state, action) => {
                 state.isLoading = false;
-                state.error = action.payload as string;
+                state.error = action.payload ?? 'Unknown error';
             })
             // Handle fetchMyGroupsWithMembers
             .addCase(fetchMyGroupsWithMembers.pending, (state) => {
@@ -272,7 +318,7 @@ const groupSlice = createSlice({
             })
             .addCase(fetchMyGroupsWithMembers.fulfilled, (state, action) => {
                 state.isLoading = false;
-                // Store both groups and their pets
+                // Store both groups and their pets - no type assertion needed!
                 state.groups = action.payload.groups;
                 state.groupPets = action.payload.groupPets;
                 // Mark all groups as not loading since we fetched pets already
@@ -282,7 +328,7 @@ const groupSlice = createSlice({
             })
             .addCase(fetchMyGroupsWithMembers.rejected, (state, action) => {
                 state.isLoading = false;
-                state.error = action.payload as string;
+                state.error = action.payload ?? 'Unknown error';
             })
             // Handle joinGroup
             .addCase(joinGroup.pending, (state) => {
@@ -295,7 +341,7 @@ const groupSlice = createSlice({
             })
             .addCase(joinGroup.rejected, (state, action) => {
                 state.isLoading = false;
-                state.error = action.payload as string;
+                state.error = action.payload ?? 'Unknown error';
             })
             // Handle fetchGroupPets
             .addCase(fetchGroupPets.pending, (state, action) => {
@@ -309,9 +355,10 @@ const groupSlice = createSlice({
                 state.groupPets[groupId] = pets;
             })
             .addCase(fetchGroupPets.rejected, (state, action) => {
-                const payload = action.payload as { groupId: string; error: string };
-                state.isLoadingPets[payload.groupId] = false;
-                state.petsError[payload.groupId] = payload.error;
+                if (action.payload) {
+                    state.isLoadingPets[action.payload.groupId] = false;
+                    state.petsError[action.payload.groupId] = action.payload.error;
+                }
             })
             // Handle logout from auth slice - clear group state
             .addCase(logout, (state) => {
