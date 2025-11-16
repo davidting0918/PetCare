@@ -1,47 +1,41 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { User, X, Upload, Camera } from 'lucide-react';
-import { useUser } from '../../hooks';
-import type { User as UserType } from '../../types';
+import { PawPrint, X, Upload, Camera } from 'lucide-react';
+import { usePet } from '../../hooks';
+import type { PetInfo } from '../../types';
 import { getPhotoUrl } from '../../api';
 
-interface EditUserInfoModalProps {
+interface EditPetInfoModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: (message: string) => void;
-  user: UserType;
+  pet: PetInfo;
 }
 
-export const EditUserInfoModal: React.FC<EditUserInfoModalProps> = ({
+export const EditPetInfoModal: React.FC<EditPetInfoModalProps> = ({
   isOpen,
   onClose,
   onSuccess,
-  user
+  pet
 }) => {
-  const { updateInfo, uploadPhoto, changePassword, isLoading } = useUser();
+  const { updatePetInfo, uploadPetPhoto, isLoading } = usePet();
 
   // Form states
-  const [name, setName] = useState(user.name);
+  const [name, setName] = useState(pet.name);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [oldPassword, setOldPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Reset form when user changes or modal opens
+  // Reset form when pet changes or modal opens
   useEffect(() => {
     if (isOpen) {
-      setName(user.name);
+      setName(pet.name);
       setSelectedFile(null);
       setPreviewUrl(null);
-      setOldPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
       setErrors({});
     }
-  }, [isOpen, user]);
+  }, [isOpen, pet]);
 
   // Clean up preview URL
   useEffect(() => {
@@ -98,23 +92,8 @@ export const EditUserInfoModal: React.FC<EditUserInfoModalProps> = ({
     // Validate name
     if (!name.trim()) {
       newErrors.name = 'Name is required';
-    }
-
-    // Validate password if any password field is filled
-    if (oldPassword || newPassword || confirmPassword) {
-      if (!oldPassword) {
-        newErrors.oldPassword = 'Current password is required';
-      }
-      if (!newPassword) {
-        newErrors.newPassword = 'New password is required';
-      } else if (newPassword.length < 6) {
-        newErrors.newPassword = 'Password must be at least 6 characters';
-      }
-      if (!confirmPassword) {
-        newErrors.confirmPassword = 'Please confirm your password';
-      } else if (newPassword !== confirmPassword) {
-        newErrors.confirmPassword = 'Passwords do not match';
-      }
+    } else if (name.trim().length > 50) {
+      newErrors.name = 'Name must be 50 characters or less';
     }
 
     setErrors(newErrors);
@@ -129,59 +108,50 @@ export const EditUserInfoModal: React.FC<EditUserInfoModalProps> = ({
     try {
       let photoUploaded = false;
       let infoUpdated = false;
-      let passwordChanged = false;
 
       // Upload photo if selected
       if (selectedFile) {
-        await uploadPhoto(selectedFile);
+        await uploadPetPhoto(pet.id, selectedFile);
         photoUploaded = true;
       }
 
       // Update name if changed
-      if (name.trim() !== user.name) {
-        await updateInfo({ name: name.trim() });
+      if (name.trim() !== pet.name) {
+        await updatePetInfo(pet.id, { name: name.trim() });
         infoUpdated = true;
-      }
-
-      // Change password if provided
-      if (oldPassword && newPassword) {
-        await changePassword(oldPassword, newPassword);
-        passwordChanged = true;
       }
 
       // Build success message
       const updates = [];
       if (photoUploaded) updates.push('photo');
-      if (infoUpdated) updates.push('profile');
-      if (passwordChanged) updates.push('password');
+      if (infoUpdated) updates.push('name');
 
       const message = updates.length > 0
-        ? `Successfully updated ${updates.join(', ')}`
-        : 'Profile updated';
+        ? `Successfully updated ${updates.join(' and ')}`
+        : 'Pet profile updated';
 
       onSuccess?.(message);
       handleClose();
     } catch (error) {
-      console.error('Failed to update user info:', error);
-      setErrors({ submit: error instanceof Error ? error.message : 'Failed to update profile' });
+      console.error('Failed to update pet info:', error);
+      setErrors({ submit: error instanceof Error ? error.message : 'Failed to update pet profile' });
     }
   };
 
   const handleClose = () => {
-    setName(user.name);
+    setName(pet.name);
     setSelectedFile(null);
     if (previewUrl) {
       URL.revokeObjectURL(previewUrl);
       setPreviewUrl(null);
     }
-    setOldPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
     setErrors({});
     onClose();
   };
 
   if (!isOpen) return null;
+
+  const petPhotoUrl = pet.photo_url ? getPhotoUrl(pet.photo_url) : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -189,8 +159,8 @@ export const EditUserInfoModal: React.FC<EditUserInfoModalProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div className="flex items-center gap-2">
-            <User className="w-6 h-6 text-earth" />
-            <h2 className="text-xl font-bold text-earth">Edit Profile</h2>
+            <PawPrint className="w-6 h-6 text-orange" />
+            <h2 className="text-xl font-bold text-earth">Edit Pet Info</h2>
           </div>
           <button
             onClick={handleClose}
@@ -210,23 +180,29 @@ export const EditUserInfoModal: React.FC<EditUserInfoModalProps> = ({
             </div>
           )}
 
-          {/* Profile Photo Section */}
+          {/* Pet Photo Section */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-3">
-              Profile Photo
+              Pet Photo
             </label>
             <div className="flex items-center gap-4">
               {/* Avatar Preview */}
               <div className="w-24 h-24 rounded-full bg-gray-200 flex-shrink-0 overflow-hidden shadow-3d relative">
-                {user.picture ? (
+                {previewUrl ? (
                   <img
-                    src={user.picture.startsWith('http') ? user.picture : getPhotoUrl(user.picture) || ''}
-                    alt={user.name}
+                    src={previewUrl}
+                    alt="Preview"
+                    className="w-full h-full object-cover"
+                  />
+                ) : petPhotoUrl ? (
+                  <img
+                    src={petPhotoUrl}
+                    alt={pet.name}
                     className="w-full h-full object-cover"
                   />
                 ) : (
                   <div className="w-full h-full bg-orange/30 flex items-center justify-center text-earth font-semibold text-3xl">
-                    {user.name.charAt(0).toUpperCase()}
+                    {pet.name.charAt(0).toUpperCase()}
                   </div>
                 )}
                 {selectedFile && (
@@ -249,7 +225,8 @@ export const EditUserInfoModal: React.FC<EditUserInfoModalProps> = ({
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isLoading}
-                  className="w-full px-4 py-2 bg-mint text-white rounded-lg hover:bg-mint/90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full px-4 py-2 bg-orange text-white rounded-lg hover:bg-orange/90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                  style={{ backgroundColor: '#F4C2A1' }}
                 >
                   <Upload className="w-4 h-4" />
                   <span className="text-sm">
@@ -279,7 +256,7 @@ export const EditUserInfoModal: React.FC<EditUserInfoModalProps> = ({
           {/* Name Input */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Name *
+              Pet Name *
             </label>
             <input
               type="text"
@@ -292,27 +269,28 @@ export const EditUserInfoModal: React.FC<EditUserInfoModalProps> = ({
                   setErrors(newErrors);
                 }
               }}
-              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-mint/50 focus:border-mint ${
+              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange/50 focus:border-orange ${
                 errors.name ? 'border-red-300' : 'border-gray-300'
               }`}
-              placeholder="Enter your name"
+              placeholder="Enter pet name"
               disabled={isLoading}
+              maxLength={50}
             />
             {errors.name && <p className="text-red-600 text-xs mt-1">{errors.name}</p>}
           </div>
 
-          {/* Email (Read-only) */}
+          {/* Pet Type (Read-only) */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Email
+              Pet Type
             </label>
             <input
-              type="email"
-              value={user.email}
+              type="text"
+              value={pet.pet_type}
               disabled
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed capitalize"
             />
-            <p className="text-xs text-gray-500 mt-1">Email cannot be changed</p>
+            <p className="text-xs text-gray-500 mt-1">Pet type cannot be changed</p>
           </div>
         </form>
 
@@ -330,7 +308,8 @@ export const EditUserInfoModal: React.FC<EditUserInfoModalProps> = ({
             type="submit"
             onClick={handleSubmit}
             disabled={isLoading}
-            className="flex-1 px-4 py-3 bg-mint text-white rounded-lg hover:bg-mint/90 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 px-4 py-3 text-white rounded-lg hover:bg-orange/90 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ backgroundColor: '#F4C2A1' }}
           >
             {isLoading ? 'Saving...' : 'Save Changes'}
           </button>

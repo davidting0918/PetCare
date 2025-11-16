@@ -66,3 +66,17 @@ export interface PetInfo {
   is_active: boolean;
   user_permission?: string;
 }
+
+export interface UpdatePetRequest {
+  name?: string;
+  breed?: string;
+  gender?: PetGender;
+  birth_date?: number;
+  current_weight_kg?: number;
+  target_weight_kg?: number;
+  height_cm?: number;
+  is_spayed?: boolean;
+  microchip_id?: string;
+  daily_calorie_target?: number;
+  notes?: string;
+}

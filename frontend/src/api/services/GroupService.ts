@@ -1,5 +1,5 @@
 import { apiClient } from "../client";
-import type { MyGroupResponse, GroupMemberInfo, ApiResponse, CreateGroupRequest, GroupRole, JoinGroupRequest, GroupInfo } from "../../types";
+import type { MyGroupResponse, GroupMemberInfo, ApiResponse, CreateGroupRequest, GroupRole, JoinGroupRequest, GroupInfo, GroupPetInfo } from "../../types";
 
 interface CreateInvitationRequest {
     role: GroupRole;
@@ -48,7 +48,7 @@ class GroupService {
         return response.data;
     }
 
-    async getGroupPets(groupId: string): Promise<ApiResponse<any[]>> {
+    async getGroupPets(groupId: string): Promise<ApiResponse<GroupPetInfo[]>> {
         const response = await apiClient.get(`${this.basePath}/${groupId}/pets`);
         return response.data;
     }

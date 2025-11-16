@@ -146,24 +146,14 @@ export const AssignPetToGroupModal: React.FC<AssignPetToGroupModalProps> = ({
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mint/50 focus:border-mint"
                 disabled={isSubmitting}
               >
-                <option value="">Personal Pet (No Group)</option>
+                <option value="">(change to private pet)</option>
                 {creatorGroups.map((group) => (
                   <option key={group.id} value={group.id}>
-                    {group.name} ({group.memberCount} members)
+                    {group.name}
                   </option>
                 ))}
               </select>
             )}
-            <p className="text-xs text-gray-500 mt-2">
-              💡 You can only assign pets to groups where you are the creator
-            </p>
-          </div>
-
-          {/* Info Box */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-            <p className="text-blue-800 text-sm">
-              <strong>Note:</strong> When you assign a pet to a group, all group members will be able to view and manage this pet according to their role permissions.
-            </p>
           </div>
 
           {/* Action Buttons */}
@@ -182,7 +172,6 @@ export const AssignPetToGroupModal: React.FC<AssignPetToGroupModalProps> = ({
               className="flex-1 btn-3d text-white disabled:opacity-50 disabled:cursor-not-allowed"
               style={{
                 backgroundColor: '#B8D8D8',
-                border: '2px solid #a8c8c8'
               }}
             >
               {isSubmitting ? 'Assigning...' : 'Assign Pet'}

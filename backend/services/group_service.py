@@ -546,6 +546,7 @@ class GroupService:
             gm.*,
             u.name as user_name,
             u.email as user_email,
+            u.picture as user_picture,
             g.name as group_name
         from group_members gm
         left join users u on (gm.user_id = u.id)
