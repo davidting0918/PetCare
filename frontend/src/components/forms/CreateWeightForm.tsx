@@ -136,14 +136,6 @@ export const CreateWeightForm: React.FC<CreateWeightFormProps> = ({
             </div>
           )}
 
-          {/* Pet Info Display */}
-          {selectedPet && (
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-sm text-gray-600">
-                <span className="font-medium">Pet:</span> {selectedPet.name}
-              </p>
-            </div>
-          )}
 
           {/* Weight Input */}
           <div>
@@ -164,15 +156,12 @@ export const CreateWeightForm: React.FC<CreateWeightFormProps> = ({
               disabled={isLoading}
             />
             {errors.weight && <p className="text-red-600 text-xs mt-1">{errors.weight}</p>}
-            <p className="text-gray-500 text-xs mt-1">
-              Enter weight in kilograms (0.1 - 200 kg, up to 2 decimal places)
-            </p>
           </div>
 
           {/* Timestamp Input */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Date & Time *
+              Date
             </label>
             <input
               type="datetime-local"
@@ -181,9 +170,6 @@ export const CreateWeightForm: React.FC<CreateWeightFormProps> = ({
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mint/50 focus:border-mint"
               disabled={isLoading}
             />
-            <p className="text-gray-500 text-xs mt-1">
-              When was this weight measured?
-            </p>
           </div>
 
           {/* Notes */}
@@ -199,19 +185,12 @@ export const CreateWeightForm: React.FC<CreateWeightFormProps> = ({
               className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-mint/50 focus:border-mint resize-none ${
                 errors.notes ? 'border-red-300' : 'border-gray-300'
               }`}
-              placeholder="Any additional notes about this weight measurement..."
+              placeholder="Enter notes"
               disabled={isLoading}
             />
             {errors.notes && <p className="text-red-600 text-xs mt-1">{errors.notes}</p>}
             <p className="text-gray-500 text-xs mt-1">
               {formData.notes?.length || 0}/500 characters
-            </p>
-          </div>
-
-          {/* Info Box */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-            <p className="text-blue-800 text-sm">
-              💡 <strong>Tip:</strong> Regular weight tracking helps monitor your pet's health and detect any changes early.
             </p>
           </div>
 

@@ -6,7 +6,6 @@ interface DeleteConfirmDialogProps {
   onClose: () => void;
   onConfirm: () => void;
   title: string;
-  message: string;
   itemName?: string;
   isLoading?: boolean;
 }
@@ -16,7 +15,6 @@ export const DeleteConfirmDialog: React.FC<DeleteConfirmDialogProps> = ({
   onClose,
   onConfirm,
   title,
-  message,
   itemName,
   isLoading = false
 }) => {
@@ -44,13 +42,6 @@ export const DeleteConfirmDialog: React.FC<DeleteConfirmDialogProps> = ({
 
         {/* Content */}
         <div className="p-6 space-y-4">
-          {/* Warning Message */}
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <p className="text-red-800 text-sm">
-              {message}
-            </p>
-          </div>
-
           {/* Item Name Display */}
           {itemName && (
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
@@ -75,7 +66,6 @@ export const DeleteConfirmDialog: React.FC<DeleteConfirmDialogProps> = ({
               className="flex-1 btn-3d text-white disabled:opacity-50 disabled:cursor-not-allowed"
               style={{
                 backgroundColor: '#EF4444',
-                border: '2px solid #DC2626'
               }}
             >
               {isLoading ? 'Deleting...' : 'Delete'}

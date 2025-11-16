@@ -103,9 +103,6 @@ export const CreateInvitationForm: React.FC<CreateInvitationFormProps> = ({
 
               {/* Role Selection */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Select Role for Invitee *
-                </label>
                 <div className="space-y-2">
                   <label className="flex items-start p-3 border-2 border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
                     <input
@@ -144,13 +141,6 @@ export const CreateInvitationForm: React.FC<CreateInvitationFormProps> = ({
                 </div>
               </div>
 
-              {/* Info Box */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                <p className="text-blue-800 text-sm">
-                  💡 <strong>Tip:</strong> The invitation code will expire after 7 days. Share it with the person you want to invite.
-                </p>
-              </div>
-
               {/* Action Buttons */}
               <div className="flex gap-3 pt-4">
                 <button
@@ -167,7 +157,6 @@ export const CreateInvitationForm: React.FC<CreateInvitationFormProps> = ({
                   className="flex-1 btn-3d text-white disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{
                     backgroundColor: '#B8D8D8',
-                    border: '2px solid #a8c8c8'
                   }}
                 >
                   {isLoading ? 'Creating...' : 'Create Invitation'}

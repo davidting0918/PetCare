@@ -253,7 +253,6 @@ export const WeightPage: React.FC = () => {
             <div className="text-center text-gray-400">
               <Scale className="w-12 h-12 mx-auto mb-2 opacity-50" />
               <p className="text-sm">No weight records yet</p>
-              <p className="text-xs mt-1">Click above to record your pet's weight</p>
             </div>
           </div>
         )}
@@ -447,7 +446,6 @@ export const WeightPage: React.FC = () => {
             <div className="text-center text-gray-400">
               <TrendingUp className="w-12 h-12 mx-auto mb-2 opacity-50" />
               <p className="text-sm">No weight records for selected period</p>
-              <p className="text-xs mt-1">Record weight to see trends</p>
             </div>
           </div>
         )}
