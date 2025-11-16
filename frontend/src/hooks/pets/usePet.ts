@@ -85,7 +85,7 @@ export const usePet = () => {
 
 export const usePetInitialization = () => {
     const dispatch = useAppDispatch();
-    const { userPets, isLoading } = useAppSelector((state) => state.pet);
+    const { userPets, selectedPet, isLoading } = useAppSelector((state) => state.pet);
     const { isAuthenticated } = useAppSelector((state) => state.auth);
 
     useEffect(() => {
@@ -93,5 +93,11 @@ export const usePetInitialization = () => {
         if (isAuthenticated && !userPets && !isLoading) {
             dispatch(fetchAccessiblePets());
         }
-    }, [dispatch, userPets, isLoading, isAuthenticated]);
+
+        // Auto-select first pet if available and none selected
+        if (isAuthenticated && userPets && userPets.length > 0 && !selectedPet) {
+            console.log('🐾 Auto-selecting first accessible pet:', userPets[0].pet.name);
+            dispatch(selectPetAction(userPets[0].pet));
+        }
+    }, [dispatch, userPets, selectedPet, isLoading, isAuthenticated]);
 }

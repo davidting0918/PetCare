@@ -7,7 +7,22 @@ export const DashboardPage: React.FC = () => {
   const { selectedPet } = usePet();
 
   if (!selectedPet) {
-    return null;
+    return (
+      <div className="p-4">
+        <div className="card-3d p-6 text-center">
+          <div className="w-16 h-16 mx-auto mb-4 bg-orange/20 rounded-full flex items-center justify-center">
+            <Activity className="w-8 h-8 text-orange" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-800 mb-2">No Pet Selected</h3>
+          <p className="text-gray-600 mb-4">
+            Select a pet to view dashboard data, or create one to get started.
+          </p>
+          <p className="text-sm text-gray-500">
+            Go to Settings to create a pet or join a group to access shared pets.
+          </p>
+        </div>
+      </div>
+    );
   }
 
   const petPhotoUrl = getPhotoUrl(selectedPet.photo_url);
