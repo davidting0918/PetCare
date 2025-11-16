@@ -628,7 +628,7 @@ export const SettingsPage: React.FC = () => {
                   setInviteCode(e.target.value);
                   setJoinError(null); // Clear error when user types
                 }}
-                placeholder="Enter invite code (e.g., ABC123)"
+                placeholder="Enter invite code"
                 className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-mint/50 focus:border-mint mb-3 ${
                   joinError ? 'border-red-300' : 'border-gray-300'
                 }`}
@@ -650,7 +650,6 @@ export const SettingsPage: React.FC = () => {
                 className="btn-3d w-full py-2 text-sm text-white bg-mint hover:bg-mint/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{
                   backgroundColor: '#B8D8D8',
-                  border: '2px solid #a8c8c8'
                 }}
               >
                 {isJoining ? 'Joining...' : 'Join Group'}
@@ -734,7 +733,6 @@ export const SettingsPage: React.FC = () => {
           }}
           onConfirm={handleConfirmDelete}
           title="Delete Group"
-          message="Are you sure you want to delete this group? This action cannot be undone. All group data will be marked as inactive."
           itemName={selectedGroupForDelete.name}
           isLoading={isDeleting}
         />

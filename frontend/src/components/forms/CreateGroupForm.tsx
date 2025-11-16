@@ -122,20 +122,13 @@ export const CreateGroupForm: React.FC<CreateGroupFormProps> = ({
               className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-mint/50 focus:border-mint ${
                 errors.name ? 'border-red-300' : 'border-gray-300'
               }`}
-              placeholder="e.g., Smith Family Pets, Dog Walking Group"
+              placeholder="Enter group name"
               disabled={isLoading}
               maxLength={50}
             />
             {errors.name && <p className="text-red-600 text-xs mt-1">{errors.name}</p>}
             <p className="text-gray-500 text-xs mt-1">
               {formData.name.length}/50 characters
-            </p>
-          </div>
-
-          {/* Info Box */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-            <p className="text-blue-800 text-sm">
-              💡 <strong>Tip:</strong> Groups allow you to collaborate with family and friends to take care of your pets together. You'll be the group creator with full management permissions.
             </p>
           </div>
 
@@ -155,7 +148,6 @@ export const CreateGroupForm: React.FC<CreateGroupFormProps> = ({
               className="flex-1 btn-3d text-white disabled:opacity-50 disabled:cursor-not-allowed"
               style={{
                 backgroundColor: '#B8D8D8',
-                border: '2px solid #a8c8c8'
               }}
             >
               {isLoading ? 'Creating...' : 'Create Group'}

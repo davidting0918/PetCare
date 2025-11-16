@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { useAuth, useAuthInitialization, usePet, usePetInitialization, useGroupInitialization } from './hooks';
+import { useAuth, useAuthInitialization, usePetInitialization, useGroupInitialization } from './hooks';
 import { LoginPage } from './components/auth/LoginPage';
 import { SignUpPage } from './components/auth/SignupPage';
-import { PetSelectionPage } from './components/auth/PetSelectionPage';
 import { DashboardPage } from './components/dashboard';
 import { MainLayout } from './components/layout/MainLayout';
 import { ComingSoon } from './components/common/ComingSoon';
@@ -34,21 +33,6 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;
-  }
-
-  return <>{children}</>;
-};
-
-// Pet selection guard
-const PetGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { selectedPet, isLoading } = usePet();
-
-  if (isLoading) {
-    return <LoadingScreen />;
-  }
-
-  if (!selectedPet) {
-    return <Navigate to="/select_pet" replace />;
   }
 
   return <>{children}</>;
@@ -147,40 +131,28 @@ const AppContent: React.FC = () => {
       {/* Default redirect to login */}
       <Route path="/" element={<Navigate to="/login" replace />} />
 
-      {/* Login page - redirect to dashboard if already authenticated */}
+      {/* Login page - redirect to settings if already authenticated */}
       <Route
         path="/login"
         element={
-          isAuthenticated ? <Navigate to="/dashboard" replace /> : <LoginPage />
+          isAuthenticated ? <Navigate to="/settings" replace /> : <LoginPage />
         }
       />
 
-      {/* Signup page - redirect to dashboard if already authenticated */}
+      {/* Signup page - redirect to settings if already authenticated */}
       <Route
         path="/signup"
         element={
-          isAuthenticated ? <Navigate to="/dashboard" replace /> : <SignUpPage />
+          isAuthenticated ? <Navigate to="/settings" replace /> : <SignUpPage />
         }
       />
 
-      {/* Pet selection page - protected route */}
-      <Route
-        path="/select_pet"
-        element={
-          <ProtectedRoute>
-            <PetSelectionPage />
-          </ProtectedRoute>
-        }
-      />
-
-      {/* Main app routes - require authentication and pet selection */}
+      {/* Main app routes - only authentication required */}
       <Route
         path="/*"
         element={
           <ProtectedRoute>
-            <PetGuard>
-              <AppLayout />
-            </PetGuard>
+            <AppLayout />
           </ProtectedRoute>
         }
       />
