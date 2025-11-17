@@ -204,7 +204,7 @@ def is_test() -> bool:
     return env_config.is_test
 
 
-def get_storage_path() -> str:
+def get_storage_path() -> tuple[str, bool]:
     """
     Get base storage path from environment or use default.
 
@@ -217,16 +217,16 @@ def get_storage_path() -> str:
     if storage_path:
         # Use environment-specified path (for Render: /var/data/storage)
         os.makedirs(storage_path, exist_ok=True)
-        return storage_path
+        return storage_path, True
 
     # Default to local development path
     current_dir = Path(__file__).parent
     default_path = current_dir / ".." / "storage"
     default_path.mkdir(exist_ok=True)
-    return str(default_path)
+    return str(default_path), False
 
 
-def get_photo_storage_path(category: str) -> str:
+def get_photo_storage_path(category: str) -> tuple[str, bool]:
     """
     Get category-specific photo storage path.
 
@@ -236,7 +236,7 @@ def get_photo_storage_path(category: str) -> str:
     Returns:
         str: Full path to category storage directory
     """
-    base_path = get_storage_path()
+    base_path, use_env_path = get_storage_path()
     category_path = os.path.join(base_path, category)
     os.makedirs(category_path, exist_ok=True)
-    return category_path
+    return category_path, use_env_path
