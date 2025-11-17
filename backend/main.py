@@ -78,7 +78,7 @@ app.include_router(meal_router)
 app.include_router(weight_router)
 
 # Configure static files with environment-aware path
-storage_path, use_env_path = get_storage_path()
+storage_path = get_storage_path()
 logger.info(f"📁 Serving static files from: {storage_path}")
 app.mount("/static", StaticFiles(directory=storage_path), name="static")
 

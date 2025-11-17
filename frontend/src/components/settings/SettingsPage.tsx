@@ -327,7 +327,7 @@ export const SettingsPage: React.FC = () => {
                   <div className="space-y-3">
                     {myOwnedPets.map((petAccess) => {
                       const pet = petAccess.pet;
-                      const petPhotoUrl = getPhotoUrl(pet.photo_url);
+                      const petPhotoUrl = pet.photo_url?.startsWith('http') ? pet.photo_url : getPhotoUrl(pet.photo_url);
                       const isMenuOpen = openPetMenuId === pet.id;
                       return (
                         <div

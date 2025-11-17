@@ -9,7 +9,7 @@ from fastapi import HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 
 from backend.core.db_manager import get_db
-from backend.core.environment import get_photo_storage_path
+from backend.core.environment import build_static_url, get_photo_storage_path
 from backend.models.pet import (  # Tables; Models; Request Models; Response Models
     AssignPetToGroupRequest,
     CreatePetRequest,
@@ -43,6 +43,32 @@ class PetService:
     def db(self):
         """Get database client from global manager"""
         return get_db()
+
+    def _extract_filename_from_url(self, photo_url: str) -> str | None:
+        """
+        Extract filename from photo URL (handles both relative and absolute URLs).
+
+        Args:
+            photo_url: Photo URL (e.g., '/static/pet_photos/abc.jpg' or 'https://domain.com/static/pet_photos/abc.jpg')
+
+        Returns:
+            str: Filename (e.g., 'abc.jpg') or None if URL doesn't match expected pattern
+
+        Examples:
+            >>> _extract_filename_from_url('/static/pet_photos/abc.jpg')
+            'abc.jpg'
+            >>> _extract_filename_from_url('https://domain.com/static/pet_photos/abc.jpg')
+            'abc.jpg'
+        """
+        if not photo_url:
+            return None
+
+        # Check if URL contains the pet_photos path
+        if "/static/pet_photos/" in photo_url:
+            # Extract filename after /static/pet_photos/
+            return photo_url.split("/static/pet_photos/")[-1]
+
+        return None
 
     # ================== Permission Helpers ==================
 
@@ -488,29 +514,8 @@ class PetService:
         file_extension = Path(file.filename).suffix if file.filename else ".jpg"
         file_name = f"{pet_id}{file_extension}"
         file_path = os.path.join(self.photo_storage_path, file_name)
-        photo_url = f"/static/pet_photos/{file_name}"
-
-        # Get current pet info to check for existing photo
-        sql = f"""
-        SELECT photo_url FROM pets WHERE id = '{pet_id}' AND is_active = true
-        """
-        pet_info = await self.db.read_one(sql)
-
-        # Delete old photo if it has a different extension
-        # (same extension will be automatically overwritten)
-        if pet_info and pet_info.get("photo_url"):
-            old_photo_url = pet_info["photo_url"]
-            if old_photo_url.startswith("/static/pet_photos/"):
-                old_file_name = old_photo_url.split("/")[-1]
-                # Only delete if it's a different file (different extension)
-                if old_file_name != file_name:
-                    old_file_path = os.path.join(self.photo_storage_path, old_file_name)
-                    if os.path.exists(old_file_path):
-                        try:
-                            os.remove(old_file_path)
-                        except Exception as e:
-                            # Log but don't fail if old photo deletion fails
-                            print(f"Warning: Could not delete old pet photo: {e}")
+        # Build photo URL based on environment configuration
+        photo_url = build_static_url("pet_photos", file_name)
 
         try:
             # Save file to storage (content already read for validation)
@@ -556,21 +561,41 @@ class PetService:
                 status_code=status.HTTP_403_FORBIDDEN, detail="You don't have permission to view this photo"
             )
 
-        # get photo url
+        # Get photo URL from database
         sql = f"""
         select photo_url from pets where id = '{pet_id}' and is_active = true
         """
-        photo_url = await self.db.read_one(sql)
-        if not photo_url:
+        result = await self.db.read_one(sql)
+        if not result or not result.get("photo_url"):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo not found")
 
-        # Check if file exists
-        if not os.path.exists(photo_url):
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo file not found")
+        photo_url = result["photo_url"]
+
+        # Extract filename from URL and build filesystem path
+        file_name = self._extract_filename_from_url(photo_url)
+        if not file_name:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invalid photo URL")
+
+        file_path = os.path.join(self.photo_storage_path, file_name)
+
+        # Check if file exists on filesystem
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo file not found on server")
+
+        # Determine media type from file extension
+        file_extension = file_name.split(".")[-1].lower()
+        media_type_map = {
+            "jpg": "image/jpeg",
+            "jpeg": "image/jpeg",
+            "png": "image/png",
+            "gif": "image/gif",
+            "webp": "image/webp",
+        }
+        media_type = media_type_map.get(file_extension, "image/jpeg")
 
         return FileResponse(
-            path=photo_url,
-            media_type=photo_url.split(".")[-1],
-            filename=photo_url.split("/")[-1].split(".")[0],
+            path=file_path,
+            media_type=media_type,
+            filename=file_name,
             headers={"Cache-Control": "public, max-age=3600"},  # 1 hour cache
         )

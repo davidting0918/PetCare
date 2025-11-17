@@ -7,7 +7,7 @@ import aiofiles
 from fastapi import HTTPException, UploadFile, status
 
 from backend.core.db_manager import get_db
-from backend.core.environment import get_photo_storage_path
+from backend.core.environment import build_static_url, get_photo_storage_path
 from backend.models.auth import access_token_table, pwd_context
 from backend.models.group import CreateGroupRequest
 from backend.models.user import (
@@ -25,7 +25,7 @@ class UserService:
     def __init__(self):
         # No need to initialize database here - it's handled globally
         self.group_service = GroupService()
-        self.photo_storage_path, self.use_env_path = get_photo_storage_path("user_photos")
+        self.photo_storage_path = get_photo_storage_path("user_photos")
 
     @property
     def db(self):
@@ -178,11 +178,8 @@ class UserService:
         file_ext = Path(file.filename).suffix if file.filename else ".jpg"
         file_name = f"{user_id}{file_ext}"
         file_path = os.path.join(self.photo_storage_path, file_name)
-        photo_url = (
-            f"/static/user_photos/{file_name}"
-            if not self.use_env_path
-            else f"https://petcare-staging.onrender.com/static/user_photos/{file_name}"
-        )
+        # Build photo URL based on environment configuration
+        photo_url = build_static_url("user_photos", file_name)
         try:
             # Save file to storage
             async with aiofiles.open(file_path, "wb") as f:
