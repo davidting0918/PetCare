@@ -1,5 +1,4 @@
 import logging
-import os
 from contextlib import asynccontextmanager
 
 import uvicorn
@@ -9,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from scalar_fastapi import get_scalar_api_reference
 
 from backend.core.db_manager import close_database, init_database
-from backend.core.environment import env_config, get_config
+from backend.core.environment import env_config, get_config, get_storage_path
 from backend.routers.auth_router import router as auth_router
 from backend.routers.food_router import router as food_router
 from backend.routers.group_router import router as group_router
@@ -78,7 +77,9 @@ app.include_router(food_router)
 app.include_router(meal_router)
 app.include_router(weight_router)
 
-storage_path = os.path.join(os.path.dirname(__file__), "storage")
+# Configure static files with environment-aware path
+storage_path = get_storage_path()
+logger.info(f"📁 Serving static files from: {storage_path}")
 app.mount("/static", StaticFiles(directory=storage_path), name="static")
 
 

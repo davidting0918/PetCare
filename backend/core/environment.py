@@ -202,3 +202,41 @@ def is_production() -> bool:
 def is_test() -> bool:
     """Check if running in test environment"""
     return env_config.is_test
+
+
+def get_storage_path() -> str:
+    """
+    Get base storage path from environment or use default.
+
+    Returns:
+        str: Absolute or relative path to storage directory
+    """
+    # Check environment variable first
+    storage_path = os.getenv("STORAGE_BASE_PATH")
+
+    if storage_path:
+        # Use environment-specified path (for Render: /var/data/storage)
+        os.makedirs(storage_path, exist_ok=True)
+        return storage_path
+
+    # Default to local development path
+    current_dir = Path(__file__).parent
+    default_path = current_dir / ".." / "storage"
+    default_path.mkdir(exist_ok=True)
+    return str(default_path)
+
+
+def get_photo_storage_path(category: str) -> str:
+    """
+    Get category-specific photo storage path.
+
+    Args:
+        category: Folder name (e.g., 'pet_photos', 'user_photos', 'food_photos')
+
+    Returns:
+        str: Full path to category storage directory
+    """
+    base_path = get_storage_path()
+    category_path = os.path.join(base_path, category)
+    os.makedirs(category_path, exist_ok=True)
+    return category_path

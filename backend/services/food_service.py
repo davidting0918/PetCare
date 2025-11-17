@@ -10,6 +10,7 @@ from fastapi import HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 
 from backend.core.db_manager import get_db
+from backend.core.environment import get_photo_storage_path
 from backend.models.food import (  # Tables; Models; Enums; Request Models; Response Models
     CreateFoodRequest,
     Food,
@@ -36,10 +37,7 @@ class FoodService:
     """
 
     def __init__(self):
-        self.photo_storage_path = "backend/storage/food_photos"
-
-        # Ensure photo storage directory exists
-        os.makedirs(self.photo_storage_path, exist_ok=True)
+        self.photo_storage_path = get_photo_storage_path("food_photos")
 
     @property
     def db(self):

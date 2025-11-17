@@ -9,6 +9,7 @@ from fastapi import HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 
 from backend.core.db_manager import get_db
+from backend.core.environment import get_photo_storage_path
 from backend.models.pet import (  # Tables; Models; Request Models; Response Models
     AssignPetToGroupRequest,
     CreatePetRequest,
@@ -36,10 +37,7 @@ class PetService:
 
     def __init__(self):
         self.group_service = GroupService()
-        self.photo_storage_path = "backend/storage/pet_photos"
-
-        # Ensure photo storage directory exists
-        os.makedirs(self.photo_storage_path, exist_ok=True)
+        self.photo_storage_path = get_photo_storage_path("pet_photos")
 
     @property
     def db(self):

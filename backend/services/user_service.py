@@ -7,6 +7,7 @@ import aiofiles
 from fastapi import HTTPException, UploadFile, status
 
 from backend.core.db_manager import get_db
+from backend.core.environment import get_photo_storage_path
 from backend.models.auth import access_token_table, pwd_context
 from backend.models.group import CreateGroupRequest
 from backend.models.user import (
@@ -24,10 +25,7 @@ class UserService:
     def __init__(self):
         # No need to initialize database here - it's handled globally
         self.group_service = GroupService()
-        self.photo_storage_path = "backend/storage/user_photos"
-
-        # Ensure photo storage directory exists
-        os.makedirs(self.photo_storage_path, exist_ok=True)
+        self.photo_storage_path = get_photo_storage_path("user_photos")
 
     @property
     def db(self):
