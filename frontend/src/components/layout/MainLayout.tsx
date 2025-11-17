@@ -33,7 +33,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     <div className="min-h-screen bg-primary pb-20">
       {/* Header */}
       <div className="bg-white shadow-3d sticky top-0 z-40">
-        <div className="max-w-md mx-auto px-4 py-3">
+        <div className="max-w-md lg:max-w-7xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center">
               {showBackButton && (
@@ -89,7 +89,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
       </div>
 
       {/* Main Content */}
-      <div className="max-w-md mx-auto min-h-[calc(100vh-140px)]">
+      <div className="max-w-md lg:max-w-7xl mx-auto min-h-[calc(100vh-140px)]">
         {children}
       </div>
 

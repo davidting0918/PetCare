@@ -14,12 +14,6 @@ export const DashboardPage: React.FC = () => {
             <Activity className="w-8 h-8 text-orange" />
           </div>
           <h3 className="text-lg font-semibold text-gray-800 mb-2">No Pet Selected</h3>
-          <p className="text-gray-600 mb-4">
-            Select a pet to view dashboard data, or create one to get started.
-          </p>
-          <p className="text-sm text-gray-500">
-            Go to Settings to create a pet or join a group to access shared pets.
-          </p>
         </div>
       </div>
     );
@@ -28,7 +22,7 @@ export const DashboardPage: React.FC = () => {
   const petPhotoUrl = getPhotoUrl(selectedPet.photo_url);
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="p-4 space-y-4 lg:p-6">
       {/* Pet Summary Card */}
       <div className="card-3d p-6">
         <div className="flex items-center mb-4">
@@ -79,71 +73,73 @@ export const DashboardPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Daily Calorie Intake Card */}
-      <div className="card-3d p-5">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center">
-            <div className="w-10 h-10 rounded-full bg-orange/20 flex items-center justify-center mr-3">
-              <BarChart3 className="w-5 h-5 text-orange" />
+      {/* Cards Grid - 1 column mobile, 2 columns desktop */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
+        {/* Daily Calorie Intake Card */}
+        <div className="card-3d p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center">
+              <div className="w-10 h-10 rounded-full bg-orange/20 flex items-center justify-center mr-3">
+                <BarChart3 className="w-5 h-5 text-orange" />
+              </div>
+              <h3 className="text-lg font-semibold text-earth">Daily Calorie Intake</h3>
             </div>
-            <h3 className="text-lg font-semibold text-earth">Daily Calorie Intake</h3>
           </div>
-        </div>
 
-        {/* Empty Chart Placeholder */}
-        <div className="bg-gray-50 rounded-lg p-8 border-2 border-dashed border-gray-200">
-          <div className="text-center text-gray-400">
-            <BarChart3 className="w-12 h-12 mx-auto mb-2 opacity-50" />
-            <p className="text-sm">No calorie data available</p>
-            <p className="text-xs mt-1">Start logging meals to see daily intake</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Weight Trend Card */}
-      <div className="card-3d p-5">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center">
-            <div className="w-10 h-10 rounded-full bg-mint/20 flex items-center justify-center mr-3">
-              <TrendingUp className="w-5 h-5 text-mint" />
+          {/* Empty Chart Placeholder */}
+          <div className="bg-gray-50 rounded-lg p-8 border-2 border-dashed border-gray-200">
+            <div className="text-center text-gray-400">
+              <BarChart3 className="w-12 h-12 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">No calorie data available</p>
+              <p className="text-xs mt-1">Start logging meals to see daily intake</p>
             </div>
-            <h3 className="text-lg font-semibold text-earth">Weight Trend</h3>
           </div>
         </div>
 
-        {/* Empty Chart Placeholder */}
-        <div className="bg-gray-50 rounded-lg p-8 border-2 border-dashed border-gray-200">
-          <div className="text-center text-gray-400">
-            <LineChart className="w-12 h-12 mx-auto mb-2 opacity-50" />
-            <p className="text-sm">No weight records available</p>
-            <p className="text-xs mt-1">Track weight regularly to see progress</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Meal History Card */}
-      <div className="card-3d p-5">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center">
-            <div className="w-10 h-10 rounded-full bg-orange/20 flex items-center justify-center mr-3">
-              <Utensils className="w-5 h-5 text-orange" />
+        {/* Weight Trend Card */}
+        <div className="card-3d p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center">
+              <div className="w-10 h-10 rounded-full bg-mint/20 flex items-center justify-center mr-3">
+                <TrendingUp className="w-5 h-5 text-mint" />
+              </div>
+              <h3 className="text-lg font-semibold text-earth">Weight Trend</h3>
             </div>
-            <h3 className="text-lg font-semibold text-earth">Recent Meals</h3>
+          </div>
+
+          {/* Empty Chart Placeholder */}
+          <div className="bg-gray-50 rounded-lg p-8 border-2 border-dashed border-gray-200">
+            <div className="text-center text-gray-400">
+              <LineChart className="w-12 h-12 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">No weight records available</p>
+              <p className="text-xs mt-1">Track weight regularly to see progress</p>
+            </div>
           </div>
         </div>
 
-        {/* Empty List Placeholder */}
-        <div className="bg-gray-50 rounded-lg p-8 border-2 border-dashed border-gray-200">
-          <div className="text-center text-gray-400">
-            <Utensils className="w-12 h-12 mx-auto mb-2 opacity-50" />
-            <p className="text-sm">No meals recorded yet</p>
-            <p className="text-xs mt-1">Use the Meal tab to log your pet's food</p>
+        {/* Meal History Card */}
+        <div className="card-3d p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center">
+              <div className="w-10 h-10 rounded-full bg-orange/20 flex items-center justify-center mr-3">
+                <Utensils className="w-5 h-5 text-orange" />
+              </div>
+              <h3 className="text-lg font-semibold text-earth">Recent Meals</h3>
+            </div>
+          </div>
+
+          {/* Empty List Placeholder */}
+          <div className="bg-gray-50 rounded-lg p-8 border-2 border-dashed border-gray-200">
+            <div className="text-center text-gray-400">
+              <Utensils className="w-12 h-12 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">No meals recorded yet</p>
+              <p className="text-xs mt-1">Use the Meal tab to log your pet's food</p>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Quick Stats Summary Card */}
-      <div className="card-3d p-5">
+        {/* Quick Stats Summary Card */}
+        <div className="card-3d p-5">
         <div className="flex items-center mb-4">
           <div className="w-10 h-10 rounded-full bg-earth/20 flex items-center justify-center mr-3">
             <Activity className="w-5 h-5 text-earth" />
@@ -169,6 +165,7 @@ export const DashboardPage: React.FC = () => {
             <p className="text-2xl font-bold text-earth">0</p>
             <p className="text-xs text-gray-400 mt-1">kcal per day</p>
           </div>
+        </div>
         </div>
       </div>
     </div>

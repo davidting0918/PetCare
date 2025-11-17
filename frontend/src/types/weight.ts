@@ -46,3 +46,24 @@ export interface CustomDateRange {
   startDate: Date;
   endDate: Date;
 }
+
+// Search Weight Records Types
+export interface SearchWeightRecordsRequest {
+  pet_id?: string;
+  weight_id?: string;
+  user_id?: string;
+  start?: string; // ISO date string
+  end?: string; // ISO date string
+  order_by?: 'timestamp' | 'created_at' | 'updated_at';
+  order_direction?: 'asc' | 'desc';
+  page?: number;
+  number?: number; // Number of records per page
+}
+
+export interface SearchWeightRecordsResponse {
+  records: WeightRecord[];
+  total: number;
+  page: number;
+  number: number;
+  total_pages: number;
+}
