@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Scale, X } from 'lucide-react';
 import { usePet } from '../../hooks';
+import { weightService } from '../../api';
 import type { CreateWeightRequest } from '../../types';
 
 interface CreateWeightFormProps {
@@ -79,17 +80,37 @@ export const CreateWeightForm: React.FC<CreateWeightFormProps> = ({
       };
 
       console.log('⚖️ CreateWeightForm: Submitting data:', submitData);
-      // TODO: Implement API call here
-      // await createWeight(submitData);
 
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 500));
+      const response = await weightService.createWeight(submitData);
 
-      onSuccess?.('Weight recorded successfully!');
-      handleClose();
-    } catch (error) {
+      if (response.status === 1) {
+        console.log('✅ CreateWeightForm: Weight recorded successfully:', response.data);
+        onSuccess?.(response.message || 'Weight recorded successfully!');
+        handleClose();
+      } else {
+        throw new Error(response.message || 'Failed to record weight');
+      }
+    } catch (error: any) {
       console.error('❌ CreateWeightForm: Error recording weight:', error);
-      setErrors({ submit: error instanceof Error ? error.message : 'Failed to record weight' });
+
+      // Extract error message from different error formats
+      let errorMessage = 'Failed to record weight';
+
+      if (error.response?.data?.detail) {
+        // FastAPI validation error or custom error
+        if (typeof error.response.data.detail === 'string') {
+          errorMessage = error.response.data.detail;
+        } else if (Array.isArray(error.response.data.detail)) {
+          // Validation errors from Pydantic
+          errorMessage = error.response.data.detail.map((err: any) => err.msg).join(', ');
+        }
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      setErrors({ submit: errorMessage });
     } finally {
       setIsLoading(false);
     }

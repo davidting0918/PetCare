@@ -34,7 +34,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
 }) => {
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-3d z-50">
-      <div className="max-w-md mx-auto">
+      <div className="max-w-md lg:max-w-7xl mx-auto">
         <div className="flex items-center justify-around py-2">
           {navigationItems.map((item) => {
             const Icon = item.icon;

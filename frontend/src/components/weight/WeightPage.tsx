@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Scale, TrendingUp, Calendar, User, Plus } from 'lucide-react';
+import { Scale, TrendingUp, Calendar, Plus, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { usePet } from '../../hooks';
+import { weightService } from '../../api';
 import { CreateWeightForm } from '../forms';
 import type { WeightRecord, TimeIntervalType, CustomDateRange } from '../../types';
 
@@ -84,10 +85,53 @@ export const WeightPage: React.FC = () => {
   });
   const [customDateError, setCustomDateError] = useState<string>('');
 
-  // TODO: Replace with API call to fetch weight records
-  // const [weightRecords, setWeightRecords] = useState<WeightRecord[]>([]);
-  // useEffect(() => { fetchWeightRecords(); }, [selectedPet]);
-  const weightRecords: WeightRecord[] = [];
+  // Weight records state
+  const [weightRecords, setWeightRecords] = useState<WeightRecord[]>([]);
+  const [isLoadingRecords, setIsLoadingRecords] = useState(false);
+  const [recordsError, setRecordsError] = useState<string>('');
+
+  // Fetch weight records from API
+  const fetchWeightRecords = async () => {
+    if (!selectedPet) return;
+
+    setIsLoadingRecords(true);
+    setRecordsError('');
+
+    try {
+      console.log('📊 WeightPage: Fetching weight records for pet:', selectedPet.id);
+      const response = await weightService.getWeightRecords(selectedPet.id, { number: 10 });
+
+      if (response.status === 1 && response.data) {
+        console.log('✅ WeightPage: Loaded', response.data.records.length, 'records');
+        setWeightRecords(response.data.records);
+      } else {
+        throw new Error(response.message || 'Failed to load weight records');
+      }
+    } catch (error: any) {
+      console.error('❌ WeightPage: Error loading weight records:', error);
+
+      let errorMessage = 'Failed to load weight records';
+      if (error.response?.data?.detail) {
+        if (typeof error.response.data.detail === 'string') {
+          errorMessage = error.response.data.detail;
+        }
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      setRecordsError(errorMessage);
+      setWeightRecords([]);
+    } finally {
+      setIsLoadingRecords(false);
+    }
+  };
+
+  // Load weight records when pet is selected
+  useEffect(() => {
+    fetchWeightRecords();
+  }, [selectedPet?.id]);
 
   // Filter records based on selected interval
   const filteredRecords = useMemo(() => {
@@ -102,11 +146,6 @@ export const WeightPage: React.FC = () => {
       return recordDate >= start && recordDate <= end;
     });
   }, [selectedInterval, customDateRange, customDateError, weightRecords]);
-
-  // Get latest record for display
-  const latestRecord = useMemo(() => {
-    return weightRecords.length > 0 ? weightRecords[0] : null;
-  }, [weightRecords]);
 
   // Calculate chart data points
   const chartData = useMemo(() => {
@@ -158,7 +197,8 @@ export const WeightPage: React.FC = () => {
   const handleFormSuccess = (message: string) => {
     console.log('✅ Weight recorded:', message);
     setIsFormOpen(false);
-    // TODO: Refresh weight records when API is implemented
+    // Refresh weight records after successful creation
+    fetchWeightRecords();
   };
 
   // Handle custom date range changes
@@ -203,62 +243,8 @@ export const WeightPage: React.FC = () => {
   }
 
   return (
-    <div className="p-4 space-y-4">
-      {/* Record Weight Button */}
-      <div className="card-3d p-4">
-        <button
-          onClick={() => setIsFormOpen(true)}
-          className="w-full btn-3d btn-3d-mint p-4 text-white flex items-center justify-center gap-2"
-        >
-          <Plus className="w-5 h-5" />
-          <span className="font-semibold">Record Current Weight</span>
-        </button>
-      </div>
-
-      {/* Latest Weight Record Card */}
-      <div className="card-3d p-5">
-        <div className="flex items-center mb-4">
-          <div className="w-10 h-10 rounded-full bg-mint/20 flex items-center justify-center mr-3">
-            <Scale className="w-5 h-5 text-mint" />
-          </div>
-          <h3 className="text-lg font-semibold text-earth">Latest Weight Record</h3>
-        </div>
-
-        {latestRecord ? (
-          <div className="space-y-3">
-            <div className="bg-gray-50 rounded-lg p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-gray-600">Weight</span>
-                <span className="text-2xl font-bold text-earth">{latestRecord.weight.toFixed(2)} kg</span>
-              </div>
-              <div className="flex items-center text-sm text-gray-500 mt-2">
-                <Calendar className="w-4 h-4 mr-2" />
-                <span>{formatDateTime(latestRecord.timestamp)}</span>
-              </div>
-              {latestRecord.user_name && (
-                <div className="flex items-center text-sm text-gray-500 mt-2">
-                  <User className="w-4 h-4 mr-2" />
-                  <span>Recorded by {latestRecord.user_name}</span>
-                </div>
-              )}
-              {latestRecord.notes && (
-                <div className="mt-2 pt-2 border-t border-gray-200">
-                  <p className="text-sm text-gray-600">{latestRecord.notes}</p>
-                </div>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="bg-gray-50 rounded-lg p-8 border-2 border-dashed border-gray-200">
-            <div className="text-center text-gray-400">
-              <Scale className="w-12 h-12 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">No weight records yet</p>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Weight Chart Section */}
+    <div className="p-4 space-y-4 lg:p-6">
+      {/* Weight Trend Chart - Priority at top, full width */}
       <div className="card-3d p-5">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center">
@@ -271,13 +257,13 @@ export const WeightPage: React.FC = () => {
 
         {/* Time Interval Selector */}
         <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-earth mb-2">
             Time Interval
           </label>
           <select
             value={selectedInterval}
             onChange={(e) => setSelectedInterval(e.target.value as TimeIntervalType)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mint/50 focus:border-mint"
+            className="w-full px-3 py-2 border-2 border-mint/30 bg-white rounded-lg focus:ring-2 focus:ring-mint focus:border-mint hover:border-mint/50 transition-colors text-earth font-medium"
           >
             <option value="last_7_days">Last 7 Days</option>
             <option value="last_30_days">Last 30 Days</option>
@@ -291,7 +277,7 @@ export const WeightPage: React.FC = () => {
               <div className="grid grid-cols-2 gap-3">
                 {/* Start Date */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-earth mb-1">
                     Start Date
                   </label>
                   <input
@@ -299,15 +285,15 @@ export const WeightPage: React.FC = () => {
                     value={formatDateForInput(customDateRange.startDate)}
                     onChange={(e) => handleCustomDateChange('startDate', e.target.value)}
                     max={formatDateForInput(customDateRange.endDate)}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-mint/50 focus:border-mint ${
-                      customDateError ? 'border-red-300' : 'border-gray-300'
+                    className={`w-full px-3 py-2 border-2 rounded-lg focus:ring-2 focus:ring-mint focus:border-mint hover:border-mint/50 transition-colors text-earth ${
+                      customDateError ? 'border-red-300' : 'border-mint/30'
                     }`}
                   />
                 </div>
 
                 {/* End Date */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-earth mb-1">
                     End Date
                   </label>
                   <input
@@ -316,8 +302,8 @@ export const WeightPage: React.FC = () => {
                     onChange={(e) => handleCustomDateChange('endDate', e.target.value)}
                     min={formatDateForInput(customDateRange.startDate)}
                     max={formatDateForInput(new Date())}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-mint/50 focus:border-mint ${
-                      customDateError ? 'border-red-300' : 'border-gray-300'
+                    className={`w-full px-3 py-2 border-2 rounded-lg focus:ring-2 focus:ring-mint focus:border-mint hover:border-mint/50 transition-colors text-earth ${
+                      customDateError ? 'border-red-300' : 'border-mint/30'
                     }`}
                   />
                 </div>
@@ -332,8 +318,8 @@ export const WeightPage: React.FC = () => {
 
               {/* Date Range Display */}
               {!customDateError && (
-                <div className="bg-gray-50 rounded-lg p-2">
-                  <p className="text-sm text-gray-600 text-center">
+                <div className="bg-mint/5 rounded-lg p-2 border border-mint/20">
+                  <p className="text-sm text-earth text-center">
                     <Calendar className="w-4 h-4 inline mr-1" />
                     {format(customDateRange.startDate, 'MMM d, yyyy')} - {format(customDateRange.endDate, 'MMM d, yyyy')}
                   </p>
@@ -446,6 +432,86 @@ export const WeightPage: React.FC = () => {
             <div className="text-center text-gray-400">
               <TrendingUp className="w-12 h-12 mx-auto mb-2 opacity-50" />
               <p className="text-sm">No weight records for selected period</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Weight Records Card - Add button at top, history below */}
+      <div className="card-3d p-5">
+        <div className="flex items-center mb-4">
+          <div className="w-10 h-10 rounded-full bg-mint/20 flex items-center justify-center mr-3">
+            <Scale className="w-5 h-5 text-mint" />
+          </div>
+          <h3 className="text-lg font-semibold text-earth">Weight Records</h3>
+        </div>
+
+        {/* Add New Weight Button */}
+        <button
+          onClick={() => setIsFormOpen(true)}
+          className="w-full btn-3d btn-3d-mint py-3 px-4 text-white flex items-center justify-center gap-2 mb-4"
+        >
+          <Plus className="w-5 h-5" />
+          <span className="font-semibold">Add New Weight</span>
+        </button>
+
+        {/* Weight Records History */}
+        {isLoadingRecords ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="w-8 h-8 text-mint animate-spin" />
+            <span className="ml-3 text-gray-600">Loading records...</span>
+          </div>
+        ) : recordsError ? (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <p className="text-red-600 text-sm">{recordsError}</p>
+            <button
+              onClick={fetchWeightRecords}
+              className="mt-2 text-sm text-red-700 underline hover:no-underline"
+            >
+              Try again
+            </button>
+          </div>
+        ) : weightRecords.length > 0 ? (
+          <div className="space-y-2">
+            {weightRecords.map((record, index) => (
+              <div
+                key={record.id}
+                className={`rounded-lg p-4 border transition-colors ${
+                  index === 0
+                    ? 'bg-mint/5 border-mint/20'
+                    : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    {index === 0 && (
+                      <span className="text-xs font-medium text-mint mr-2 px-2 py-0.5 bg-mint/20 rounded">
+                        Latest
+                      </span>
+                    )}
+                    <span className="text-2xl font-bold text-earth">
+                      {record.weight.toFixed(1)} kg
+                    </span>
+                  </div>
+                  <div className="flex items-center text-sm text-gray-600">
+                    <Calendar className="w-4 h-4 mr-1" />
+                    <span>{formatDateTime(record.timestamp)}</span>
+                  </div>
+                </div>
+                {record.notes && (
+                  <div className="mt-2 pt-2 border-t border-gray-200">
+                    <p className="text-sm text-gray-600">{record.notes}</p>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-gray-50 rounded-lg p-8 border-2 border-dashed border-gray-200">
+            <div className="text-center text-gray-400">
+              <Scale className="w-12 h-12 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">No weight records yet</p>
+              <p className="text-xs mt-1">Click "Add New Weight" to start tracking</p>
             </div>
           </div>
         )}
