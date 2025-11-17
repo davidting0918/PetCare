@@ -25,7 +25,7 @@ class UserService:
     def __init__(self):
         # No need to initialize database here - it's handled globally
         self.group_service = GroupService()
-        self.photo_storage_path = get_photo_storage_path("user_photos")
+        self.photo_storage_path, self.use_env_path = get_photo_storage_path("user_photos")
 
     @property
     def db(self):
@@ -178,24 +178,11 @@ class UserService:
         file_ext = Path(file.filename).suffix if file.filename else ".jpg"
         file_name = f"{user_id}{file_ext}"
         file_path = os.path.join(self.photo_storage_path, file_name)
-        photo_url = f"/static/user_photos/{file_name}"
-
-        # Delete old photo if it has a different extension
-        # (same extension will be automatically overwritten)
-        if user_exists.get("picture"):
-            old_photo_url = user_exists["picture"]
-            if old_photo_url.startswith("/static/user_photos/"):
-                old_file_name = old_photo_url.split("/")[-1]
-                # Only delete if it's a different file (different extension)
-                if old_file_name != file_name:
-                    old_file_path = os.path.join(self.photo_storage_path, old_file_name)
-                    if os.path.exists(old_file_path):
-                        try:
-                            os.remove(old_file_path)
-                        except Exception as e:
-                            # Log but don't fail if old photo deletion fails
-                            print(f"Warning: Could not delete old photo: {e}")
-
+        photo_url = (
+            f"/static/user_photos/{file_name}"
+            if not self.use_env_path
+            else f"https://petcare-staging.onrender.com/static/user_photos/{file_name}"
+        )
         try:
             # Save file to storage
             async with aiofiles.open(file_path, "wb") as f:
