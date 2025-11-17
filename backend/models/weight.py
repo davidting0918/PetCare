@@ -88,6 +88,7 @@ class WeightRecordInfo(BaseModel):
     pet_id: str
     weight: float
     user_id: str
+    user_name: str
     timestamp: dt
     created_at: dt
     updated_at: dt
