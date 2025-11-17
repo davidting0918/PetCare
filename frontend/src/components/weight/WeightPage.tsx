@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Scale, TrendingUp, Calendar, Plus, Loader2 } from 'lucide-react';
+import { Scale, TrendingUp, Calendar, Plus, Loader2, User } from 'lucide-react';
 import { format } from 'date-fns';
 import { usePet } from '../../hooks';
 import { weightService } from '../../api';
@@ -498,6 +498,12 @@ export const WeightPage: React.FC = () => {
                     <span>{formatDateTime(record.timestamp)}</span>
                   </div>
                 </div>
+                {record.user_name && (
+                  <div className="flex items-center text-sm text-gray-600 mt-2">
+                    <User className="w-4 h-4 mr-1" />
+                    <span>{record.user_name}</span>
+                  </div>
+                )}
                 {record.notes && (
                   <div className="mt-2 pt-2 border-t border-gray-200">
                     <p className="text-sm text-gray-600">{record.notes}</p>

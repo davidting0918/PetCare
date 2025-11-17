@@ -325,6 +325,7 @@ class WeightService:
         SELECT COUNT(*) as total
         FROM {weight_table} w
         JOIN pets p ON w.pet_id = p.id
+        LEFT JOIN users u ON w.user_id = u.id
         WHERE {where_clause}
         """
         count_result = await self.db.read_one(count_sql)
@@ -345,12 +346,14 @@ class WeightService:
             w.pet_id,
             w.weight,
             w.user_id,
+            u.name as user_name,
             w.timestamp,
             w.notes,
             w.created_at,
             w.updated_at
         FROM {weight_table} w
         JOIN pets p ON w.pet_id = p.id
+        LEFT JOIN users u ON w.user_id = u.id
         WHERE {where_clause}
         ORDER BY w.{order_field} {order_dir}
         LIMIT {request.number} OFFSET {offset}
@@ -365,6 +368,7 @@ class WeightService:
                 pet_id=record["pet_id"],
                 weight=float(record["weight"]),
                 user_id=record["user_id"],
+                user_name=record["user_name"] or "Unknown User",
                 timestamp=record["timestamp"],
                 created_at=record["created_at"],
                 updated_at=record["updated_at"],
