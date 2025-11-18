@@ -13,6 +13,7 @@
     "@headlessui/react": "^2.2.8",
     "@react-oauth/google": "^0.12.1",
     "@reduxjs/toolkit": "^2.9.0",
+    "@vercel/speed-insights": "^1.2.0",
     "axios": "^1.12.2",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
