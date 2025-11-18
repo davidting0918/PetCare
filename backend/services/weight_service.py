@@ -122,7 +122,9 @@ class WeightService:
 
     # ================== CRUD Operations ==================
 
-    async def create_weight_record(self, request: CreateWeightRecordRequest, user_id: str) -> WeightRecordDetails:
+    async def create_weight_record(
+        self, request: CreateWeightRecordRequest, user_id: str, user_name: str
+    ) -> WeightRecordDetails:
         """
         Create a new weight record for a pet.
 
@@ -142,7 +144,7 @@ class WeightService:
         RETURNING *
         """
         created_record = await self.db.execute_returning(sql)
-        return WeightRecordInfo(**created_record)
+        return WeightRecordInfo(**created_record, user_name=user_name)
 
     async def get_weight_record(self, weight_id: str, user_id: str) -> WeightRecordDetails:
         """
