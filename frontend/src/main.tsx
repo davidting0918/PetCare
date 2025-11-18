@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import { Provider } from 'react-redux'
 import { GoogleOAuthProvider } from '@react-oauth/google'
 import { SpeedInsights } from '@vercel/speed-insights/react'
+import { Analytics } from '@vercel/analytics/react'
 import { store } from './store'
 import './index.css'
 import App from './App.tsx'
@@ -17,6 +18,7 @@ createRoot(document.getElementById('root')!).render(
         <BrowserRouter>
           <App />
           <SpeedInsights />
+          <Analytics />
         </BrowserRouter>
       </Provider>
     </GoogleOAuthProvider>
