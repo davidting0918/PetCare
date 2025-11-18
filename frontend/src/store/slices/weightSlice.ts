@@ -1,5 +1,5 @@
 import { createAsyncThunk, createSlice, type PayloadAction } from '@reduxjs/toolkit';
-import type { WeightRecord, CreateWeightRequest, UpdateWeightRequest, SearchWeightRecordsRequest, SearchWeightRecordsResponse } from '../../types';
+import type { WeightRecord, CreateWeightRequest, UpdateWeightRequest, SearchWeightRecordsRequest } from '../../types';
 import { weightService } from '../../api';
 import { logout } from './authSlice';
 
