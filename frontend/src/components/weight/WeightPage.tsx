@@ -108,7 +108,7 @@ export const WeightPage: React.FC = () => {
     if (cachedRecords.length === 0 && !isLoadingWeightRecords(selectedPet.id)) {
       console.log('📊 WeightPage: Fetching weight records for pet:', selectedPet.id);
       getWeightRecords(selectedPet.id, { number: 10 }).catch((error) => {
-        console.error('❌ WeightPage: Error loading weight records:', error);
+      console.error('❌ WeightPage: Error loading weight records:', error);
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -389,8 +389,9 @@ export const WeightPage: React.FC = () => {
                     fontSize: 11,
                     fill: '#6b7280'
                   },
-                  valueFormatter: (value) => `${value.toFixed(2)} kg`,
-                  domain: [weightRange.min, weightRange.max]
+                  valueFormatter: (value: number) => `${value.toFixed(2)} kg`,
+                  min: weightRange.min,
+                  max: weightRange.max
                 }]}
                 series={[{
                   data: chartDataForMUI.map(d => d.weight),
@@ -407,7 +408,7 @@ export const WeightPage: React.FC = () => {
                 grid={{ vertical: true, horizontal: true }}
                 slotProps={{
                   tooltip: {
-                    contentStyle: {
+                    sx: {
                       backgroundColor: 'white',
                       border: '1px solid #e5e7eb',
                       borderRadius: '8px',
@@ -534,9 +535,9 @@ export const WeightPage: React.FC = () => {
                     </span>
                   </div>
                   <div className="flex items-center gap-3">
-                    <div className="flex items-center text-sm text-gray-600">
-                      <Calendar className="w-4 h-4 mr-1" />
-                      <span>{formatDateTime(record.timestamp)}</span>
+                  <div className="flex items-center text-sm text-gray-600">
+                    <Calendar className="w-4 h-4 mr-1" />
+                    <span>{formatDateTime(record.timestamp)}</span>
                     </div>
                     <button
                       onClick={() => handleUpdateClick(record)}
