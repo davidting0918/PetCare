@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Scale, TrendingUp, Calendar, Plus, Loader2, User, Edit2, RefreshCw } from 'lucide-react';
 import { format } from 'date-fns';
+import { LineChart } from '@mui/x-charts/LineChart';
 import { usePet, useWeight } from '../../hooks';
 import { CreateWeightForm, UpdateWeightForm } from '../forms';
 import type { WeightRecord, TimeIntervalType, CustomDateRange } from '../../types';
@@ -173,6 +174,20 @@ export const WeightPage: React.FC = () => {
     const padding = (max - min) * 0.1 || 1;
     return { min: Math.max(0, min - padding), max: max + padding };
   }, [chartData]);
+
+  // Prepare data for MUI X LineChart
+  const chartDataForMUI = useMemo(() => {
+    return chartData.map(point => ({
+      date: point.date.getTime(), // Convert to timestamp for xAxis
+      weight: point.weight
+    }));
+  }, [chartData]);
+
+  // Format date for xAxis
+  const formatDateForAxis = (value: number) => {
+    const date = new Date(value);
+    return formatDate(date);
+  };
 
   const handleFormSuccess = async (message: string) => {
     console.log('✅ Weight recorded:', message);
@@ -348,74 +363,83 @@ export const WeightPage: React.FC = () => {
         {/* Chart Area */}
         {chartData.length > 0 ? (
           <div className="bg-gray-50 rounded-lg p-4">
-            <div className="relative h-64">
-              {/* Simple Line Chart Visualization */}
-              <svg className="w-full h-full" viewBox="0 0 800 200" preserveAspectRatio="none">
-                {/* Grid lines */}
-                {[0, 1, 2, 3, 4].map(i => (
-                  <line
-                    key={`grid-${i}`}
-                    x1="0"
-                    y1={(i * 200) / 4}
-                    x2="800"
-                    y2={(i * 200) / 4}
-                    stroke="#e5e7eb"
-                    strokeWidth="1"
-                  />
-                ))}
-
-                {/* Weight line */}
-                {chartData.length > 1 && (
-                  <polyline
-                    points={chartData.map((point, index) => {
-                      const x = (index / (chartData.length - 1)) * 800;
-                      const y = 200 - ((point.weight - weightRange.min) / (weightRange.max - weightRange.min)) * 200;
-                      return `${x},${y}`;
-                    }).join(' ')}
-                    fill="none"
-                    stroke="#B8E6D3"
-                    strokeWidth="3"
-                  />
-                )}
-
-                {/* Data points */}
-                {chartData.map((point, index) => {
-                  const x = chartData.length > 1
-                    ? (index / (chartData.length - 1)) * 800
-                    : 400; // Center point if only one data point
-                  const y = 200 - ((point.weight - weightRange.min) / (weightRange.max - weightRange.min)) * 200;
-                  return (
-                    <circle
-                      key={`point-${index}`}
-                      cx={x}
-                      cy={y}
-                      r="4"
-                      fill="#B8E6D3"
-                      stroke="#ffffff"
-                      strokeWidth="2"
-                    />
-                  );
-                })}
-              </svg>
-
-              {/* Y-axis labels */}
-              <div className="absolute left-0 top-0 h-full flex flex-col justify-between text-xs text-gray-500 pr-2">
-                <span>{weightRange.max.toFixed(2)} kg</span>
-                <span>{((weightRange.min + weightRange.max) / 2).toFixed(2)} kg</span>
-                <span>{weightRange.min.toFixed(2)} kg</span>
-              </div>
-
-              {/* X-axis labels */}
-              <div className="absolute bottom-0 left-0 right-0 flex justify-between text-xs text-gray-500 pt-2 px-4">
-                {chartData.length > 0 && (
-                  <>
-                    <span>{formatDate(chartData[0].date)}</span>
-                    {chartData.length > 1 && (
-                      <span>{formatDate(chartData[chartData.length - 1].date)}</span>
-                    )}
-                  </>
-                )}
-              </div>
+            <div className="w-full" style={{ height: '256px' }}>
+              <LineChart
+                xAxis={[{
+                  data: chartDataForMUI.map(d => d.date),
+                  valueFormatter: (value) => formatDateForAxis(value),
+                  scaleType: 'time',
+                  label: 'Date',
+                  labelStyle: {
+                    fontSize: 12,
+                    fill: '#6b7280'
+                  },
+                  tickLabelStyle: {
+                    fontSize: 11,
+                    fill: '#6b7280'
+                  }
+                }]}
+                yAxis={[{
+                  label: 'Weight (kg)',
+                  labelStyle: {
+                    fontSize: 12,
+                    fill: '#6b7280'
+                  },
+                  tickLabelStyle: {
+                    fontSize: 11,
+                    fill: '#6b7280'
+                  },
+                  valueFormatter: (value) => `${value.toFixed(2)} kg`,
+                  domain: [weightRange.min, weightRange.max]
+                }]}
+                series={[{
+                  data: chartDataForMUI.map(d => d.weight),
+                  color: '#B8E6D3',
+                  showMark: chartDataForMUI.length <= 20 ? true : ({ index }) => {
+                    // Show marks for first, last, and evenly distributed points
+                    const step = Math.max(1, Math.floor(chartDataForMUI.length / 10));
+                    return index % step === 0 || index === chartDataForMUI.length - 1;
+                  },
+                  curve: 'monotoneX',
+                  label: 'Weight'
+                }]}
+                height={256}
+                grid={{ vertical: true, horizontal: true }}
+                slotProps={{
+                  tooltip: {
+                    contentStyle: {
+                      backgroundColor: 'white',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      padding: '8px 12px'
+                    }
+                  }
+                }}
+                sx={{
+                  '& .MuiLineElement-root': {
+                    strokeWidth: 3,
+                    stroke: '#B8E6D3'
+                  },
+                  '& .MuiMarkElement-root': {
+                    fill: '#B8E6D3',
+                    stroke: '#ffffff',
+                    strokeWidth: 2,
+                    r: 4
+                  },
+                  '& .MuiChartsGrid-root line': {
+                    stroke: '#e5e7eb',
+                    strokeWidth: 1
+                  },
+                  '& .MuiChartsAxis-root line': {
+                    stroke: '#d1d5db',
+                    strokeWidth: 1
+                  },
+                  '& .MuiChartsAxis-root text': {
+                    fill: '#6b7280',
+                    fontSize: 11
+                  }
+                }}
+              />
             </div>
 
             {/* Chart Stats */}
