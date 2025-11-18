@@ -11,6 +11,8 @@ $$ LANGUAGE plpgsql;
 create type food_type_enum as enum ('wet_food', 'dry_food', 'other');
 create type pet_type_enum as enum ('dog', 'cat', 'bird', 'fish', 'rabbit', 'other');
 create type pet_gender_enum as enum ('male', 'female', 'unknown');
+create type meal_type_enum as enum ('breakfast', 'lunch', 'dinner', 'snack');
+create type serving_type_enum as enum ('units', 'grams');
 
 
 -- users table
@@ -264,3 +266,50 @@ create trigger update_weight_records_updated_at before
 update
     on
     public.weight_records for each row execute function update_updated_at_column();
+
+
+-- meals table
+
+CREATE TABLE public.meals (
+	id varchar(11) NOT NULL,
+	pet_id varchar(8) NOT NULL,
+	food_id varchar(30) NOT NULL,
+	user_id varchar(8) NOT NULL,
+	group_id varchar(8) NOT NULL,
+	"timestamp" timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	meal_type public."meal_type_enum" NULL,
+	serving_type public."serving_type_enum" NOT NULL,
+	serving_amount numeric(7, 2) NOT NULL,
+	actual_weight_g numeric(7, 2) NOT NULL,
+	calories numeric(8, 2) NOT NULL,
+	protein_g numeric(7, 2) NOT NULL,
+	fat_g numeric(7, 2) NOT NULL,
+	moisture_g numeric(7, 2) NOT NULL,
+	carbohydrate_g numeric(7, 2) NOT NULL,
+	notes text NULL,
+	created_at timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	updated_at timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	is_active bool DEFAULT true NOT NULL,
+	CONSTRAINT meals_actual_weight_g_valid CHECK (((actual_weight_g > (0)::numeric) AND (actual_weight_g <= (10000)::numeric))),
+	CONSTRAINT meals_notes_check CHECK ((length(notes) <= 500)),
+	CONSTRAINT meals_pkey PRIMARY KEY (id),
+	CONSTRAINT meals_serving_amount_valid CHECK (((serving_amount > (0)::numeric) AND (serving_amount <= (10000)::numeric))),
+	CONSTRAINT fk_meals_food FOREIGN KEY (food_id) REFERENCES public.foods(id) ON DELETE CASCADE ON UPDATE CASCADE,
+	CONSTRAINT fk_meals_group FOREIGN KEY (group_id) REFERENCES public."groups"(id) ON DELETE CASCADE ON UPDATE CASCADE,
+	CONSTRAINT fk_meals_pet FOREIGN KEY (pet_id) REFERENCES public.pets(id) ON DELETE CASCADE ON UPDATE CASCADE,
+	CONSTRAINT fk_meals_user FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE SET NULL ON UPDATE CASCADE
+);
+CREATE INDEX idx_meals_created_at ON public.meals USING btree (created_at);
+CREATE INDEX idx_meals_group_id ON public.meals USING btree (group_id) WHERE (is_active = true);
+CREATE INDEX idx_meals_group_timestamp ON public.meals USING btree (group_id, "timestamp") WHERE (is_active = true);
+CREATE INDEX idx_meals_pet_id ON public.meals USING btree (pet_id) WHERE (is_active = true);
+CREATE INDEX idx_meals_pet_timestamp ON public.meals USING btree (pet_id, "timestamp") WHERE (is_active = true);
+CREATE INDEX idx_meals_timestamp ON public.meals USING btree ("timestamp") WHERE (is_active = true);
+CREATE INDEX idx_meals_user_id ON public.meals USING btree (user_id);
+
+-- Table Triggers
+
+create trigger update_meals_updated_at before
+update
+    on
+    public.meals for each row execute function update_updated_at_column();

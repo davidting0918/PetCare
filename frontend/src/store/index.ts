@@ -3,6 +3,8 @@ import authReducer from './slices/authSlice';
 import petReducer from './slices/petSlice';
 import groupReducer from './slices/groupSlice';
 import weightReducer from './slices/weightSlice';
+import mealReducer from './slices/mealSlice';
+import foodReducer from './slices/foodSlice';
 
 export const store = configureStore({
   reducer: {
@@ -10,6 +12,8 @@ export const store = configureStore({
     pet: petReducer,
     group: groupReducer,
     weight: weightReducer,
+    meal: mealReducer,
+    food: foodReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
@@ -46,4 +50,22 @@ export {
   clearWeightError,
   clearWeightRecords
 } from './slices/weightSlice';
+export {
+  fetchMealRecords,
+  createMeal,
+  updateMeal,
+  deleteMeal,
+  fetchTodayMeals,
+  clearMealState,
+  clearError as clearMealError
+} from './slices/mealSlice';
+export {
+  fetchGroupFoods,
+  createFood,
+  updateFood,
+  deleteFood,
+  selectFood,
+  clearFoodState,
+  clearError as clearFoodError
+} from './slices/foodSlice';
 export type { PetAccess } from './slices/petSlice';

@@ -132,7 +132,7 @@ class MealService:
         user_role = await self._get_user_group_role(group_id, user_id)
 
         # Creator can modify any record, members can only modify their own
-        can_modify = user_role == "creator" or (user_role == "member" and meal_info["fed_by"] == user_id)
+        can_modify = user_role == "creator" or (user_role == "member" and meal_info["user_id"] == user_id)
 
         return can_modify, meal_info
 
@@ -213,8 +213,8 @@ class MealService:
 
         nutrition_values = self._calculate_nutrition_values(actual_weight, food_data)
 
-        # Generate meal ID
-        meal_id = base64.urlsafe_b64encode(os.urandom(16)).decode("utf-8").rstrip("=")
+        # Generate meal ID with ml_ prefix
+        meal_id = "ml_" + base64.urlsafe_b64encode(os.urandom(6)).decode("utf-8").rstrip("=")
         current_time = dt.now()
 
         # Create meal record
@@ -222,9 +222,9 @@ class MealService:
             id=meal_id,
             pet_id=request.pet_id,
             food_id=request.food_id,
-            fed_by=user.id,
+            user_id=user.id,
             group_id=group_id,
-            fed_at=request.fed_at,
+            timestamp=request.fed_at,
             meal_type=request.meal_type,
             serving_type=request.serving_type,
             serving_amount=request.serving_amount,
@@ -289,20 +289,16 @@ class MealService:
             conditions.append(f"p.group_id = ${param_count}")
             params.append(filters.group_id)
 
-        if filters.fed_by:
+        if filters.user_id:
             param_count += 1
-            conditions.append(f"m.fed_by = ${param_count}")
-            params.append(filters.fed_by)
+            conditions.append(f"m.user_id = ${param_count}")
+            params.append(filters.user_id)
 
         if filters.date_from:
-            param_count += 1
-            conditions.append(f"DATE(m.fed_at) >= ${param_count}")
-            params.append(filters.date_from)
+            conditions.append(f"DATE(m.timestamp) >= '{filters.date_from}'")
 
         if filters.date_to:
-            param_count += 1
-            conditions.append(f"DATE(m.fed_at) <= ${param_count}")
-            params.append(filters.date_to)
+            conditions.append(f"DATE(m.timestamp) <= '{filters.date_to}'")
 
         if filters.meal_type:
             param_count += 1
@@ -327,9 +323,9 @@ class MealService:
         FROM meals m
         JOIN pets p ON m.pet_id = p.id
         JOIN foods f ON m.food_id = f.id
-        JOIN users u ON m.fed_by = u.id
+        JOIN users u ON m.user_id = u.id
         WHERE {' AND '.join(conditions)}
-        ORDER BY m.fed_at DESC
+        ORDER BY m.timestamp DESC
         LIMIT {limit_param} OFFSET {offset_param}
         """
 
@@ -360,7 +356,7 @@ class MealService:
         FROM meals m
         JOIN pets p ON m.pet_id = p.id
         JOIN foods f ON m.food_id = f.id
-        JOIN users u ON m.fed_by = u.id
+        JOIN users u ON m.user_id = u.id
         JOIN groups g ON p.group_id = g.id
         WHERE m.id = $1 AND m.is_active = TRUE
         """
@@ -417,7 +413,7 @@ class MealService:
             needs_recalculation = True
 
         if request.fed_at is not None:
-            update_data["fed_at"] = request.fed_at
+            update_data["timestamp"] = request.fed_at
 
         if request.meal_type is not None:
             update_data["meal_type"] = request.meal_type.value
@@ -620,11 +616,11 @@ class MealService:
 
         # Get detailed nutrition data
         detailed_query = """
-        SELECT protein_g, fat_g, moisture_g, carbohydrate_g, meal_type, fed_by, food_id
+        SELECT protein_g, fat_g, moisture_g, carbohydrate_g, meal_type, user_id, food_id
         FROM meals m
         JOIN pets p ON m.pet_id = p.id
         WHERE m.is_active = TRUE
-        AND DATE(m.fed_at) BETWEEN $1 AND $2
+        AND DATE(m.timestamp) BETWEEN $1 AND $2
         """ + (
             "AND m.pet_id = $3" if filters.pet_id else "AND p.group_id = $3"
         )
@@ -649,8 +645,8 @@ class MealService:
         # Most active feeders
         feeder_counts = {}
         for row in nutrition_data:
-            fed_by = row["fed_by"]
-            feeder_counts[fed_by] = feeder_counts.get(fed_by, 0) + 1
+            user_id = row["user_id"]
+            feeder_counts[user_id] = feeder_counts.get(user_id, 0) + 1
 
         # Get feeder names
         if feeder_counts:

@@ -5,6 +5,8 @@ export * from './user';
 export * from './pet';
 export * from './group';
 export * from './weight';
+export * from './meal';
+export * from './food';
 
 // Common API Types
 export interface ApiResponse<T> {

@@ -8,6 +8,7 @@ import { MainLayout } from './components/layout/MainLayout';
 import { ComingSoon } from './components/common/ComingSoon';
 import { SettingsPage } from './components/settings';
 import { WeightPage } from './components/weight';
+import { MealPage } from './components/meal';
 import type { NavigationTab } from './types';
 
 // Loading component
@@ -89,12 +90,7 @@ const AppLayout: React.FC = () => {
         />
         <Route
           path="/meal"
-          element={
-            <ComingSoon
-              title="Meal Tracking"
-              description="Track your pet's meals, calories, and feeding schedule."
-            />
-          }
+          element={<MealPage />}
         />
         <Route
           path="/medicine"

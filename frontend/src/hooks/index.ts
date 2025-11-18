@@ -24,5 +24,13 @@ export {
 } from './weight';
 
 export {
+  useMeal
+} from './meals';
+
+export {
+  useFood
+} from './foods';
+
+export {
   useRefresh
 } from './useRefresh';

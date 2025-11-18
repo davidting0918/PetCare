@@ -37,11 +37,11 @@ class Meal(BaseModel):
     id: str
     pet_id: str
     food_id: str
-    fed_by: str  # User ID who recorded the feeding
+    user_id: str  # User ID who recorded the feeding
     group_id: str  # Group where the feeding was recorded
 
     # Feeding timing
-    fed_at: dt  # When the pet was actually fed
+    timestamp: dt  # When the pet was actually fed
     meal_type: Optional[MealType] = None  # Optional meal classification
 
     # Serving information
@@ -106,9 +106,9 @@ class MealInfo(BaseModel):
     pet_name: str
     food_id: str
     food_name: str  # Brand + product name for display
-    fed_by: str  # User ID
+    user_id: str  # User ID
     fed_by_name: str  # User display name
-    fed_at: dt
+    timestamp: dt
     meal_type: Optional[MealType]
 
     # Serving summary
@@ -136,13 +136,13 @@ class MealDetails(BaseModel):
     food_name: str
     food_brand: str
     food_product_name: str
-    fed_by: str
+    user_id: str
     fed_by_name: str
     group_id: str
     group_name: str
 
     # Feeding details
-    fed_at: dt
+    timestamp: dt
     meal_type: Optional[MealType]
 
     # Complete serving information
@@ -225,7 +225,7 @@ class MealQueryFilters(BaseModel):
 
     pet_id: Optional[str] = None
     group_id: Optional[str] = None
-    fed_by: Optional[str] = None
+    user_id: Optional[str] = None
     date_from: Optional[str] = None  # YYYY-MM-DD format
     date_to: Optional[str] = None  # YYYY-MM-DD format
     meal_type: Optional[MealType] = None
