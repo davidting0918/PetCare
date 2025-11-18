@@ -68,6 +68,33 @@ async def create_invitation(
         raise e
 
 
+@router.get("/invitation/{invite_code}", response_model=dict)
+async def get_invitation_info(invite_code: str, current_user: Annotated[UserInfo, Depends(get_current_user)]) -> dict:
+    """
+    Get invitation information by invite code without joining.
+    Used to preview invitation details before confirming join.
+
+    Path Parameters:
+    - invite_code: 6-character invitation code (uppercase letters)
+
+    Returns:
+    - Group name
+    - Inviter name
+    - Role that will be assigned (member or viewer)
+    - Expiration date
+    - Invitation ID
+
+    Raises:
+    - 404: Invalid or expired invitation code
+    - 400: User is already a member of this group
+    """
+    try:
+        invitation_info = await group_service.get_invitation_info(invite_code.upper(), current_user.id)
+        return {"status": 1, "data": invitation_info, "message": "Invitation found"}
+    except Exception as e:
+        raise e
+
+
 @router.post("/join", response_model=dict)
 async def join_group(request: JoinGroupRequest, current_user: Annotated[UserInfo, Depends(get_current_user)]) -> dict:
     """

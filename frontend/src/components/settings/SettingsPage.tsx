@@ -19,10 +19,10 @@ import { useAppDispatch } from '../../hooks/redux';
 import { refreshCurrentUser } from '../../store/slices/authSlice';
 import { fetchAccessiblePets } from '../../store/slices/petSlice';
 import type { UserRole, GroupRole, PetInfo } from '../../types';
-import { CreateGroupForm, CreateInvitationForm, EditUserInfoModal, EditPetInfoModal, CreatePetForm, AssignPetToGroupModal } from '../forms';
+import { CreateGroupForm, CreateInvitationForm, EditUserInfoModal, EditPetInfoModal, CreatePetForm, AssignPetToGroupModal, EnterInviteCodeModal, InvitationPreviewModal } from '../forms';
 import { DeleteConfirmDialog } from '../common/DeleteConfirmDialog';
 import { GroupPetsList } from './GroupPetsList';
-import { getPhotoUrl } from '../../api';
+import { groupService } from '../../api';
 // Helper function to convert API role to UI role
 const normalizeRole = (role: GroupRole): UserRole => {
   return (role.charAt(0).toUpperCase() + role.slice(1)) as UserRole;
@@ -58,16 +58,16 @@ export const SettingsPage: React.FC = () => {
   const dispatch = useAppDispatch();
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [groupTabs, setGroupTabs] = useState<Record<string, 'members' | 'pets'>>({});
-  const [inviteCode, setInviteCode] = useState('');
   const [showCreateGroupForm, setShowCreateGroupForm] = useState(false);
   const [showInvitationForm, setShowInvitationForm] = useState(false);
   const [selectedGroupForInvite, setSelectedGroupForInvite] = useState<{ id: string; name: string } | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [selectedGroupForDelete, setSelectedGroupForDelete] = useState<{ id: string; name: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isJoining, setIsJoining] = useState(false);
-  const [joinError, setJoinError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [showEnterCodeModal, setShowEnterCodeModal] = useState(false);
+  const [showInvitationPreview, setShowInvitationPreview] = useState(false);
+  const [invitationData, setInvitationData] = useState<any>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showCreatePetForm, setShowCreatePetForm] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
@@ -179,29 +179,41 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
-  const handleJoinGroup = async () => {
-    // Validate input
-    const trimmedCode = inviteCode.trim().toUpperCase();
-    if (!trimmedCode) {
-      return;
-    }
+  const handleJoinGroupClick = () => {
+    setShowEnterCodeModal(true);
+  };
 
-    setIsJoining(true);
-    setJoinError(null);
-    setSuccessMessage(null);
+  const handleCodeSubmit = async (inviteCode: string) => {
+    try {
+      const response = await groupService.getInvitationInfo(inviteCode);
+
+      if (response.status === 1 && response.data) {
+        setInvitationData(response.data);
+        setShowEnterCodeModal(false);
+        setShowInvitationPreview(true);
+      }
+    } catch (error) {
+      console.error('Failed to fetch invitation info:', error);
+      throw error; // Re-throw to let the modal handle the error
+    }
+  };
+
+  const handleConfirmJoin = async () => {
+    if (!invitationData) return;
 
     try {
-      await join({ invite_code: trimmedCode });
+      await join({ invite_code: invitationData.invite_code });
       setSuccessMessage('Successfully joined the group!');
-      setInviteCode(''); // Clear input
+      setShowInvitationPreview(false);
+      setInvitationData(null);
       // Groups list will be automatically refreshed by the thunk
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (error) {
       console.error('Failed to join group:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to join group. Please check the invite code and try again.';
-      setJoinError(errorMessage);
-    } finally {
-      setIsJoining(false);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to join group. Please try again.';
+      setSuccessMessage(errorMessage);
+      setTimeout(() => setSuccessMessage(null), 3000);
+      throw error;
     }
   };
 
@@ -263,9 +275,7 @@ export const SettingsPage: React.FC = () => {
             {user.picture ? (
               <img
                 src={
-                  user.picture.startsWith('http')
-                    ? user.picture
-                    : getPhotoUrl(user.picture) || ''
+                  user.picture
                 }
                 alt={user.name}
                 className="w-full h-full object-cover"
@@ -308,7 +318,7 @@ export const SettingsPage: React.FC = () => {
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-earth px-2">My Pets</h3>
 
-            <div className="card-3d p-4 flex flex-col" style={{ height: '450px' }}>
+            <div className="card-3d p-4 flex flex-col" style={{ height: '434px' }}>
               <div className="flex items-center mb-4">
                 <PawPrint className="w-5 h-5 text-orange mr-2" />
                 <h4 className="font-semibold text-earth">My Pets</h4>
@@ -324,7 +334,6 @@ export const SettingsPage: React.FC = () => {
                   <div className="space-y-3">
                     {accessiblePets.map((petAccess) => {
                       const pet = petAccess.pet;
-                      const petPhotoUrl = pet.photo_url?.startsWith('http') ? pet.photo_url : getPhotoUrl(pet.photo_url);
                       const isMenuOpen = openPetMenuId === pet.id;
                       const isViewer = petAccess.role === 'Viewer';
                       return (
@@ -336,9 +345,9 @@ export const SettingsPage: React.FC = () => {
                             {/* Pet Info */}
                             <div className="flex items-center flex-1">
                               <div className="w-12 h-12 rounded-full bg-gray-200 flex-shrink-0 overflow-hidden">
-                                {petPhotoUrl ? (
+                                {pet.photo_url ? (
                                   <img
-                                    src={petPhotoUrl}
+                                    src={pet.photo_url}
                                     alt={pet.name}
                                     className="w-full h-full object-cover"
                                   />
@@ -414,53 +423,8 @@ export const SettingsPage: React.FC = () => {
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-earth px-2">Group Management</h3>
 
-            {/* Join Group Card */}
-            <div className="card-3d p-4" style={{ height: '160px' }}>
-              <div className="flex items-center mb-3">
-                <UserPlus className="w-5 h-5 text-mint mr-2" />
-                <h4 className="font-semibold text-earth">Join a Group</h4>
-              </div>
-
-              <div className="space-y-3">
-                <input
-                  type="text"
-                  value={inviteCode}
-                  onChange={(e) => {
-                    setInviteCode(e.target.value);
-                    setJoinError(null);
-                  }}
-                  placeholder="Enter invite code to join"
-                  className={`w-full px-3 py-2 border-2 rounded-lg focus:ring-2 focus:ring-mint focus:border-mint transition-colors text-earth ${
-                    joinError ? 'border-red-300' : 'border-mint/30'
-                  }`}
-                  disabled={isJoining}
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter' && !isJoining) {
-                      handleJoinGroup();
-                    }
-                  }}
-                />
-                {joinError && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-2">
-                    <p className="text-red-600 text-xs">{joinError}</p>
-                  </div>
-                )}
-                <button
-                  onClick={handleJoinGroup}
-                  disabled={isJoining}
-                  className="btn-3d w-full py-2 text-sm text-white bg-mint hover:bg-mint/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  style={{
-                    backgroundColor: '#B8D8D8',
-                  }}
-                >
-                  <UserPlus className="w-4 h-4" />
-                  <span>{isJoining ? 'Joining...' : 'Join Group'}</span>
-                </button>
-              </div>
-            </div>
-
             {/* My Groups List */}
-            <div className="card-3d p-4 flex flex-col" style={{ height: '274px' }}>
+            <div className="card-3d p-4 flex flex-col" style={{ height: '434px' }}>
               <div className="flex items-center mb-4">
                 <Users className="w-5 h-5 text-earth mr-2" />
                 <h4 className="font-semibold text-earth">My Groups</h4>
@@ -570,7 +534,7 @@ export const SettingsPage: React.FC = () => {
                                               <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-semibold text-earth overflow-hidden">
                                                 {member.picture ? (
                                                   <img
-                                                    src={member.picture?.startsWith('http') ? member.picture : getPhotoUrl(member.picture) || ''}
+                                                    src={member.picture}
                                                     alt={member.name}
                                                     className="w-full h-full object-cover"
                                                   />
@@ -673,6 +637,18 @@ export const SettingsPage: React.FC = () => {
         <span className="font-semibold">Create New Pet</span>
       </button>
 
+      {/* Join a Group Button */}
+      <button
+        onClick={handleJoinGroupClick}
+        className="btn-3d w-full py-4 text-white hover:bg-mint/90 transition-all duration-200 flex items-center justify-center gap-3"
+        style={{
+          backgroundColor: '#B8D8D8',
+        }}
+      >
+        <UserPlus className="w-5 h-5" />
+        <span className="font-semibold">Join a Group</span>
+      </button>
+
       {/* Create New Group Button */}
       <button
         onClick={handleCreateGroup}
@@ -768,6 +744,24 @@ export const SettingsPage: React.FC = () => {
         onSuccess={handlePetEditSuccess}
       />
     )}
+
+    {/* Enter Invite Code Modal */}
+    <EnterInviteCodeModal
+      isOpen={showEnterCodeModal}
+      onClose={() => setShowEnterCodeModal(false)}
+      onSubmit={handleCodeSubmit}
+    />
+
+    {/* Invitation Preview Modal */}
+    <InvitationPreviewModal
+      isOpen={showInvitationPreview}
+      onClose={() => {
+        setShowInvitationPreview(false);
+        setInvitationData(null);
+      }}
+      invitationData={invitationData}
+      onConfirmJoin={handleConfirmJoin}
+    />
   </div>
   );
 };

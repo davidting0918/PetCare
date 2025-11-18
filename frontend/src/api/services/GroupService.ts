@@ -43,6 +43,11 @@ class GroupService {
         return response.data;
     }
 
+    async getInvitationInfo(inviteCode: string): Promise<ApiResponse<InvitationResponse>> {
+        const response = await apiClient.get(`${this.basePath}/invitation/${inviteCode.toUpperCase()}`);
+        return response.data;
+    }
+
     async joinGroup(request: JoinGroupRequest): Promise<ApiResponse<GroupInfo>> {
         const response = await apiClient.post(`${this.basePath}/join`, request);
         return response.data;
