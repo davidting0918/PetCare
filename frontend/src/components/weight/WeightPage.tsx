@@ -1,9 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Scale, TrendingUp, Calendar, Plus, Loader2, User } from 'lucide-react';
+import { Scale, TrendingUp, Calendar, Plus, Loader2, User, Edit2, RefreshCw } from 'lucide-react';
 import { format } from 'date-fns';
-import { usePet } from '../../hooks';
-import { weightService } from '../../api';
-import { CreateWeightForm } from '../forms';
+import { usePet, useWeight } from '../../hooks';
+import { CreateWeightForm, UpdateWeightForm } from '../forms';
 import type { WeightRecord, TimeIntervalType, CustomDateRange } from '../../types';
 
 // Calculate date range based on interval type
@@ -73,8 +72,17 @@ const formatDateTime = (dateString: string): string => {
 
 export const WeightPage: React.FC = () => {
   const { selectedPet } = usePet();
+  const {
+    getCachedWeightRecords,
+    isLoadingWeightRecords,
+    getWeightError,
+    getWeightRecords,
+    refreshWeightRecords,
+  } = useWeight();
   const [selectedInterval, setSelectedInterval] = useState<TimeIntervalType>('last_30_days');
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isUpdateFormOpen, setIsUpdateFormOpen] = useState(false);
+  const [selectedWeightRecord, setSelectedWeightRecord] = useState<WeightRecord | null>(null);
 
   // Custom date range state
   const [customDateRange, setCustomDateRange] = useState<CustomDateRange>(() => {
@@ -85,52 +93,24 @@ export const WeightPage: React.FC = () => {
   });
   const [customDateError, setCustomDateError] = useState<string>('');
 
-  // Weight records state
-  const [weightRecords, setWeightRecords] = useState<WeightRecord[]>([]);
-  const [isLoadingRecords, setIsLoadingRecords] = useState(false);
-  const [recordsError, setRecordsError] = useState<string>('');
+  // Get weight records from cache
+  const weightRecords = selectedPet ? getCachedWeightRecords(selectedPet.id) : [];
+  const isLoadingRecords = selectedPet ? isLoadingWeightRecords(selectedPet.id) : false;
+  const recordsError = selectedPet ? getWeightError(selectedPet.id) : null;
 
-  // Fetch weight records from API
-  const fetchWeightRecords = async () => {
+  // Fetch weight records when pet is selected
+  useEffect(() => {
     if (!selectedPet) return;
 
-    setIsLoadingRecords(true);
-    setRecordsError('');
-
-    try {
+    // Only fetch if we don't have cached records
+    const cachedRecords = getCachedWeightRecords(selectedPet.id);
+    if (cachedRecords.length === 0 && !isLoadingWeightRecords(selectedPet.id)) {
       console.log('📊 WeightPage: Fetching weight records for pet:', selectedPet.id);
-      const response = await weightService.getWeightRecords(selectedPet.id, { number: 10 });
-
-      if (response.status === 1 && response.data) {
-        console.log('✅ WeightPage: Loaded', response.data.records.length, 'records');
-        setWeightRecords(response.data.records);
-      } else {
-        throw new Error(response.message || 'Failed to load weight records');
-      }
-    } catch (error: any) {
-      console.error('❌ WeightPage: Error loading weight records:', error);
-
-      let errorMessage = 'Failed to load weight records';
-      if (error.response?.data?.detail) {
-        if (typeof error.response.data.detail === 'string') {
-          errorMessage = error.response.data.detail;
-        }
-      } else if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-
-      setRecordsError(errorMessage);
-      setWeightRecords([]);
-    } finally {
-      setIsLoadingRecords(false);
+      getWeightRecords(selectedPet.id, { number: 10 }).catch((error) => {
+        console.error('❌ WeightPage: Error loading weight records:', error);
+      });
     }
-  };
-
-  // Load weight records when pet is selected
-  useEffect(() => {
-    fetchWeightRecords();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPet?.id]);
 
   // Filter records based on selected interval
@@ -194,11 +174,39 @@ export const WeightPage: React.FC = () => {
     return { min: Math.max(0, min - padding), max: max + padding };
   }, [chartData]);
 
-  const handleFormSuccess = (message: string) => {
+  const handleFormSuccess = async (message: string) => {
     console.log('✅ Weight recorded:', message);
     setIsFormOpen(false);
     // Refresh weight records after successful creation
-    fetchWeightRecords();
+    if (selectedPet) {
+      await refreshWeightRecords(selectedPet.id, { number: 10 });
+    }
+  };
+
+  const handleUpdateClick = (record: WeightRecord) => {
+    setSelectedWeightRecord(record);
+    setIsUpdateFormOpen(true);
+  };
+
+  const handleUpdateSuccess = async (message: string) => {
+    console.log('✅ Weight updated:', message);
+    setIsUpdateFormOpen(false);
+    setSelectedWeightRecord(null);
+    // Refresh weight records after successful update
+    if (selectedPet) {
+      await refreshWeightRecords(selectedPet.id, { number: 10 });
+    }
+  };
+
+  const handleUpdateClose = () => {
+    setIsUpdateFormOpen(false);
+    setSelectedWeightRecord(null);
+  };
+
+  const handleRefresh = async () => {
+    if (selectedPet) {
+      await refreshWeightRecords(selectedPet.id, { number: 10 });
+    }
   };
 
   // Handle custom date range changes
@@ -253,6 +261,14 @@ export const WeightPage: React.FC = () => {
             </div>
             <h3 className="text-lg font-semibold text-earth">Weight Trend</h3>
           </div>
+          <button
+            onClick={handleRefresh}
+            disabled={isLoadingRecords}
+            className="p-2 text-gray-600 hover:text-mint hover:bg-mint/10 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Refresh weight records"
+          >
+            <RefreshCw className={`w-5 h-5 ${isLoadingRecords ? 'animate-spin' : ''}`} />
+          </button>
         </div>
 
         {/* Time Interval Selector */}
@@ -465,7 +481,7 @@ export const WeightPage: React.FC = () => {
           <div className="bg-red-50 border border-red-200 rounded-lg p-4">
             <p className="text-red-600 text-sm">{recordsError}</p>
             <button
-              onClick={fetchWeightRecords}
+              onClick={() => selectedPet && refreshWeightRecords(selectedPet.id, { number: 10 })}
               className="mt-2 text-sm text-red-700 underline hover:no-underline"
             >
               Try again
@@ -493,9 +509,18 @@ export const WeightPage: React.FC = () => {
                       {record.weight.toFixed(1)} kg
                     </span>
                   </div>
-                  <div className="flex items-center text-sm text-gray-600">
-                    <Calendar className="w-4 h-4 mr-1" />
-                    <span>{formatDateTime(record.timestamp)}</span>
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center text-sm text-gray-600">
+                      <Calendar className="w-4 h-4 mr-1" />
+                      <span>{formatDateTime(record.timestamp)}</span>
+                    </div>
+                    <button
+                      onClick={() => handleUpdateClick(record)}
+                      className="p-2 text-gray-600 hover:text-mint hover:bg-mint/10 rounded-lg transition-colors"
+                      title="Edit weight record"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
                 {record.user_name && (
@@ -528,6 +553,14 @@ export const WeightPage: React.FC = () => {
         isOpen={isFormOpen}
         onClose={() => setIsFormOpen(false)}
         onSuccess={handleFormSuccess}
+      />
+
+      {/* Update Weight Form Modal */}
+      <UpdateWeightForm
+        isOpen={isUpdateFormOpen}
+        onClose={handleUpdateClose}
+        onSuccess={handleUpdateSuccess}
+        weightRecord={selectedWeightRecord}
       />
     </div>
   );

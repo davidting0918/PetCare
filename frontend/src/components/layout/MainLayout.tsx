@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { ArrowLeft, ChevronDown } from 'lucide-react';
+import { ArrowLeft, ChevronDown, RefreshCw } from 'lucide-react';
 import { BottomNavigation } from './BottomNavigation';
 import type { NavigationTab } from '../../types';
-import { usePet } from '../../hooks';
+import { usePet, useRefresh } from '../../hooks';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -22,6 +22,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   onBackClick
 }) => {
   const { selectedPet, selectPet, userPets } = usePet();
+  const { refreshAll, isRefreshing } = useRefresh();
   const [showPetSelector, setShowPetSelector] = useState(false);
 
   const handlePetChange = (petAccess: any) => {
@@ -47,8 +48,19 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
               <h1 className="text-lg font-semibold text-gray-800">{title}</h1>
             </div>
 
-            {/* Pet Selector */}
-            {selectedPet && userPets && userPets.length > 1 && (
+            <div className="flex items-center gap-2">
+              {/* Refresh Button */}
+              <button
+                onClick={refreshAll}
+                disabled={isRefreshing}
+                className={`btn-3d p-2 text-gray-600 ${isRefreshing ? 'opacity-75 cursor-not-allowed' : ''}`}
+                title="Refresh all data"
+              >
+                <RefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} />
+              </button>
+
+              {/* Pet Selector */}
+              {selectedPet && userPets && userPets.length > 1 && (
               <div className="relative">
                 <button
                   onClick={() => setShowPetSelector(!showPetSelector)}
@@ -75,7 +87,8 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                   </div>
                 )}
               </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
 

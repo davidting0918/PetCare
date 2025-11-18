@@ -52,7 +52,7 @@ async def create_weight_record(
     - User attribution and timing details
     """
     try:
-        weight_details = await weight_service.create_weight_record(request, current_user.id)
+        weight_details = await weight_service.create_weight_record(request, current_user.id, current_user.name)
         return {
             "status": 1,
             "data": weight_details.model_dump(),

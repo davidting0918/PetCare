@@ -241,11 +241,8 @@ export const SettingsPage: React.FC = () => {
     setSelectedPetForEdit(null);
   };
 
-  // Filter user's owned pets (where user is the owner)
-  const myOwnedPets = userPets?.filter(petAccess => {
-    const isOwner = petAccess.pet.owner_id === user?.id;
-    return isOwner;
-  }) || [];
+  // Show all accessible pets (not just owned pets)
+  const accessiblePets = userPets || [];
 
   if (!user) return null;
 
@@ -318,17 +315,18 @@ export const SettingsPage: React.FC = () => {
               </div>
 
               <div className="flex-1 overflow-y-auto pr-2">
-                {myOwnedPets.length === 0 ? (
+                {accessiblePets.length === 0 ? (
                   <div className="text-center py-6 text-gray-500">
                     <PawPrint className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">You don't own any pets yet</p>
+                    <p className="text-sm">You don't have access to any pets yet</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {myOwnedPets.map((petAccess) => {
+                    {accessiblePets.map((petAccess) => {
                       const pet = petAccess.pet;
                       const petPhotoUrl = pet.photo_url?.startsWith('http') ? pet.photo_url : getPhotoUrl(pet.photo_url);
                       const isMenuOpen = openPetMenuId === pet.id;
+                      const isViewer = petAccess.role === 'Viewer';
                       return (
                         <div
                           key={pet.id}
@@ -366,18 +364,20 @@ export const SettingsPage: React.FC = () => {
                               </div>
                             </div>
 
-                            {/* Three-dot Menu Button */}
-                            <button
-                              onClick={() => setOpenPetMenuId(isMenuOpen ? null : pet.id)}
-                              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-                              title="More options"
-                            >
-                              <MoreVertical className="w-5 h-5 text-gray-600" />
-                            </button>
+                            {/* Three-dot Menu Button - Only show if not Viewer */}
+                            {!isViewer && (
+                              <button
+                                onClick={() => setOpenPetMenuId(isMenuOpen ? null : pet.id)}
+                                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                                title="More options"
+                              >
+                                <MoreVertical className="w-5 h-5 text-gray-600" />
+                              </button>
+                            )}
                           </div>
 
-                          {/* Dropdown Menu */}
-                          {isMenuOpen && (
+                          {/* Dropdown Menu - Only show if not Viewer */}
+                          {!isViewer && isMenuOpen && (
                             <div className="absolute right-3 top-16 bg-white border border-gray-200 rounded-lg shadow-lg z-10 py-1 min-w-[160px]">
                               <button
                                 onClick={() => handleEditPet(pet as PetInfo)}

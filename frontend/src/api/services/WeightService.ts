@@ -1,6 +1,7 @@
 import { apiClient } from "../client";
 import type {
     CreateWeightRequest,
+    UpdateWeightRequest,
     WeightRecord,
     ApiResponse,
     SearchWeightRecordsRequest,
@@ -12,6 +13,11 @@ class WeightService {
 
     async createWeight(request: CreateWeightRequest): Promise<ApiResponse<WeightRecord>> {
         const response = await apiClient.post(`${this.basePath}/create`, request);
+        return response.data;
+    }
+
+    async updateWeight(weightId: string, request: UpdateWeightRequest): Promise<ApiResponse<WeightRecord>> {
+        const response = await apiClient.post(`${this.basePath}/update/${weightId}`, request);
         return response.data;
     }
 

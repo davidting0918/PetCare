@@ -1,33 +1,45 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Scale, X } from 'lucide-react';
-import { usePet, useWeight } from '../../hooks';
-import type { CreateWeightRequest } from '../../types';
+import { useWeight } from '../../hooks';
+import type { UpdateWeightRequest, WeightRecord } from '../../types';
 
-interface CreateWeightFormProps {
+interface UpdateWeightFormProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: (message: string) => void;
+  weightRecord: WeightRecord | null;
   title?: string;
 }
 
-export const CreateWeightForm: React.FC<CreateWeightFormProps> = ({
+export const UpdateWeightForm: React.FC<UpdateWeightFormProps> = ({
   isOpen,
   onClose,
   onSuccess,
-  title = "Record Weight"
+  weightRecord,
+  title = "Update Weight Record"
 }) => {
-  const { selectedPet } = usePet();
-  const { create } = useWeight();
-  const [formData, setFormData] = useState<CreateWeightRequest>({
-    pet_id: selectedPet?.id || '',
+  const { update } = useWeight();
+  const [formData, setFormData] = useState<UpdateWeightRequest>({
     weight: 0,
-    timestamp: new Date().toISOString().slice(0, 16), // Format: YYYY-MM-DDTHH:mm
+    timestamp: '',
     notes: ''
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleInputChange = (field: keyof CreateWeightRequest, value: any) => {
+  // Initialize form data when weightRecord changes
+  useEffect(() => {
+    if (weightRecord) {
+      const timestamp = new Date(weightRecord.timestamp);
+      setFormData({
+        weight: weightRecord.weight,
+        timestamp: timestamp.toISOString().slice(0, 16), // Format: YYYY-MM-DDTHH:mm
+        notes: weightRecord.notes || ''
+      });
+    }
+  }, [weightRecord]);
+
+  const handleInputChange = (field: keyof UpdateWeightRequest, value: any) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
@@ -45,16 +57,14 @@ export const CreateWeightForm: React.FC<CreateWeightFormProps> = ({
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
 
-    if (!selectedPet) {
-      newErrors.pet_id = 'No pet selected';
-    }
-
-    if (!formData.weight || formData.weight <= 0) {
-      newErrors.weight = 'Weight must be greater than 0';
-    } else if (formData.weight < 0.1) {
-      newErrors.weight = 'Weight must be at least 0.1 kg';
-    } else if (formData.weight > 200) {
-      newErrors.weight = 'Weight must be less than 200 kg';
+    if (formData.weight !== undefined) {
+      if (!formData.weight || formData.weight <= 0) {
+        newErrors.weight = 'Weight must be greater than 0';
+      } else if (formData.weight < 0.1) {
+        newErrors.weight = 'Weight must be at least 0.1 kg';
+      } else if (formData.weight > 200) {
+        newErrors.weight = 'Weight must be less than 200 kg';
+      }
     }
 
     if (formData.notes && formData.notes.length > 500) {
@@ -68,29 +78,30 @@ export const CreateWeightForm: React.FC<CreateWeightFormProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!validateForm()) return;
+    if (!validateForm() || !weightRecord) return;
 
     setIsLoading(true);
     try {
-      const submitData: CreateWeightRequest = {
-        pet_id: selectedPet!.id,
-        weight: Math.round(parseFloat(formData.weight.toString()) * 100) / 100, // Round to 2 decimal places
-        timestamp: formData.timestamp ? new Date(formData.timestamp).toISOString() : undefined,
-        notes: formData.notes?.trim() || undefined
+      const submitData: UpdateWeightRequest = {
+        ...(formData.weight !== undefined && {
+          weight: Math.round(parseFloat(formData.weight.toString()) * 100) / 100
+        }),
+        ...(formData.timestamp && { timestamp: new Date(formData.timestamp).toISOString() }),
+        ...(formData.notes?.trim() && { notes: formData.notes.trim() })
       };
 
-      console.log('⚖️ CreateWeightForm: Submitting data:', submitData);
+      console.log('⚖️ UpdateWeightForm: Submitting data:', submitData);
 
-      await create(submitData);
+      await update(weightRecord.id, weightRecord.pet_id, submitData);
 
-      console.log('✅ CreateWeightForm: Weight recorded successfully');
-      onSuccess?.('Weight recorded successfully!');
+      console.log('✅ UpdateWeightForm: Weight updated successfully');
+      onSuccess?.('Weight record updated successfully!');
       handleClose();
     } catch (error: any) {
-      console.error('❌ CreateWeightForm: Error recording weight:', error);
+      console.error('❌ UpdateWeightForm: Error updating weight:', error);
 
       // Extract error message from different error formats
-      let errorMessage = 'Failed to record weight';
+      let errorMessage = 'Failed to update weight record';
 
       if (error.response?.data?.detail) {
         // FastAPI validation error or custom error
@@ -113,17 +124,19 @@ export const CreateWeightForm: React.FC<CreateWeightFormProps> = ({
   };
 
   const handleClose = () => {
-    setFormData({
-      pet_id: selectedPet?.id || '',
-      weight: 0,
-      timestamp: new Date().toISOString().slice(0, 16),
-      notes: ''
-    });
+    if (weightRecord) {
+      const timestamp = new Date(weightRecord.timestamp);
+      setFormData({
+        weight: weightRecord.weight,
+        timestamp: timestamp.toISOString().slice(0, 16),
+        notes: weightRecord.notes || ''
+      });
+    }
     setErrors({});
     onClose();
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || !weightRecord) return null;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -152,7 +165,6 @@ export const CreateWeightForm: React.FC<CreateWeightFormProps> = ({
               <p className="text-red-600 text-sm">{errors.submit}</p>
             </div>
           )}
-
 
           {/* Weight Input */}
           <div>
@@ -226,7 +238,7 @@ export const CreateWeightForm: React.FC<CreateWeightFormProps> = ({
               disabled={isLoading}
               className="flex-1 btn-3d btn-3d-mint text-white disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading ? 'Recording...' : 'Record Weight'}
+              {isLoading ? 'Updating...' : 'Update Weight'}
             </button>
           </div>
         </form>

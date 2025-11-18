@@ -2,12 +2,14 @@ import { configureStore } from '@reduxjs/toolkit';
 import authReducer from './slices/authSlice';
 import petReducer from './slices/petSlice';
 import groupReducer from './slices/groupSlice';
+import weightReducer from './slices/weightSlice';
 
 export const store = configureStore({
   reducer: {
     auth: authReducer,
     pet: petReducer,
     group: groupReducer,
+    weight: weightReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
@@ -36,4 +38,12 @@ export {
   clearGroupState,
   clearError as clearGroupError
 } from './slices/groupSlice';
+export {
+  fetchWeightRecords,
+  createWeight,
+  updateWeight,
+  clearWeightState,
+  clearWeightError,
+  clearWeightRecords
+} from './slices/weightSlice';
 export type { PetAccess } from './slices/petSlice';
