@@ -10,7 +10,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
     "@headlessui/react": "^2.2.8",
+    "@mui/material": "^7.3.5",
+    "@mui/x-charts": "^8.18.0",
     "@react-oauth/google": "^0.12.1",
     "@reduxjs/toolkit": "^2.9.0",
     "@vercel/analytics": "^1.5.0",

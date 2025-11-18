@@ -366,13 +366,13 @@ export const SettingsPage: React.FC = () => {
 
                             {/* Three-dot Menu Button - Only show if not Viewer */}
                             {!isViewer && (
-                              <button
-                                onClick={() => setOpenPetMenuId(isMenuOpen ? null : pet.id)}
-                                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-                                title="More options"
-                              >
-                                <MoreVertical className="w-5 h-5 text-gray-600" />
-                              </button>
+                            <button
+                              onClick={() => setOpenPetMenuId(isMenuOpen ? null : pet.id)}
+                              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                              title="More options"
+                            >
+                              <MoreVertical className="w-5 h-5 text-gray-600" />
+                            </button>
                             )}
                           </div>
 
