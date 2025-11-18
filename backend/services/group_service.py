@@ -401,6 +401,70 @@ class GroupService:
             "share_message": f"Join my pet care group '{group_dict['name']}' with code: {invite_code}",
         }
 
+    async def get_invitation_info(self, invite_code: str, user_id: str) -> Dict[str, Any]:
+        """
+        Retrieve invitation information without joining the group.
+        Validates invitation exists and is not expired.
+        Used to preview invitation details before confirming join.
+
+        Args:
+            invite_code: Invitation code to lookup
+            user_id: User requesting the information
+
+        Returns:
+            Dict with group_name, invited_by_name, role, expires_at, group_id
+
+        Raises:
+            HTTPException: If invitation not found, expired, or user already member
+        """
+        current_time = dt.now()
+
+        # Find valid invitation
+        sql = f"""
+        select * from group_invitations gi
+        where
+            gi.invite_code = '{invite_code}'
+            and gi.status = '{InvitationStatus.PENDING.value}'
+            and gi.expires_at > '{current_time}'
+        """
+        invitation_dict = await self.db.read_one(sql)
+
+        if not invitation_dict:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invalid or expired invitation code")
+
+        group_id = invitation_dict["group_id"]
+
+        # Check if user is already a member
+        if await self._is_group_member(group_id, user_id):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="You are already a member of this group"
+            )
+
+        # Get group information
+        sql = f"""select * from groups g where g.id = '{group_id}' and g.is_active = True"""
+        group_dict = await self.db.read_one(sql)
+
+        if not group_dict:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found or inactive")
+
+        # Get inviter information
+        sql = f"""select name, email from users where id = '{invitation_dict['invited_by']}' and is_active = True"""
+        inviter_dict = await self.db.read_one(sql)
+
+        if not inviter_dict:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inviter not found")
+
+        return {
+            "id": invitation_dict["id"],
+            "group_id": group_id,
+            "group_name": group_dict["name"],
+            "invited_by_name": inviter_dict["name"],
+            "invite_code": invite_code,
+            "role": invitation_dict["role"],
+            "created_at": invitation_dict["created_at"],
+            "expires_at": invitation_dict["expires_at"],
+        }
+
     async def join_group_by_code(self, request: JoinGroupRequest, user_id: str) -> GroupInfo:
         """
         Join a group using an invitation code.

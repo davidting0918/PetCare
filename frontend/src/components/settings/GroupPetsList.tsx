@@ -1,7 +1,6 @@
 import React from 'react';
 import { PawPrint, Crown, Users as UsersIcon, Eye } from 'lucide-react';
 import { useGroup } from '../../hooks';
-import { getPhotoUrl } from '../../api';
 
 interface GroupPetsListProps {
   groupId: string;
@@ -96,7 +95,6 @@ export const GroupPetsList: React.FC<GroupPetsListProps> = ({
   return (
     <div className="space-y-3">
       {pets.map((pet) => {
-        const petPhotoUrl = getPhotoUrl(pet.photo_url);
         return (
           <div
             key={pet.id}
@@ -105,9 +103,9 @@ export const GroupPetsList: React.FC<GroupPetsListProps> = ({
             <div className="flex items-center">
               {/* Pet Photo */}
               <div className="w-12 h-12 rounded-full bg-gray-200 flex-shrink-0 overflow-hidden">
-                {petPhotoUrl ? (
+                {pet.photo_url ? (
                   <img
-                    src={petPhotoUrl}
+                    src={pet.photo_url}
                     alt={pet.name}
                     className="w-full h-full object-cover"
                   />
