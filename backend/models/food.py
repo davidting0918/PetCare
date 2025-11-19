@@ -113,7 +113,7 @@ class FoodInfo(BaseModel):
     fat: float
     moisture: float
     carbohydrate: float
-    has_photo: bool
+    photo_url: Optional[str] = ""
     created_at: dt
     updated_at: dt
     group_id: str
@@ -142,7 +142,7 @@ class FoodDetails(BaseModel):
     updated_at: dt
     group_id: str
     group_name: str
-    has_photo: bool
+    photo_url: Optional[str] = ""
     creator_id: str
     creator_name: str
 
@@ -160,6 +160,6 @@ class FoodSearchResult(BaseModel):
     target_pet: TargetPet
     unit_weight: float
     calories: float
-    has_photo: bool
+    photo_url: Optional[str] = ""
     group_id: str
     group_name: str

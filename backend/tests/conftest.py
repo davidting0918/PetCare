@@ -503,7 +503,7 @@ class TestHelper:
             required_fields.extend(
                 [
                     "group_name",
-                    "has_photo",
+                    "photo_url",
                     "calories_per_unit",
                     "creator_id",
                     "creator_name",

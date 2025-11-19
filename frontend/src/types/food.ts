@@ -35,7 +35,7 @@ export interface FoodInfo {
   fat: number;
   moisture: number;
   carbohydrate: number;
-  has_photo: boolean;
+  photo_url?: string;
   created_at: string;
   updated_at: string;
   group_id: string;
@@ -58,7 +58,7 @@ export interface FoodDetails {
   updated_at: string;
   group_id: string;
   group_name: string;
-  has_photo: boolean;
+  photo_url?: string;
   creator_id: string;
   creator_name: string;
   calories_per_unit: number;
@@ -72,7 +72,7 @@ export interface FoodSearchResult {
   target_pet: TargetPet;
   unit_weight: number;
   calories: number;
-  has_photo: boolean;
+  photo_url?: string;
   group_id: string;
   group_name: string;
 }

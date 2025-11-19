@@ -119,7 +119,7 @@ class TestFoodBasicOperations:
         assert "group_name" in food
         assert "created_at" in food
         assert "updated_at" in food
-        assert food["has_photo"] is False
+        assert "photo_url" in food
 
     @pytest.mark.asyncio
     async def test_get_food_details(self, async_client: AsyncClient, session_auth_headers_user1, session_test_group):

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Calendar, User, Edit2, Apple, UtensilsCrossed } from 'lucide-react';
+import { Plus, Calendar, User, Edit2, Apple, UtensilsCrossed, MoreVertical } from 'lucide-react';
 import { BarChart } from '@mui/x-charts/BarChart';
 import { format } from 'date-fns';
 import { usePet, useMeal, useFood } from '../../hooks';
@@ -44,6 +44,8 @@ export const MealPage: React.FC = () => {
   const [isFoodDetailsOpen, setIsFoodDetailsOpen] = useState(false);
   const [selectedFoodId, setSelectedFoodId] = useState<string | null>(null);
   const [preSelectedFoodId, setPreSelectedFoodId] = useState<string | null>(null);
+  const [menuOpenFoodId, setMenuOpenFoodId] = useState<string | null>(null);
+  const [initialEditMode, setInitialEditMode] = useState(false);
 
   const petId = selectedPet?.id;
   const groupId = selectedPet?.group_id;
@@ -160,10 +162,48 @@ export const MealPage: React.FC = () => {
     try {
       await deleteFoodAction(foodId, groupId);
       await getGroupFoods(groupId);
+      setMenuOpenFoodId(null);
     } catch (error) {
       console.error('Failed to delete food:', error);
     }
   };
+
+  const handleFoodMenuClick = (e: React.MouseEvent, foodId: string) => {
+    e.stopPropagation();
+    setMenuOpenFoodId(menuOpenFoodId === foodId ? null : foodId);
+  };
+
+  const handleMenuAction = (action: 'view' | 'edit' | 'delete', foodId: string) => {
+    setMenuOpenFoodId(null);
+    if (action === 'view') {
+      setSelectedFoodId(foodId);
+      setInitialEditMode(false);
+      setIsFoodDetailsOpen(true);
+    } else if (action === 'edit') {
+      setSelectedFoodId(foodId);
+      setInitialEditMode(true);
+      setIsFoodDetailsOpen(true);
+    } else if (action === 'delete') {
+      handleDeleteFood(foodId);
+    }
+  };
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.food-menu-container')) {
+        setMenuOpenFoodId(null);
+      }
+    };
+
+    if (menuOpenFoodId) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [menuOpenFoodId]);
 
   if (!selectedPet) {
     return (
@@ -406,31 +446,65 @@ export const MealPage: React.FC = () => {
               {foods.map((food) => (
                 <div
                   key={food.id}
-                  onClick={() => handleFoodClick(food.id)}
-                  className="card-3d p-3 cursor-pointer hover:shadow-lg transition-shadow"
+                  className="card-3d p-3 cursor-pointer hover:shadow-lg transition-shadow relative"
                 >
-                  <div className="aspect-video bg-gray-100 rounded-lg mb-2 overflow-hidden">
-                    {food.has_photo ? (
-                      <img
-                        src={`${import.meta.env.VITE_API_URL}/foods/photos/${food.id}`}
-                        alt={food.product_name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Apple className="w-12 h-12 text-gray-300" />
+                  {/* Three-dot menu button */}
+                  <div className="absolute top-2 right-2 z-10 food-menu-container">
+                    <button
+                      onClick={(e) => handleFoodMenuClick(e, food.id)}
+                      className="p-1 rounded-full hover:bg-gray-200 transition-colors"
+                      aria-label="Food options"
+                    >
+                      <MoreVertical className="w-4 h-4 text-gray-600" />
+                    </button>
+                    {/* Dropdown menu */}
+                    {menuOpenFoodId === food.id && (
+                      <div className="absolute right-0 mt-1 w-40 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20">
+                        <button
+                          onClick={() => handleMenuAction('view', food.id)}
+                          className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                        >
+                          View Details
+                        </button>
+                        <button
+                          onClick={() => handleMenuAction('edit', food.id)}
+                          className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleMenuAction('delete', food.id)}
+                          className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 transition-colors"
+                        >
+                          Delete
+                        </button>
                       </div>
                     )}
                   </div>
-                  <p className="font-semibold text-earth text-sm truncate">{food.brand}</p>
-                  <p className="text-xs text-gray-600 truncate">{food.product_name}</p>
-                  <div className="flex items-center justify-between mt-2 pt-2 border-t">
-                    <span className="text-xs text-gray-500">
-                      {food.food_type === 'wet_food' ? '🥫' : '🍖'} {food.target_pet}
-                    </span>
-                    <span className="text-xs font-semibold text-orange">
-                      {food.calories} kcal/100g
-                    </span>
+                  <div onClick={() => handleFoodClick(food.id)}>
+                    <div className="aspect-video bg-gray-100 rounded-lg mb-2 overflow-hidden">
+                      {food.photo_url ? (
+                        <img
+                          src={food.photo_url}
+                          alt={food.product_name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Apple className="w-12 h-12 text-gray-300" />
+                        </div>
+                      )}
+                    </div>
+                    <p className="font-semibold text-earth text-sm truncate">{food.brand}</p>
+                    <p className="text-xs text-gray-600 truncate">{food.product_name}</p>
+                    <div className="flex items-center justify-between mt-2 pt-2 border-t">
+                      <span className="text-xs text-gray-500">
+                        {food.food_type === 'wet_food' ? '🥫' : '🍖'} {food.target_pet}
+                      </span>
+                      <span className="text-xs font-semibold text-orange">
+                        {food.calories} kcal/100g
+                      </span>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -483,10 +557,13 @@ export const MealPage: React.FC = () => {
         onClose={() => {
           setIsFoodDetailsOpen(false);
           setSelectedFoodId(null);
+          setInitialEditMode(false);
         }}
         foodId={selectedFoodId}
         onUseInMeal={handleUseInMeal}
         onDelete={handleDeleteFood}
+        initialEditMode={initialEditMode}
+        onSuccess={handleFoodSuccess}
       />
     </div>
   );

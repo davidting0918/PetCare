@@ -239,8 +239,24 @@ class MealService:
             notes=request.notes,
         )
 
-        # Save to database
-        await self.db.insert_one(meal_table, meal.model_dump())
+        # Save to database (using string formatting like weight_service to avoid timezone issues)
+        sql = f"""
+        INSERT INTO {meal_table} (
+            id, pet_id, food_id, user_id, group_id, timestamp, meal_type,
+            serving_type, serving_amount, actual_weight_g,
+            calories, protein_g, fat_g, moisture_g, carbohydrate_g,
+            created_at, updated_at, notes, is_active
+        )
+        VALUES (
+            '{meal.id}', '{meal.pet_id}', '{meal.food_id}', '{meal.user_id}', '{meal.group_id}',
+            '{meal.timestamp}', {f"'{meal.meal_type.value}'" if meal.meal_type else 'NULL'},
+            '{meal.serving_type.value}', {meal.serving_amount}, {meal.actual_weight_g},
+            {meal.calories}, {meal.protein_g}, {meal.fat_g}, {meal.moisture_g}, {meal.carbohydrate_g},
+            '{meal.created_at}', '{meal.updated_at}', {f"'{meal.notes}'" if meal.notes else 'NULL'}, {meal.is_active}
+        )
+        RETURNING *
+        """
+        await self.db.execute_returning(sql)
 
         # Return detailed meal information
         return await self.get_meal_details(meal_id, user.id)

@@ -476,7 +476,7 @@ class PetService:
 
     # ================== Photo Management ==================
 
-    async def upload_pet_photo(self, pet_id: str, file: UploadFile, user_id: str) -> bool:
+    async def upload_pet_photo(self, pet_id: str, file: UploadFile, user_id: str) -> dict:
         """
         Upload or update a photo for a pet. Only owners can upload photos.
 
