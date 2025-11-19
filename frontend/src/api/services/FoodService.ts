@@ -46,7 +46,6 @@ class FoodService {
         // Don't include keyword parameter to get all foods
 
         const response = await apiClient.get(`${this.basePath}/info`, { params });
-        console.log(response.data);
         return response.data;
     }
 

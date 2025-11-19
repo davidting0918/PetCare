@@ -1,5 +1,6 @@
 import os
 from contextlib import asynccontextmanager
+from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 import asyncpg
@@ -84,6 +85,29 @@ class PostgresAsyncClient:
         async with self._pool.acquire() as connection:
             yield connection
 
+    # ================== Data Conversion Helpers ==================
+
+    def _convert_decimals_to_floats(self, obj: Any) -> Any:
+        """
+        Recursively convert all Decimal instances to float in nested data structures.
+
+        Args:
+            obj: The object to convert (dict, list, tuple, Decimal, or any other type)
+
+        Returns:
+            The object with all Decimal values converted to float
+        """
+        if isinstance(obj, Decimal):
+            return float(obj)
+        elif isinstance(obj, dict):
+            return {key: self._convert_decimals_to_floats(value) for key, value in obj.items()}
+        elif isinstance(obj, list):
+            return [self._convert_decimals_to_floats(item) for item in obj]
+        elif isinstance(obj, tuple):
+            return tuple(self._convert_decimals_to_floats(item) for item in obj)
+        else:
+            return obj
+
     # ================== Simple Query Methods ==================
 
     async def read(self, query: str, *args: Any) -> List[Dict[str, Any]]:
@@ -95,12 +119,13 @@ class PostgresAsyncClient:
             *args: Parameters for the query placeholders
 
         Returns:
-            List[Dict[str, Any]]: Query results as list of dictionaries
+            List[Dict[str, Any]]: Query results as list of dictionaries with Decimal values converted to float
         """
         try:
             async with self.get_connection() as conn:
                 rows = await conn.fetch(query, *args)
-                return [dict(row) for row in rows]
+                result = [dict(row) for row in rows]
+                return self._convert_decimals_to_floats(result)
         except Exception as e:
             raise e
 
@@ -111,11 +136,19 @@ class PostgresAsyncClient:
         Args:
             query (str): SQL SELECT query with $1, $2, etc. placeholders
             *args: Parameters for the query placeholders
+
+        Returns:
+            Optional[Dict[str, Any]]:
+                First query result as dictionary with Decimal values converted to float,
+                or None if no result
         """
         try:
             async with self.get_connection() as conn:
                 row = await conn.fetchrow(query, *args)
-                return dict(row) if row else None
+                if row:
+                    result = dict(row)
+                    return self._convert_decimals_to_floats(result)
+                return None
 
         except Exception as e:
             raise e
@@ -148,6 +181,9 @@ class PostgresAsyncClient:
             async with self.get_connection() as conn:
                 result = await conn.fetchrow(query, *values)
                 result_dict = dict(result)
+
+                # Convert Decimal values to float
+                result_dict = self._convert_decimals_to_floats(result_dict)
 
                 # Return just the id if it exists, otherwise return the full record
                 return result_dict.get("id", result_dict)
@@ -205,6 +241,9 @@ class PostgresAsyncClient:
                 results = await conn.fetch(query, *all_values)
                 result_dicts = [dict(row) for row in results]
 
+                # Convert Decimal values to float
+                result_dicts = self._convert_decimals_to_floats(result_dicts)
+
                 # Return just the ids if they exist, otherwise return the full records
                 if result_dicts and "id" in result_dicts[0]:
                     return [record["id"] for record in result_dicts]
@@ -238,8 +277,11 @@ class PostgresAsyncClient:
             *args: Parameters for the query placeholders
 
         Returns:
-            Any: The returned value from the RETURNING clause
+            Any: The returned value from the RETURNING clause with Decimal values converted to float
         """
         async with self.get_connection() as conn:
             result = await conn.fetchrow(query, *args)
-            return dict(result) if result else None
+            if result:
+                result_dict = dict(result)
+                return self._convert_decimals_to_floats(result_dict)
+            return None
