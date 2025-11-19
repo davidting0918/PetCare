@@ -43,8 +43,10 @@ class FoodService {
         const params: any = { group_id: groupId };
         if (foodType) params.food_type = foodType;
         if (targetPet) params.target_pet = targetPet;
+        // Don't include keyword parameter to get all foods
 
-        const response = await apiClient.get(`${this.basePath}/list`, { params });
+        const response = await apiClient.get(`${this.basePath}/info`, { params });
+        console.log(response.data);
         return response.data;
     }
 
@@ -66,16 +68,12 @@ class FoodService {
         const formData = new FormData();
         formData.append('file', file);
 
-        const response = await apiClient.post(`${this.basePath}/${foodId}/photo`, formData, {
+        const response = await apiClient.post(`${this.basePath}/${foodId}/photo/upload`, formData, {
             headers: {
                 'Content-Type': 'multipart/form-data',
             },
         });
         return response.data;
-    }
-
-    getFoodPhotoUrl(foodId: string): string {
-        return `${apiClient.defaults.baseURL}${this.basePath}/photos/${foodId}`;
     }
 
     async deleteFoodPhoto(foodId: string): Promise<ApiResponse<any>> {

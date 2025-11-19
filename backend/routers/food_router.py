@@ -1,7 +1,6 @@
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile
-from fastapi.responses import FileResponse
 
 from backend.models.food import CreateFoodRequest, FoodType, TargetPet, UpdateFoodRequest
 from backend.models.user import UserInfo
@@ -186,44 +185,41 @@ async def create_food(
         raise e
 
 
-@router.get("/list", response_model=dict)
-async def get_food_list(
+# ================== Food Search and Discovery ==================
+
+
+@router.get("/info", response_model=dict)
+async def search_foods(
     current_user: Annotated[UserInfo, Depends(get_current_user)],
-    group_id: str = Query(..., description="Group ID to get foods from"),
+    group_id: str = Query(..., description="Group ID to search foods in"),
+    keyword: Optional[str] = Query(None, description="Search term to match against food names and brands (optional)"),
     food_type: Optional[FoodType] = Query(None, description="Filter by food type"),
     target_pet: Optional[TargetPet] = Query(None, description="Filter by target pet species"),
 ) -> dict:
     """
-    Retrieves the complete list of foods available in the specified group's database.
+    Retrieves or searches foods within the group database.
 
     Authorization: Group membership required (any role: creator, member, or viewer)
 
-    This endpoint provides access to the group's collaborative food database, enabling all group
-    members to view available foods for feeding record purposes. The response includes essential
-    information for food selection interfaces and supports filtering for better organization.
+    This endpoint provides flexible access to the group's food database:
+    - When keyword is provided: Performs text search across food names and brand names
+    - When keyword is omitted: Returns complete list of foods in the group database
 
-    Key features:
-    - Returns all active foods in the group's database with essential information
-    - Supports optional filtering by food type (wet_food, dry_food) and target pet species
-    - Includes nutritional summaries for quick comparison and selection
-    - Provides photo availability indicators for visual food identification
-    - Optimized for quick loading and responsive food selection interfaces
+    Search functionality (when keyword provided):
+    - Case-insensitive partial matching across brand and product names
+    - Results sorted by relevance (brand matches prioritized over product matches)
+    - Additional filtering by food type and target pet when specified
+    - Optimized for responsive search-as-you-type functionality
+
+    List functionality (when keyword omitted):
+    - Returns all active foods in the group's database
+    - Supports optional filtering by food type and target pet species
+    - Foods sorted alphabetically by brand and product name
 
     Query Parameters:
-    - food_type (optional): Filter results by food preparation type
-    - target_pet (optional): Filter results by intended pet species
-
-    The response structure:
-    - Foods sorted alphabetically by brand and product name for easy browsing
-    - Essential nutritional information (calories, protein, fat) for quick comparison
-    - Photo availability status to indicate visual identification support
-    - Group context information for collaborative database management
-
-    Filtering capabilities:
-    - Food type filtering enables separation between wet and dry food categories
-    - Target pet filtering helps users find foods appropriate for their pet species
-    - Multiple filters can be combined for refined results
-    - No filters returns complete group food database
+    - keyword (optional): Search term to match against food names and brands. If omitted, returns all foods.
+    - food_type (optional): Filter results by food type (wet_food, dry_food)
+    - target_pet (optional): Filter results by target pet species
 
     Returns:
     - List of foods with essential information for selection interfaces
@@ -232,66 +228,19 @@ async def get_food_list(
     - Group context for collaborative food database management
     """
     try:
-        foods = await food_service.get_group_foods(group_id, current_user.id, food_type, target_pet)
-        return {
-            "status": 1,
-            "data": [food.model_dump() for food in foods],
-            "message": f"Found {len(foods)} foods in group database",
-        }
-    except Exception as e:
-        raise e
-
-
-# ================== Food Search and Discovery ==================
-
-
-@router.get("/info", response_model=dict)
-async def search_foods(
-    current_user: Annotated[UserInfo, Depends(get_current_user)],
-    group_id: str = Query(..., description="Group ID to search foods in"),
-    keyword: str = Query(..., description="Search term to match against food names and brands"),
-    food_type: Optional[FoodType] = Query(None, description="Filter by food type"),
-    target_pet: Optional[TargetPet] = Query(None, description="Filter by target pet species"),
-) -> dict:
-    """
-    Enables users to search for foods within the group database using text-based queries.
-
-    Authorization: Group membership required (any role: creator, member, or viewer)
-
-    This endpoint performs comprehensive text search across food names and brand names within
-    the group's database, supporting case-insensitive partial matching for flexible search results.
-
-    Search functionality:
-    - Case-insensitive partial matching across brand and product names
-    - Results sorted by relevance (brand matches prioritized over product matches)
-    - Additional filtering by food type and target pet when specified
-    - Optimized for responsive search-as-you-type functionality
-    - Supports empty keyword for browsing with filters
-
-    Query Parameters:
-    - keyword (required): Search term to match against food names and brands
-    - food_type (optional): Filter results by food type (wet_food, dry_food)
-    - target_pet (optional): Filter results by target pet species
-
-    The search algorithm:
-    - Searches both brand names and product names simultaneously
-    - Prioritizes exact brand matches, then exact product matches
-    - Falls back to partial matches for flexible discovery
-    - Maintains alphabetical ordering within relevance groups
-
-    Returns:
-    - Relevant foods with highlighted or scored relevance for better user experience
-    - Essential food information for selection interfaces
-    - Photo availability indicators for visual identification
-    - Group context for collaborative food database management
-    """
-    try:
         search_results = await food_service.search_foods(group_id, current_user.id, keyword, food_type, target_pet)
-        return {
-            "status": 1,
-            "data": [result.model_dump() for result in search_results],
-            "message": f"Found {len(search_results)} foods matching '{keyword}'",
-        }
+        if keyword:
+            return {
+                "status": 1,
+                "data": [result.model_dump() for result in search_results],
+                "message": f"Found {len(search_results)} foods matching '{keyword}'",
+            }
+        else:
+            return {
+                "status": 1,
+                "data": [result.model_dump() for result in search_results],
+                "message": f"Found {len(search_results)} foods in group database",
+            }
     except Exception as e:
         raise e
 
@@ -299,7 +248,7 @@ async def search_foods(
 # ================== Photo Management ==================
 
 
-@router.post("/{food_id}/photo", response_model=dict)
+@router.post("/{food_id}/photo/upload", response_model=dict)
 async def upload_food_photo(
     food_id: str,
     current_user: Annotated[UserInfo, Depends(get_current_user)],
@@ -339,85 +288,6 @@ async def upload_food_photo(
     """
     try:
         photo_info = await food_service.upload_food_photo(food_id, file, current_user.id)
-        return {"status": 1, "data": photo_info.model_dump(), "message": "Food photo uploaded successfully"}
-    except Exception as e:
-        raise e
-
-
-@router.get("/photos/{food_id}", response_class=FileResponse)
-async def get_food_photo(food_id: str, current_user: Annotated[UserInfo, Depends(get_current_user)]):
-    """
-    Serves food identification photos to authorized users through secure access control.
-
-    Authorization: Group membership required (any role through food access validation)
-
-    This endpoint provides secure access to food identification photos, ensuring that only
-    users with appropriate group membership can access food images from the collaborative database.
-
-    Security features:
-    - Validates user permission to access the specific food through group membership
-    - Prevents unauthorized photo access across different groups
-    - Returns appropriate error responses for non-existent or inaccessible photos
-    - Maintains privacy by enforcing group-based access control
-
-    Performance optimizations:
-    - Includes HTTP caching headers for browser optimization (1 hour cache)
-    - Serves files directly from local storage for minimal latency
-    - Proper MIME type detection for browser compatibility
-    - Efficient file serving without loading into memory
-
-    Response characteristics:
-    - Direct image file response with appropriate content headers
-    - Cache-Control headers for performance optimization
-    - Proper content-type headers for browser display
-    - Filename preservation for download scenarios
-    """
-    try:
-        return await food_service.get_food_photo(food_id, current_user.id)
-    except Exception as e:
-        raise e
-
-
-@router.post("/{food_id}/photo/delete", response_model=dict)
-async def delete_food_photo(food_id: str, current_user: Annotated[UserInfo, Depends(get_current_user)]) -> dict:
-    """
-    Removes the photo associated with a food item, clearing the visual identification.
-
-    Authorization: Group Creator or Member permissions required
-
-    This endpoint provides clean removal of food identification photos while maintaining
-    system cleanliness and storage optimization. The operation handles both the physical
-    file removal and database record cleanup.
-
-    The operation performs:
-    - Physical file deletion from storage system to prevent storage bloat
-    - Database record removal to clear photo availability status
-    - Food record update to reflect photo removal
-    - Graceful handling of cases where no photo exists
-
-    Cleanup procedures:
-    - Validates user permission to modify the food through group membership
-    - Removes photo file from local storage system
-    - Updates food record to clear photo availability indicators
-    - Cleans up associated metadata and references
-
-    Error handling:
-    - Gracefully handles cases where no photo exists without throwing errors
-    - Validates permissions before attempting any removal operations
-    - Maintains system integrity even if file cleanup encounters issues
-
-    System maintenance:
-    - Prevents storage bloat by removing unused files
-    - Maintains database consistency by cleaning up orphaned records
-    - Supports storage cleanup and maintenance procedures
-
-    Returns:
-    - Success confirmation with food context information
-    - Handles non-existent photo scenarios gracefully
-    - Provides clear feedback for successful photo removal
-    """
-    try:
-        result = await food_service.delete_food_photo(food_id, current_user.id)
-        return {"status": 1, "data": result, "message": "Photo deleted successfully"}
+        return {"status": 1, "data": photo_info, "message": "Food photo uploaded successfully"}
     except Exception as e:
         raise e

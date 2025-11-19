@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { Apple, X } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Apple, X, Upload, Camera } from 'lucide-react';
 import { useFood } from '../../hooks';
+import { foodService } from '../../api';
 import type { CreateFoodRequest, FoodType, TargetPet } from '../../types';
 
 interface CreateFoodFormProps {
@@ -33,6 +34,61 @@ export const CreateFoodForm: React.FC<CreateFoodFormProps> = ({
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Clean up preview URL on unmount
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setErrors({ ...errors, photo: 'Please upload a JPEG, PNG, GIF, or WebP image' });
+      return;
+    }
+
+    // Validate file size (5MB for food photos)
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      setErrors({ ...errors, photo: 'File is too large. Maximum size is 5MB' });
+      return;
+    }
+
+    // Clear previous errors
+    const newErrors = { ...errors };
+    delete newErrors.photo;
+    setErrors(newErrors);
+
+    // Set file and create preview
+    setSelectedFile(file);
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+  };
+
+  const handleRemovePhoto = () => {
+    setSelectedFile(null);
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+    const newErrors = { ...errors };
+    delete newErrors.photo;
+    setErrors(newErrors);
+  };
 
   const handleInputChange = (field: keyof CreateFoodRequest, value: any) => {
     setFormData(prev => ({
@@ -92,11 +148,31 @@ export const CreateFoodForm: React.FC<CreateFoodFormProps> = ({
 
     setIsLoading(true);
     try {
+      // Create food and get the created food details
+      const createResponse = await foodService.createFood(groupId, {
+        ...formData,
+        brand: formData.brand.trim(),
+        product_name: formData.product_name.trim()
+      });
+
+      // Update Redux store by calling the hook action (this will update the cache)
       await createFood(groupId, {
         ...formData,
         brand: formData.brand.trim(),
         product_name: formData.product_name.trim()
       });
+
+      // Upload photo if selected
+      if (selectedFile && createResponse.status === 1 && createResponse.data) {
+        try {
+          await foodService.uploadFoodPhoto(createResponse.data.id, selectedFile);
+        } catch (photoError: any) {
+          console.error('Error uploading photo:', photoError);
+          // Don't fail the whole operation if photo upload fails
+          setErrors({ submit: 'Food created but photo upload failed. Please try uploading the photo again.' });
+          return; // Return early to show the error message
+        }
+      }
 
       onSuccess?.('Food added successfully!');
       handleClose();
@@ -122,6 +198,14 @@ export const CreateFoodForm: React.FC<CreateFoodFormProps> = ({
       carbohydrate: 5
     });
     setErrors({});
+    setSelectedFile(null);
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
     onClose();
   };
 
@@ -149,6 +233,73 @@ export const CreateFoodForm: React.FC<CreateFoodFormProps> = ({
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Photo Upload Section */}
+          <div>
+            <label className="block text-sm font-medium text-earth mb-2">
+              Photo (Optional)
+            </label>
+            <div className="flex gap-4">
+              {/* Photo Preview */}
+              <div className="w-32 h-32 rounded-lg overflow-hidden bg-gray-100 border-2 border-gray-200 flex-shrink-0 relative">
+                {previewUrl ? (
+                  <>
+                    <img
+                      src={previewUrl}
+                      alt="Preview"
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                      <Camera className="w-6 h-6 text-white" />
+                    </div>
+                  </>
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <Apple className="w-12 h-12 text-gray-300" />
+                  </div>
+                )}
+              </div>
+
+              {/* Upload Controls */}
+              <div className="flex-1 space-y-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isLoading}
+                  className="w-full px-4 py-2 bg-orange text-white rounded-lg hover:bg-orange/90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                  style={{ backgroundColor: '#F4C2A1' }}
+                >
+                  <Upload className="w-4 h-4" />
+                  <span className="text-sm">
+                    {selectedFile ? 'Change Photo' : 'Upload Photo'}
+                  </span>
+                </button>
+                {selectedFile && (
+                  <button
+                    type="button"
+                    onClick={handleRemovePhoto}
+                    disabled={isLoading}
+                    className="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm disabled:opacity-50"
+                  >
+                    Remove Selected
+                  </button>
+                )}
+                {selectedFile && (
+                  <p className="text-xs text-gray-500 text-center">
+                    {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)
+                  </p>
+                )}
+              </div>
+            </div>
+            {errors.photo && <p className="text-red-600 text-xs mt-2">{errors.photo}</p>}
+          </div>
+
           {/* Basic Information Section */}
           <div className="space-y-4">
             <h4 className="font-semibold text-earth border-b pb-2">Basic Information</h4>

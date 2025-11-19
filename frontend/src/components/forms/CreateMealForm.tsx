@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { UtensilsCrossed, X, Search } from 'lucide-react';
+import { UtensilsCrossed, X } from 'lucide-react';
 import { usePet, useMeal, useFood } from '../../hooks';
 import type { CreateMealRequest, MealType, ServingType } from '../../types';
 
@@ -37,7 +37,6 @@ export const CreateMealForm: React.FC<CreateMealFormProps> = ({
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
 
   // Load foods when modal opens
   useEffect(() => {
@@ -47,16 +46,6 @@ export const CreateMealForm: React.FC<CreateMealFormProps> = ({
       });
     }
   }, [isOpen, groupId, foods.length, getGroupFoods]);
-
-  // Filter foods based on search
-  const filteredFoods = useMemo(() => {
-    if (!searchQuery) return foods;
-    const query = searchQuery.toLowerCase();
-    return foods.filter(food =>
-      food.brand.toLowerCase().includes(query) ||
-      food.product_name.toLowerCase().includes(query)
-    );
-  }, [foods, searchQuery]);
 
   // Get selected food details
   const selectedFood = useMemo(() => {
@@ -172,7 +161,6 @@ export const CreateMealForm: React.FC<CreateMealFormProps> = ({
       notes: ''
     });
     setErrors({});
-    setSearchQuery('');
     onClose();
   };
 
@@ -228,17 +216,6 @@ export const CreateMealForm: React.FC<CreateMealFormProps> = ({
             <label className="block text-sm font-medium text-earth mb-2">
               Select Food *
             </label>
-            <div className="relative mb-2">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search food..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border-2 border-mint/30 rounded-lg focus:ring-2 focus:ring-mint focus:border-mint"
-                disabled={isLoading}
-              />
-            </div>
             <select
               value={formData.food_id}
               onChange={(e) => handleInputChange('food_id', e.target.value)}
@@ -248,7 +225,7 @@ export const CreateMealForm: React.FC<CreateMealFormProps> = ({
               disabled={isLoading}
             >
               <option value="">Choose a food...</option>
-              {filteredFoods.map((food) => (
+              {foods.map((food) => (
                 <option key={food.id} value={food.id}>
                   {food.brand} - {food.product_name} ({food.food_type})
                 </option>
