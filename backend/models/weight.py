@@ -1,4 +1,5 @@
 from datetime import datetime as dt
+from datetime import timezone as tz
 from enum import Enum
 from typing import Optional
 
@@ -36,7 +37,8 @@ class CreateWeightRecordRequest(BaseModel):
     pet_id: str = Field(..., description="ID of the pet being weighed")
     weight: float = Field(..., ge=0.1, le=200, description="Weight in kg")
     timestamp: dt = Field(
-        dt.now(), description="When the weight was measured (defaults to current time if not provided)"
+        default_factory=lambda: dt.now(tz.utc),
+        description="When the weight was measured (defaults to current time if not provided)",
     )
     notes: Optional[str] = Field(None, max_length=500, description="Additional notes about the measurement")
 
@@ -45,7 +47,7 @@ class UpdateWeightRecordRequest(BaseModel):
     """Request to update an existing weight record (partial update)"""
 
     weight: Optional[float] = Field(None, ge=0.1, le=200, description="Updated weight in kg")
-    timestamp: Optional[dt] = Field(dt.now(), description="Updated measurement time")
+    timestamp: Optional[dt] = Field(default_factory=lambda: dt.now(tz.utc), description="Updated measurement time")
     notes: Optional[str] = Field(None, max_length=500, description="Updated notes")
 
 

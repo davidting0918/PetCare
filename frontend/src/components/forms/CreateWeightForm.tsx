@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Scale, X } from 'lucide-react';
 import { usePet, useWeight } from '../../hooks';
+import { getCurrentLocalDateTime, datetimeLocalToUtc } from '../../utils/dateUtils';
 import type { CreateWeightRequest } from '../../types';
 
 interface CreateWeightFormProps {
@@ -21,7 +22,7 @@ export const CreateWeightForm: React.FC<CreateWeightFormProps> = ({
   const [formData, setFormData] = useState<CreateWeightRequest>({
     pet_id: selectedPet?.id || '',
     weight: 0,
-    timestamp: new Date().toISOString().slice(0, 16), // Format: YYYY-MM-DDTHH:mm
+    timestamp: getCurrentLocalDateTime(), // Format: YYYY-MM-DDTHH:mm (local time)
     notes: ''
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -75,7 +76,7 @@ export const CreateWeightForm: React.FC<CreateWeightFormProps> = ({
       const submitData: CreateWeightRequest = {
         pet_id: selectedPet!.id,
         weight: Math.round(parseFloat(formData.weight.toString()) * 100) / 100, // Round to 2 decimal places
-        timestamp: formData.timestamp ? new Date(formData.timestamp).toISOString() : undefined,
+        timestamp: formData.timestamp ? datetimeLocalToUtc(formData.timestamp) : undefined,
         notes: formData.notes?.trim() || undefined
       };
 
@@ -116,7 +117,7 @@ export const CreateWeightForm: React.FC<CreateWeightFormProps> = ({
     setFormData({
       pet_id: selectedPet?.id || '',
       weight: 0,
-      timestamp: new Date().toISOString().slice(0, 16),
+      timestamp: getCurrentLocalDateTime(),
       notes: ''
     });
     setErrors({});

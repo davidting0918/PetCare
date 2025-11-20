@@ -1,4 +1,5 @@
 from datetime import datetime as dt
+from datetime import timezone as tz
 from enum import Enum
 from typing import Optional
 
@@ -74,7 +75,7 @@ class Pet(BaseModel):
             return None
 
         birth_dt = self.birth_date
-        current_dt = dt.now()
+        current_dt = dt.now(tz.utc)
         return int((current_dt - birth_dt).days / 365.25)
 
 

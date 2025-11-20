@@ -1,6 +1,7 @@
 import os
 import uuid
 from datetime import datetime as dt
+from datetime import timezone as tz
 from pathlib import Path
 from typing import List
 
@@ -146,7 +147,7 @@ class PetService:
         """
         # Generate pet ID and timestamps
         pet_id = str(uuid.uuid4())[:8]
-        current_time = dt.now()
+        current_time = dt.now(tz.utc)
 
         # get user info
         sql = f"""
@@ -275,7 +276,7 @@ class PetService:
         pet = await self.db.read_one(sql)
         if not pet:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pet not found")
-        pet["age"] = None if not pet["birth_date"] else int((dt.now() - pet["birth_date"]).days / 365.25)
+        pet["age"] = None if not pet["birth_date"] else int((dt.now(tz.utc) - pet["birth_date"]).days / 365.25)
         return PetDetails(**pet)
 
     async def update_pet(self, pet_id: str, request: UpdatePetRequest, user_id: str) -> PetDetails:
@@ -534,7 +535,7 @@ class PetService:
                 "photo_name": file_name,
                 "photo_size": actual_size,
                 "photo_type": file.content_type,
-                "photo_uploaded_at": int(dt.now().timestamp()),
+                "photo_uploaded_at": int(dt.now(tz.utc).timestamp()),
             }
 
         except Exception as e:

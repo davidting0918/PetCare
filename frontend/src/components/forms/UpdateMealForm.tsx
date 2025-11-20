@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { UtensilsCrossed, X, Search, Trash2 } from 'lucide-react';
 import { useMeal, useFood } from '../../hooks';
+import { formatForDateTimeLocal, datetimeLocalToUtc, getCurrentLocalDateTime } from '../../utils/dateUtils';
 import type { UpdateMealRequest, MealType, ServingType, MealDetails } from '../../types';
 
 interface UpdateMealFormProps {
@@ -17,7 +18,7 @@ export const UpdateMealForm: React.FC<UpdateMealFormProps> = ({
   mealDetails
 }) => {
   const { update, deleteMeal } = useMeal();
-  const { getCachedGroupFoods } = useFood();
+  const { getCachedGroupFoods, shouldFetchGroupFoods, getGroupFoods } = useFood();
 
   const groupId = mealDetails?.group_id;
   const foods = groupId ? getCachedGroupFoods(groupId) : [];
@@ -33,7 +34,7 @@ export const UpdateMealForm: React.FC<UpdateMealFormProps> = ({
     if (mealDetails) {
       setFormData({
         food_id: mealDetails.food_id,
-        fed_at: new Date(mealDetails.timestamp).toISOString().slice(0, 16),
+        fed_at: formatForDateTimeLocal(mealDetails.timestamp),
         meal_type: mealDetails.meal_type || undefined,
         serving_type: mealDetails.serving_type,
         serving_amount: mealDetails.serving_amount,
@@ -41,6 +42,15 @@ export const UpdateMealForm: React.FC<UpdateMealFormProps> = ({
       });
     }
   }, [mealDetails]);
+
+  // Load foods when modal opens (only if no cache and not loading)
+  useEffect(() => {
+    if (isOpen && groupId && shouldFetchGroupFoods(groupId)) {
+      getGroupFoods(groupId).catch(error => {
+        console.error('Failed to load foods:', error);
+      });
+    }
+  }, [isOpen, groupId, shouldFetchGroupFoods, getGroupFoods]);
 
   // Filter foods based on search
   const filteredFoods = useMemo(() => {
@@ -118,7 +128,7 @@ export const UpdateMealForm: React.FC<UpdateMealFormProps> = ({
       const submitData: UpdateMealRequest = {};
 
       if (formData.food_id !== mealDetails.food_id) submitData.food_id = formData.food_id;
-      if (formData.fed_at) submitData.fed_at = new Date(formData.fed_at).toISOString();
+      if (formData.fed_at) submitData.fed_at = datetimeLocalToUtc(formData.fed_at);
       if (formData.meal_type !== mealDetails.meal_type) submitData.meal_type = formData.meal_type;
       if (formData.serving_type !== mealDetails.serving_type) submitData.serving_type = formData.serving_type;
       if (formData.serving_amount !== mealDetails.serving_amount) submitData.serving_amount = formData.serving_amount;
@@ -200,7 +210,7 @@ export const UpdateMealForm: React.FC<UpdateMealFormProps> = ({
               type="datetime-local"
               value={formData.fed_at}
               onChange={(e) => handleInputChange('fed_at', e.target.value)}
-              max={new Date().toISOString().slice(0, 16)}
+              max={getCurrentLocalDateTime()}
               className="w-full px-4 py-2 border-2 border-mint/30 rounded-lg focus:ring-2 focus:ring-mint focus:border-mint"
               disabled={isLoading}
             />

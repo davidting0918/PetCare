@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { UtensilsCrossed, X } from 'lucide-react';
 import { usePet, useMeal, useFood } from '../../hooks';
+import { getCurrentLocalDateTime, datetimeLocalToUtc } from '../../utils/dateUtils';
 import type { CreateMealRequest, MealType, ServingType } from '../../types';
 
 interface CreateMealFormProps {
@@ -20,7 +21,7 @@ export const CreateMealForm: React.FC<CreateMealFormProps> = ({
 }) => {
   const { selectedPet } = usePet();
   const { create } = useMeal();
-  const { getCachedGroupFoods, getGroupFoods } = useFood();
+  const { getCachedGroupFoods, shouldFetchGroupFoods, getGroupFoods } = useFood();
 
   const groupId = selectedPet?.group_id;
   const foods = groupId ? getCachedGroupFoods(groupId) : [];
@@ -28,7 +29,7 @@ export const CreateMealForm: React.FC<CreateMealFormProps> = ({
   const [formData, setFormData] = useState<CreateMealRequest>({
     pet_id: selectedPet?.id || '',
     food_id: preSelectedFoodId || '',
-    fed_at: new Date().toISOString().slice(0, 16),
+    fed_at: getCurrentLocalDateTime(),
     meal_type: undefined,
     serving_type: 'units',
     serving_amount: 1,
@@ -38,14 +39,14 @@ export const CreateMealForm: React.FC<CreateMealFormProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
 
-  // Load foods when modal opens
+  // Load foods when modal opens (only if no cache and not loading)
   useEffect(() => {
-    if (isOpen && groupId && foods.length === 0) {
+    if (isOpen && groupId && shouldFetchGroupFoods(groupId)) {
       getGroupFoods(groupId).catch(error => {
         console.error('Failed to load foods:', error);
       });
     }
-  }, [isOpen, groupId, foods.length, getGroupFoods]);
+  }, [isOpen, groupId, shouldFetchGroupFoods, getGroupFoods]);
 
   // Get selected food details
   const selectedFood = useMemo(() => {
@@ -119,7 +120,7 @@ export const CreateMealForm: React.FC<CreateMealFormProps> = ({
       const submitData: CreateMealRequest = {
         pet_id: selectedPet!.id,
         food_id: formData.food_id,
-        fed_at: formData.fed_at ? new Date(formData.fed_at).toISOString() : undefined,
+        fed_at: formData.fed_at ? datetimeLocalToUtc(formData.fed_at) : undefined,
         meal_type: formData.meal_type || undefined,
         serving_type: formData.serving_type,
         serving_amount: parseFloat(formData.serving_amount.toString()),
@@ -154,7 +155,7 @@ export const CreateMealForm: React.FC<CreateMealFormProps> = ({
     setFormData({
       pet_id: selectedPet?.id || '',
       food_id: preSelectedFoodId || '',
-      fed_at: new Date().toISOString().slice(0, 16),
+      fed_at: getCurrentLocalDateTime(),
       meal_type: undefined,
       serving_type: 'units',
       serving_amount: 1,
@@ -205,7 +206,7 @@ export const CreateMealForm: React.FC<CreateMealFormProps> = ({
               type="datetime-local"
               value={formData.fed_at}
               onChange={(e) => handleInputChange('fed_at', e.target.value)}
-              max={new Date().toISOString().slice(0, 16)}
+              max={getCurrentLocalDateTime()}
               className="w-full px-4 py-2 border-2 border-mint/30 rounded-lg focus:ring-2 focus:ring-mint focus:border-mint hover:border-mint/50 transition-colors"
               disabled={isLoading}
             />
