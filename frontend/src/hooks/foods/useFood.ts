@@ -98,11 +98,6 @@ export const useFood = () => {
         dispatch(selectFood(food));
     }, [dispatch]);
 
-    // Get loading state for a group
-    const isLoadingGroupFoods = useCallback((groupId: string): boolean => {
-        return foodState.isLoading[groupId] || false;
-    }, [foodState.isLoading]);
-
     // Get error for a group
     const getFoodError = useCallback((groupId: string): string | null => {
         return foodState.error[groupId] || null;

@@ -400,7 +400,7 @@ export const MealPage: React.FC = () => {
                           <span className="text-lg">{MEAL_TYPE_ICONS[meal.meal_type]}</span>
                         )}
                         <span className="text-sm font-medium text-gray-600">
-                          {formatLocalDate(meal.timestamp, 'MMM d, h:mm a')}
+                          {formatLocalDate(meal.timestamp)}
                         </span>
                       </div>
                       <p className="font-semibold text-earth mb-1">{meal.food_name}</p>

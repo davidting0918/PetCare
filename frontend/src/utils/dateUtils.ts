@@ -36,7 +36,7 @@ export function localToUtc(date: Date | string): string {
  * @param format - Format string (default: 'MMM d, h:mm a')
  * @returns Formatted date string in local timezone
  */
-export function formatLocalDate(utcString: string, format: string = 'MMM d, h:mm a'): string {
+export function formatLocalDate(utcString: string): string {
   const localDate = utcToLocal(utcString);
 
   // Use Intl.DateTimeFormat for better timezone handling

@@ -63,7 +63,7 @@ const formatDate = (date: Date): string => {
 
 // Format datetime for display (using UTC to local conversion)
 const formatDateTime = (dateString: string): string => {
-  return formatLocalDate(dateString, 'MMM d, h:mm a');
+  return formatLocalDate(dateString);
 };
 
 export const WeightPage: React.FC = () => {
