@@ -5,6 +5,7 @@ import { format } from 'date-fns';
 import { usePet, useMeal, useFood } from '../../hooks';
 import { CreateMealForm, UpdateMealForm, CreateFoodForm, FoodDetailsModal } from '../forms';
 import { mealService } from '../../api';
+import { formatLocalDate, utcToLocal } from '../../utils/dateUtils';
 import type { MealInfo, MealDetails } from '../../types';
 
 type TimeRange = 'last_3_days' | 'last_7_days' | 'last_14_days';
@@ -28,13 +29,20 @@ export const MealPage: React.FC = () => {
   const {
     getCachedMealRecords,
     getCachedTodaySummary,
+    shouldFetchMealRecords,
+    shouldFetchTodaySummary,
     isLoadingMealRecords,
     getMealError,
     getMealRecords,
     getTodayMeals,
     refreshMealRecords
   } = useMeal();
-  const { getCachedGroupFoods, getGroupFoods, deleteFood: deleteFoodAction } = useFood();
+  const {
+    getCachedGroupFoods,
+    shouldFetchGroupFoods,
+    getGroupFoods,
+    deleteFood: deleteFoodAction
+  } = useFood();
 
   const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>('last_7_days');
   const [isCreateMealOpen, setIsCreateMealOpen] = useState(false);
@@ -64,22 +72,24 @@ export const MealPage: React.FC = () => {
     const dateFrom = new Date();
     dateFrom.setDate(dateFrom.getDate() - days);
 
-    // Load meals
-    if (meals.length === 0 && !isLoading) {
+    // Load meals only if no cache and not loading
+    if (shouldFetchMealRecords(petId)) {
       getMealRecords(petId, {
         date_from: dateFrom.toISOString().split('T')[0],
         limit: 100
       }).catch(err => console.error('Failed to load meals:', err));
     }
 
-    // Load today's summary
-    getTodayMeals(petId).catch(err => console.error('Failed to load today summary:', err));
+    // Load today's summary only if no cache and not loading
+    if (shouldFetchTodaySummary(petId)) {
+      getTodayMeals(petId).catch(err => console.error('Failed to load today summary:', err));
+    }
 
-    // Load foods
-    if (foods.length === 0) {
+    // Load foods only if no cache and not loading
+    if (shouldFetchGroupFoods(groupId)) {
       getGroupFoods(groupId).catch(err => console.error('Failed to load foods:', err));
     }
-  }, [petId, groupId, selectedTimeRange]);
+  }, [petId, groupId, selectedTimeRange, shouldFetchMealRecords, shouldFetchTodaySummary, shouldFetchGroupFoods, getMealRecords, getTodayMeals, getGroupFoods]);
 
   // Prepare chart data
   const chartData = useMemo(() => {
@@ -92,7 +102,12 @@ export const MealPage: React.FC = () => {
       date.setDate(date.getDate() - i);
       const dateStr = date.toISOString().split('T')[0];
 
-      const dayMeals = meals.filter(m => m.timestamp.startsWith(dateStr));
+      // Filter meals by local date (convert UTC timestamp to local date)
+      const dayMeals = meals.filter(m => {
+        const localDate = utcToLocal(m.timestamp);
+        const localDateStr = localDate.toISOString().split('T')[0];
+        return localDateStr === dateStr;
+      });
 
       const breakfast = dayMeals.filter(m => m.meal_type === 'breakfast').reduce((sum, m) => sum + m.calories, 0);
       const lunch = dayMeals.filter(m => m.meal_type === 'lunch').reduce((sum, m) => sum + m.calories, 0);
@@ -385,14 +400,14 @@ export const MealPage: React.FC = () => {
                           <span className="text-lg">{MEAL_TYPE_ICONS[meal.meal_type]}</span>
                         )}
                         <span className="text-sm font-medium text-gray-600">
-                          {format(new Date(meal.timestamp), 'MMM d, h:mm a')}
+                          {formatLocalDate(meal.timestamp, 'MMM d, h:mm a')}
                         </span>
                       </div>
                       <p className="font-semibold text-earth mb-1">{meal.food_name}</p>
                       <div className="flex items-center gap-3 text-sm text-gray-600">
                         <span>{meal.serving_amount} {meal.serving_type}</span>
                         <span>•</span>
-                        <span className="font-semibold text-mint">{Math.round(meal.calories)} kcal</span>
+                        <span>{Math.round(meal.calories)} kcal</span>
                       </div>
                       <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
                         <User className="w-3 h-3" />

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Scale, X } from 'lucide-react';
 import { useWeight } from '../../hooks';
+import { formatForDateTimeLocal, datetimeLocalToUtc } from '../../utils/dateUtils';
 import type { UpdateWeightRequest, WeightRecord } from '../../types';
 
 interface UpdateWeightFormProps {
@@ -30,10 +31,9 @@ export const UpdateWeightForm: React.FC<UpdateWeightFormProps> = ({
   // Initialize form data when weightRecord changes
   useEffect(() => {
     if (weightRecord) {
-      const timestamp = new Date(weightRecord.timestamp);
       setFormData({
         weight: weightRecord.weight,
-        timestamp: timestamp.toISOString().slice(0, 16), // Format: YYYY-MM-DDTHH:mm
+        timestamp: formatForDateTimeLocal(weightRecord.timestamp), // Format: YYYY-MM-DDTHH:mm (local time)
         notes: weightRecord.notes || ''
       });
     }
@@ -86,7 +86,7 @@ export const UpdateWeightForm: React.FC<UpdateWeightFormProps> = ({
         ...(formData.weight !== undefined && {
           weight: Math.round(parseFloat(formData.weight.toString()) * 100) / 100
         }),
-        ...(formData.timestamp && { timestamp: new Date(formData.timestamp).toISOString() }),
+        ...(formData.timestamp && { timestamp: datetimeLocalToUtc(formData.timestamp) }),
         ...(formData.notes?.trim() && { notes: formData.notes.trim() })
       };
 
@@ -125,10 +125,9 @@ export const UpdateWeightForm: React.FC<UpdateWeightFormProps> = ({
 
   const handleClose = () => {
     if (weightRecord) {
-      const timestamp = new Date(weightRecord.timestamp);
       setFormData({
         weight: weightRecord.weight,
-        timestamp: timestamp.toISOString().slice(0, 16),
+        timestamp: formatForDateTimeLocal(weightRecord.timestamp),
         notes: weightRecord.notes || ''
       });
     }

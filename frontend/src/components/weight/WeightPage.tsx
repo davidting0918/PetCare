@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { LineChart } from '@mui/x-charts/LineChart';
 import { usePet, useWeight } from '../../hooks';
 import { CreateWeightForm, UpdateWeightForm } from '../forms';
+import { formatLocalDate, utcToLocal } from '../../utils/dateUtils';
 import type { WeightRecord, TimeIntervalType, CustomDateRange } from '../../types';
 
 // Calculate date range based on interval type
@@ -60,15 +61,9 @@ const formatDate = (date: Date): string => {
   });
 };
 
-// Format datetime for display
+// Format datetime for display (using UTC to local conversion)
 const formatDateTime = (dateString: string): string => {
-  const date = new Date(dateString);
-  return date.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
+  return formatLocalDate(dateString, 'MMM d, h:mm a');
 };
 
 export const WeightPage: React.FC = () => {
@@ -123,7 +118,7 @@ export const WeightPage: React.FC = () => {
 
     const { start, end } = getDateRange(selectedInterval, customRange);
     return weightRecords.filter(record => {
-      const recordDate = new Date(record.timestamp);
+      const recordDate = utcToLocal(record.timestamp);
       return recordDate >= start && recordDate <= end;
     });
   }, [selectedInterval, customDateRange, customDateError, weightRecords]);
@@ -141,7 +136,7 @@ export const WeightPage: React.FC = () => {
     // Group records by day
     const dailyData: { [key: string]: WeightRecord[] } = {};
     filteredRecords.forEach(record => {
-      const dateKey = new Date(record.timestamp).toLocaleDateString('en-CA');
+      const dateKey = utcToLocal(record.timestamp).toLocaleDateString('en-CA');
       if (!dailyData[dateKey]) {
         dailyData[dateKey] = [];
       }

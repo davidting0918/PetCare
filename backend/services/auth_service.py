@@ -2,6 +2,7 @@ import os
 import uuid
 from datetime import datetime as dt
 from datetime import timedelta as td
+from datetime import timezone as tz
 from typing import Optional
 
 from fastapi import Depends, HTTPException, status
@@ -49,7 +50,7 @@ class AuthService:
         return pwd_context.hash(password)
 
     def create_access_token(self, user_id: str):
-        current_time = dt.now()
+        current_time = dt.now(tz.utc)
         expire = current_time + td(minutes=self.access_token_expire_minutes)
 
         to_encode = {
@@ -126,8 +127,8 @@ class AuthService:
                 hashed_pwd=self.get_password_hash(google_user_info.id),
                 picture=google_user_info.picture,
                 name=google_user_info.name,
-                created_at=dt.now(),
-                updated_at=dt.now(),
+                created_at=dt.now(tz.utc),
+                updated_at=dt.now(tz.utc),
                 source="google",
                 is_active=True,
             )

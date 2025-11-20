@@ -1,6 +1,7 @@
 import base64
 import os
 from datetime import datetime as dt
+from datetime import timezone as tz
 from typing import Dict, List, Tuple
 
 from fastapi import HTTPException, status
@@ -215,7 +216,7 @@ class MealService:
 
         # Generate meal ID with ml_ prefix
         meal_id = "ml_" + base64.urlsafe_b64encode(os.urandom(6)).decode("utf-8").rstrip("=")
-        current_time = dt.now()
+        current_time = dt.now(tz.utc)
 
         # Create meal record
         meal = Meal(
@@ -410,7 +411,7 @@ class MealService:
             )
 
         # Prepare update data
-        update_data = {"updated_at": dt.now()}
+        update_data = {"updated_at": dt.now(tz.utc)}
         needs_recalculation = False
 
         # Check which fields are being updated
@@ -518,7 +519,7 @@ class MealService:
         Returns:
             TodayMealSummary: Today's feeding summary
         """
-        today = dt.now().strftime("%Y-%m-%d")
+        today = dt.now(tz.utc).strftime("%Y-%m-%d")
 
         # Set date filters to today
         today_filters = MealQueryFilters(**filters.model_dump())

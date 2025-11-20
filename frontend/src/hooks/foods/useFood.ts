@@ -34,12 +34,17 @@ export const useFood = () => {
     }, [dispatch]);
 
     // Create a new food
-    const createFood = useCallback(async (groupId: string, request: CreateFoodRequest) => {
+    const createFood = useCallback(async (groupId: string, request: CreateFoodRequest): Promise<FoodDetails> => {
         const result = await dispatch(createFoodAction({ groupId, request }));
         if (createFoodAction.rejected.match(result)) {
             const payload = result.payload as { groupId: string; error: string };
             throw new Error(payload.error);
         }
+        if (createFoodAction.fulfilled.match(result)) {
+            const payload = result.payload as { groupId: string; food: FoodDetails };
+            return payload.food;
+        }
+        throw new Error('Failed to create food');
     }, [dispatch]);
 
     // Update an existing food
@@ -64,6 +69,24 @@ export const useFood = () => {
     const getCachedGroupFoods = useCallback((groupId: string): FoodInfo[] => {
         return foodState.foods[groupId] || [];
     }, [foodState.foods]);
+
+    // Check if there is cached data for a group
+    const hasCachedGroupFoods = useCallback((groupId: string): boolean => {
+        return !!foodState.foods[groupId] && foodState.foods[groupId].length > 0;
+    }, [foodState.foods]);
+
+    // Get loading state for a group
+    const isLoadingGroupFoods = useCallback((groupId: string): boolean => {
+        return foodState.isLoading[groupId] || false;
+    }, [foodState.isLoading]);
+
+    // Check if we should fetch foods for a group
+    // Returns true if there's no cached data and not currently loading
+    const shouldFetchGroupFoods = useCallback((groupId: string): boolean => {
+        const hasCache = hasCachedGroupFoods(groupId);
+        const isLoading = isLoadingGroupFoods(groupId);
+        return !hasCache && !isLoading;
+    }, [hasCachedGroupFoods, isLoadingGroupFoods]);
 
     // Get selected food details
     const getSelectedFood = useCallback((): FoodDetails | null => {
@@ -97,6 +120,8 @@ export const useFood = () => {
     return {
         // Get cached foods
         getCachedGroupFoods,
+        hasCachedGroupFoods,
+        shouldFetchGroupFoods,
         getSelectedFood,
         // Get loading state
         isLoadingGroupFoods,

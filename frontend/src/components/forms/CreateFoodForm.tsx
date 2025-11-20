@@ -148,24 +148,17 @@ export const CreateFoodForm: React.FC<CreateFoodFormProps> = ({
 
     setIsLoading(true);
     try {
-      // Create food and get the created food details
-      const createResponse = await foodService.createFood(groupId, {
-        ...formData,
-        brand: formData.brand.trim(),
-        product_name: formData.product_name.trim()
-      });
-
-      // Update Redux store by calling the hook action (this will update the cache)
-      await createFood(groupId, {
+      // Create food using Redux action (this will update the cache)
+      const createdFood = await createFood(groupId, {
         ...formData,
         brand: formData.brand.trim(),
         product_name: formData.product_name.trim()
       });
 
       // Upload photo if selected
-      if (selectedFile && createResponse.status === 1 && createResponse.data) {
+      if (selectedFile && createdFood && createdFood.id) {
         try {
-          await foodService.uploadFoodPhoto(createResponse.data.id, selectedFile);
+          await foodService.uploadFoodPhoto(createdFood.id, selectedFile);
         } catch (photoError: any) {
           console.error('Error uploading photo:', photoError);
           // Don't fail the whole operation if photo upload fails

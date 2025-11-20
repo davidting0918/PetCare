@@ -1,6 +1,7 @@
 import os
 import uuid
 from datetime import datetime as dt
+from datetime import timezone as tz
 from pathlib import Path
 
 import aiofiles
@@ -40,7 +41,7 @@ class UserService:
             raise HTTPException(status_code=400, detail="User already exists")
 
         # create user
-        current_time = dt.now()
+        current_time = dt.now(tz.utc)
         user = User(
             id=str(uuid.uuid4())[:8],
             email=request.email,
@@ -90,7 +91,7 @@ class UserService:
             update_fields.append(f"picture = '{request.picture}'")
 
         if update_fields:
-            update_fields.append(f"updated_at = '{dt.now()}'")
+            update_fields.append(f"updated_at = '{dt.now(tz.utc)}'")
             sql = f"""
             update {user_table} set {', '.join(update_fields)} where id = '{user_id}'
             """
@@ -188,7 +189,7 @@ class UserService:
             # Update user record with photo URL
             sql = f"""
             UPDATE {user_table}
-            SET picture = '{photo_url}', updated_at = '{dt.now()}'
+            SET picture = '{photo_url}', updated_at = '{dt.now(tz.utc)}'
             WHERE id = '{user_id}'
             """
             await self.db.execute(sql)
@@ -198,7 +199,7 @@ class UserService:
                 "photo_name": file_name,
                 "photo_size": actual_size,
                 "photo_type": file.content_type,
-                "photo_uploaded_at": int(dt.now().timestamp()),
+                "photo_uploaded_at": int(dt.now(tz.utc).timestamp()),
             }
 
         except Exception as e:

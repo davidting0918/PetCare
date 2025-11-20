@@ -1,4 +1,5 @@
 from datetime import datetime as dt
+from datetime import timezone as tz
 from enum import Enum
 from typing import Optional
 
@@ -57,8 +58,8 @@ class Meal(BaseModel):
     carbohydrate_g: float  # Actual carbohydrate intake in grams
 
     # Metadata
-    created_at: dt = Field(default_factory=dt.now)
-    updated_at: dt = Field(default_factory=dt.now)
+    created_at: dt = Field(default_factory=lambda: dt.now(tz.utc))
+    updated_at: dt = Field(default_factory=lambda: dt.now(tz.utc))
     is_active: bool = True
     notes: Optional[str] = Field(None, max_length=500)
 

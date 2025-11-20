@@ -1,6 +1,7 @@
 import base64
 import os
 from datetime import datetime as dt
+from datetime import timezone as tz
 from pathlib import Path
 from typing import List, Optional
 
@@ -150,8 +151,8 @@ class FoodService:
             fat=request.fat,
             moisture=request.moisture,
             carbohydrate=request.carbohydrate,
-            created_at=dt.now(),
-            updated_at=dt.now(),
+            created_at=dt.now(tz.utc),
+            updated_at=dt.now(tz.utc),
             photo_url="",
             is_active=True,
         )
@@ -536,7 +537,7 @@ class FoodService:
                 "photo_name": file_name,
                 "photo_size": actual_size,
                 "photo_type": file.content_type,
-                "photo_uploaded_at": int(dt.now().timestamp()),
+                "photo_uploaded_at": int(dt.now(tz.utc).timestamp()),
             }
 
         except Exception as e:

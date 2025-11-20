@@ -75,15 +75,41 @@ export const useMeal = () => {
         return mealState.meals[petId] || [];
     }, [mealState.meals]);
 
+    // Check if there is cached meal records for a pet
+    const hasCachedMealRecords = useCallback((petId: string): boolean => {
+        return !!mealState.meals[petId] && mealState.meals[petId].length > 0;
+    }, [mealState.meals]);
+
     // Get today's summary for a pet (from cache)
     const getCachedTodaySummary = useCallback((petId: string): TodayMealSummary | null => {
         return mealState.todaySummary[petId] || null;
+    }, [mealState.todaySummary]);
+
+    // Check if there is cached today summary for a pet
+    const hasCachedTodaySummary = useCallback((petId: string): boolean => {
+        return !!mealState.todaySummary[petId];
     }, [mealState.todaySummary]);
 
     // Get loading state for a pet
     const isLoadingMealRecords = useCallback((petId: string): boolean => {
         return mealState.isLoading[petId] || false;
     }, [mealState.isLoading]);
+
+    // Check if we should fetch meal records for a pet
+    // Returns true if there's no cached data and not currently loading
+    const shouldFetchMealRecords = useCallback((petId: string): boolean => {
+        const hasCache = hasCachedMealRecords(petId);
+        const isLoading = isLoadingMealRecords(petId);
+        return !hasCache && !isLoading;
+    }, [hasCachedMealRecords, isLoadingMealRecords]);
+
+    // Check if we should fetch today summary for a pet
+    // Returns true if there's no cached data and not currently loading
+    const shouldFetchTodaySummary = useCallback((petId: string): boolean => {
+        const hasCache = hasCachedTodaySummary(petId);
+        const isLoading = isLoadingMealRecords(petId);
+        return !hasCache && !isLoading;
+    }, [hasCachedTodaySummary, isLoadingMealRecords]);
 
     // Get error for a pet
     const getMealError = useCallback((petId: string): string | null => {
@@ -101,7 +127,12 @@ export const useMeal = () => {
     return {
         // Get cached records
         getCachedMealRecords,
+        hasCachedMealRecords,
         getCachedTodaySummary,
+        hasCachedTodaySummary,
+        // Check if should fetch
+        shouldFetchMealRecords,
+        shouldFetchTodaySummary,
         // Get loading state
         isLoadingMealRecords,
         // Get error
