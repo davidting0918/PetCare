@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
-
+import React, { useState, useEffect } from 'react';
 import { X, Edit2, Trash2, UtensilsCrossed, Upload, Camera, Apple } from 'lucide-react';
 import { foodService } from '../../api';
 import { useFood } from '../../hooks';
+import { useFileUpload } from '../../hooks/useFileUpload';
+import { COLORS } from '../../constants/colors';
 import type { FoodDetails, UpdateFoodRequest, FoodType, TargetPet } from '../../types';
 
 interface FoodDetailsModalProps {
@@ -27,16 +28,26 @@ export const FoodDetailsModal: React.FC<FoodDetailsModalProps> = ({
   onSuccess
 }) => {
   const { updateFood, getGroupFoods } = useFood();
+
+  // Use file upload hook
+  const {
+    selectedFile,
+    previewUrl,
+    error: fileError,
+    fileInputRef,
+    handleFileSelect,
+    handleRemoveFile
+  } = useFileUpload({
+    maxSize: 5 * 1024 * 1024 // 5MB for food photos
+  });
+
   const [food, setFood] = useState<FoodDetails | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string>('');
   const [isEditMode, setIsEditMode] = useState(initialEditMode);
   const [formData, setFormData] = useState<UpdateFoodRequest>({});
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen && foodId) {
@@ -91,48 +102,18 @@ export const FoodDetailsModal: React.FC<FoodDetailsModalProps> = ({
     }
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Validate file type
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    if (!allowedTypes.includes(file.type)) {
-      setErrors({ ...errors, photo: 'Please upload a JPEG, PNG, GIF, or WebP image' });
-      return;
+  // Sync file upload error with form errors
+  useEffect(() => {
+    if (fileError) {
+      setErrors(prev => ({ ...prev, photo: fileError }));
+    } else {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors.photo;
+        return newErrors;
+      });
     }
-
-    // Validate file size (5MB for food photos)
-    const maxSize = 5 * 1024 * 1024;
-    if (file.size > maxSize) {
-      setErrors({ ...errors, photo: 'File is too large. Maximum size is 5MB' });
-      return;
-    }
-
-    // Clear previous errors
-    const newErrors = { ...errors };
-    delete newErrors.photo;
-    setErrors(newErrors);
-
-    // Set file and create preview
-    setSelectedFile(file);
-    const url = URL.createObjectURL(file);
-    setPreviewUrl(url);
-  };
-
-  const handleRemovePhoto = () => {
-    setSelectedFile(null);
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
-      setPreviewUrl(null);
-    }
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-    const newErrors = { ...errors };
-    delete newErrors.photo;
-    setErrors(newErrors);
-  };
+  }, [fileError]);
 
   const handleInputChange = (field: keyof UpdateFoodRequest, value: any) => {
     setFormData(prev => ({
@@ -247,14 +228,7 @@ export const FoodDetailsModal: React.FC<FoodDetailsModalProps> = ({
         carbohydrate: food.carbohydrate
       });
     }
-    setSelectedFile(null);
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
-      setPreviewUrl(null);
-    }
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    handleRemoveFile();
     setErrors({});
     setIsEditMode(false);
   };
@@ -264,11 +238,7 @@ export const FoodDetailsModal: React.FC<FoodDetailsModalProps> = ({
     setPhotoUrl('');
     setError(null);
     setIsEditMode(false);
-    setSelectedFile(null);
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
-      setPreviewUrl(null);
-    }
+    handleRemoveFile();
     setErrors({});
     onClose();
   };
@@ -354,17 +324,17 @@ export const FoodDetailsModal: React.FC<FoodDetailsModalProps> = ({
                         onClick={() => fileInputRef.current?.click()}
                         disabled={isLoading}
                         className="w-full px-4 py-2 bg-orange text-white rounded-lg hover:bg-orange/90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-                        style={{ backgroundColor: '#F4C2A1' }}
+                        style={{ backgroundColor: COLORS.orange }}
                       >
                         <Upload className="w-4 h-4" />
                         <span className="text-sm">
                           {selectedFile ? 'Change Photo' : 'Upload Photo'}
                         </span>
                       </button>
-                      {selectedFile && (
-                        <button
-                          type="button"
-                          onClick={handleRemovePhoto}
+                        {selectedFile && (
+                          <button
+                            type="button"
+                            onClick={handleRemoveFile}
                           disabled={isLoading}
                           className="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm disabled:opacity-50"
                         >
@@ -624,7 +594,7 @@ export const FoodDetailsModal: React.FC<FoodDetailsModalProps> = ({
                     type="button"
                     onClick={handleSave}
                     className="flex-1 btn-3d px-4 py-2 text-white rounded-lg disabled:opacity-50"
-                    style={{ backgroundColor: '#F4C2A1' }}
+                    style={{ backgroundColor: COLORS.orange }}
                     disabled={isLoading}
                   >
                     {isLoading ? 'Saving...' : 'Save Changes'}

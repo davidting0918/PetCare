@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User, X, Upload, Camera } from 'lucide-react';
 import { useUser } from '../../hooks';
+import { useFileUpload } from '../../hooks/useFileUpload';
 import type { User as UserType } from '../../types';
 import { getPhotoUrl } from '../../api';
 
@@ -19,78 +20,48 @@ export const EditUserInfoModal: React.FC<EditUserInfoModalProps> = ({
 }) => {
   const { updateInfo, uploadPhoto, changePassword, isLoading } = useUser();
 
+  // Use file upload hook
+  const {
+    selectedFile,
+    error: fileError,
+    fileInputRef,
+    handleFileSelect,
+    handleRemoveFile
+  } = useFileUpload({
+    maxSize: 10 * 1024 * 1024 // 10MB
+  });
+
   // Form states
   const [name, setName] = useState(user.name);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Reset form when user changes or modal opens
   useEffect(() => {
     if (isOpen) {
       setName(user.name);
-      setSelectedFile(null);
-      setPreviewUrl(null);
+      handleRemoveFile();
       setOldPassword('');
       setNewPassword('');
       setConfirmPassword('');
       setErrors({});
     }
-  }, [isOpen, user]);
+  }, [isOpen, user, handleRemoveFile]);
 
-  // Clean up preview URL
+  // Sync file upload error with form errors
   useEffect(() => {
-    return () => {
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-      }
-    };
-  }, [previewUrl]);
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Validate file type
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    if (!allowedTypes.includes(file.type)) {
-      setErrors({ ...errors, photo: 'Please upload a JPEG, PNG, GIF, or WebP image' });
-      return;
+    if (fileError) {
+      setErrors(prev => ({ ...prev, photo: fileError }));
+    } else {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors.photo;
+        return newErrors;
+      });
     }
-
-    // Validate file size (10MB)
-    const maxSize = 10 * 1024 * 1024;
-    if (file.size > maxSize) {
-      setErrors({ ...errors, photo: 'File is too large. Maximum size is 10MB' });
-      return;
-    }
-
-    // Clear previous errors
-    const newErrors = { ...errors };
-    delete newErrors.photo;
-    setErrors(newErrors);
-
-    // Set file and create preview
-    setSelectedFile(file);
-    const url = URL.createObjectURL(file);
-    setPreviewUrl(url);
-  };
-
-  const handleRemovePhoto = () => {
-    setSelectedFile(null);
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
-      setPreviewUrl(null);
-    }
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
+  }, [fileError]);
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -169,11 +140,7 @@ export const EditUserInfoModal: React.FC<EditUserInfoModalProps> = ({
 
   const handleClose = () => {
     setName(user.name);
-    setSelectedFile(null);
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
-      setPreviewUrl(null);
-    }
+    handleRemoveFile();
     setOldPassword('');
     setNewPassword('');
     setConfirmPassword('');
@@ -259,7 +226,7 @@ export const EditUserInfoModal: React.FC<EditUserInfoModalProps> = ({
                 {selectedFile && (
                   <button
                     type="button"
-                    onClick={handleRemovePhoto}
+                    onClick={handleRemoveFile}
                     disabled={isLoading}
                     className="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm disabled:opacity-50"
                   >

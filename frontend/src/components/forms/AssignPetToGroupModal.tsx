@@ -3,6 +3,7 @@ import { Users, X, AlertCircle } from 'lucide-react';
 import { useGroup } from '../../hooks';
 import { petService } from '../../api';
 import type { PetInfo } from '../../types';
+import { COLORS } from '../../constants/colors';
 
 interface AssignPetToGroupModalProps {
   isOpen: boolean;
@@ -171,7 +172,7 @@ export const AssignPetToGroupModal: React.FC<AssignPetToGroupModalProps> = ({
               disabled={isSubmitting || creatorGroups.length === 0}
               className="flex-1 btn-3d text-white disabled:opacity-50 disabled:cursor-not-allowed"
               style={{
-                backgroundColor: '#B8D8D8',
+                backgroundColor: COLORS.mint,
               }}
             >
               {isSubmitting ? 'Assigning...' : 'Assign Pet'}

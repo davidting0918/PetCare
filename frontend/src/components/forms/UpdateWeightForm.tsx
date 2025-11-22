@@ -54,6 +54,7 @@ export const UpdateWeightForm: React.FC<UpdateWeightFormProps> = ({
     }
   };
 
+
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
 

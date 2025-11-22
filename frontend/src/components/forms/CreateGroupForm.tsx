@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Users, X } from 'lucide-react';
 import { useGroup } from '../../hooks';
 import type { CreateGroupRequest } from '../../types';
+import { COLORS } from '../../constants/colors';
 
 interface CreateGroupFormProps {
   isOpen: boolean;
@@ -147,7 +148,7 @@ export const CreateGroupForm: React.FC<CreateGroupFormProps> = ({
               disabled={isLoading}
               className="flex-1 btn-3d text-white disabled:opacity-50 disabled:cursor-not-allowed"
               style={{
-                backgroundColor: '#B8D8D8',
+                backgroundColor: COLORS.mint,
               }}
             >
               {isLoading ? 'Creating...' : 'Create Group'}

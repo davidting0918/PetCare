@@ -1,5 +1,6 @@
 import React from 'react';
 import { AlertTriangle, X } from 'lucide-react';
+import { COLORS } from '../../constants/colors';
 
 interface DeleteConfirmDialogProps {
   isOpen: boolean;
@@ -63,10 +64,10 @@ export const DeleteConfirmDialog: React.FC<DeleteConfirmDialogProps> = ({
             <button
               onClick={onConfirm}
               disabled={isLoading}
-              className="flex-1 btn-3d text-white disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{
-                backgroundColor: '#EF4444',
-              }}
+            className="flex-1 btn-3d text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{
+              backgroundColor: COLORS.danger,
+            }}
             >
               {isLoading ? 'Deleting...' : 'Delete'}
             </button>

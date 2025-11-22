@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { X, Users, Crown, Eye, UserPlus, Calendar, User } from 'lucide-react';
+import { X, Users, UserPlus, Calendar, User } from 'lucide-react';
 import type { GroupRole } from '../../types';
+import { getRoleIcon, getRoleColor, getRoleLabel } from '../../utils/roleUtils';
+import { COLORS } from '../../constants/colors';
 
 interface InvitationData {
   id: string;
@@ -19,33 +21,6 @@ interface InvitationPreviewModalProps {
   invitationData: InvitationData | null;
   onConfirmJoin: () => Promise<void>;
 }
-
-// Helper functions for role styling
-const getRoleIcon = (role: GroupRole) => {
-  switch (role) {
-    case 'creator':
-      return <Crown className="w-5 h-5 text-orange" />;
-    case 'member':
-      return <Users className="w-5 h-5 text-mint" />;
-    case 'viewer':
-      return <Eye className="w-5 h-5 text-gray-500" />;
-  }
-};
-
-const getRoleColor = (role: GroupRole) => {
-  switch (role) {
-    case 'creator':
-      return 'bg-orange/20 text-orange border-orange/30';
-    case 'member':
-      return 'bg-mint/20 text-mint border-mint/30';
-    case 'viewer':
-      return 'bg-gray-100 text-gray-600 border-gray-300';
-  }
-};
-
-const getRoleLabel = (role: GroupRole) => {
-  return role.charAt(0).toUpperCase() + role.slice(1);
-};
 
 export const InvitationPreviewModal: React.FC<InvitationPreviewModalProps> = ({
   isOpen,
@@ -149,7 +124,7 @@ export const InvitationPreviewModal: React.FC<InvitationPreviewModalProps> = ({
           <div className="flex items-center gap-3 py-3 border-t border-gray-200">
             <div className="flex items-start gap-3">
               <div className={`inline-flex items-center px-3 py-2 rounded-full border-2 font-medium ${getRoleColor(invitationData.role)}`}>
-                {getRoleIcon(invitationData.role)}
+                {getRoleIcon(invitationData.role, { size: 'medium' })}
                 <span className="ml-2">{getRoleLabel(invitationData.role)}</span>
               </div>
             </div>
@@ -182,7 +157,7 @@ export const InvitationPreviewModal: React.FC<InvitationPreviewModalProps> = ({
               disabled={isJoining}
               className="flex-1 px-4 py-3 rounded-lg font-medium text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               style={{
-                backgroundColor: '#B8D8D8',
+                backgroundColor: COLORS.mint,
               }}
             >
               <UserPlus className="w-5 h-5" />
