@@ -7,21 +7,17 @@ import { CreateMealForm, UpdateMealForm, CreateFoodForm, FoodDetailsModal } from
 import { mealService } from '../../api';
 import { formatLocalDate, utcToLocal } from '../../utils/dateUtils';
 import type { MealInfo, MealDetails } from '../../types';
+import { COLORS } from '../../constants/colors';
+import { MEAL_TYPES } from '../../constants/mealTypes';
 
 type TimeRange = 'last_3_days' | 'last_7_days' | 'last_14_days';
 
+// Legacy support - map to new MEAL_TYPES config
 const MEAL_TYPE_COLORS = {
-  breakfast: '#FFF9E6',
-  lunch: '#E6F7FF',
-  dinner: '#F3E6FF',
-  snack: '#FFE6F0'
-};
-
-const MEAL_TYPE_ICONS = {
-  breakfast: '🌅',
-  lunch: '🌞',
-  dinner: '🌙',
-  snack: '🍪'
+  breakfast: MEAL_TYPES.breakfast.bgColor,
+  lunch: MEAL_TYPES.lunch.bgColor,
+  dinner: MEAL_TYPES.dinner.bgColor,
+  snack: MEAL_TYPES.snack.bgColor
 };
 
 export const MealPage: React.FC = () => {
@@ -29,7 +25,6 @@ export const MealPage: React.FC = () => {
   const {
     getCachedMealRecords,
     getCachedTodaySummary,
-    shouldFetchMealRecords,
     shouldFetchTodaySummary,
     isLoadingMealRecords,
     getMealError,
@@ -68,28 +63,31 @@ export const MealPage: React.FC = () => {
   useEffect(() => {
     if (!petId || !groupId) return;
 
-    const days = selectedTimeRange === 'last_3_days' ? 3 : selectedTimeRange === 'last_7_days' ? 7 : 14;
-    const dateFrom = new Date();
-    dateFrom.setDate(dateFrom.getDate() - days);
+    // Only fetch if we don't have cached records
+    const hasCachedMeals = getCachedMealRecords(petId).length > 0;
+    if (!hasCachedMeals && !isLoadingMealRecords(petId)) {
+      console.log('📊 MealPage: Fetching meal records for pet:', petId);
+      // Use last 14 days as default for initial fetch
+      const dateFrom = new Date();
+      dateFrom.setDate(dateFrom.getDate() - 14);
 
-    // Load meals only if no cache and not loading
-    if (shouldFetchMealRecords(petId)) {
       getMealRecords(petId, {
         date_from: dateFrom.toISOString().split('T')[0],
         limit: 100
-      }).catch(err => console.error('Failed to load meals:', err));
+      }).catch(err => console.error('❌ MealPage: Failed to load meals:', err));
     }
 
     // Load today's summary only if no cache and not loading
     if (shouldFetchTodaySummary(petId)) {
-      getTodayMeals(petId).catch(err => console.error('Failed to load today summary:', err));
+      getTodayMeals(petId).catch(err => console.error('❌ MealPage: Failed to load today summary:', err));
     }
 
     // Load foods only if no cache and not loading
     if (shouldFetchGroupFoods(groupId)) {
-      getGroupFoods(groupId).catch(err => console.error('Failed to load foods:', err));
+      getGroupFoods(groupId).catch(err => console.error('❌ MealPage: Failed to load foods:', err));
     }
-  }, [petId, groupId, selectedTimeRange, shouldFetchMealRecords, shouldFetchTodaySummary, shouldFetchGroupFoods, getMealRecords, getTodayMeals, getGroupFoods]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [petId, groupId]);
 
   // Prepare chart data
   const chartData = useMemo(() => {
@@ -267,19 +265,19 @@ export const MealPage: React.FC = () => {
             {/* Meal Counts */}
             <div className="grid grid-cols-4 gap-2 pt-2 border-t">
               <div className="text-center">
-                <p className="text-xs text-gray-600">🌅</p>
+                <p className="text-xs text-gray-600 font-medium">Breakfast</p>
                 <p className="text-lg font-bold text-earth">{todaySummary.breakfast_count}</p>
               </div>
               <div className="text-center">
-                <p className="text-xs text-gray-600">🌞</p>
+                <p className="text-xs text-gray-600 font-medium">Lunch</p>
                 <p className="text-lg font-bold text-earth">{todaySummary.lunch_count}</p>
               </div>
               <div className="text-center">
-                <p className="text-xs text-gray-600">🌙</p>
+                <p className="text-xs text-gray-600 font-medium">Dinner</p>
                 <p className="text-lg font-bold text-earth">{todaySummary.dinner_count}</p>
               </div>
               <div className="text-center">
-                <p className="text-xs text-gray-600">🍪</p>
+                <p className="text-xs text-gray-600 font-medium">Snack</p>
                 <p className="text-lg font-bold text-earth">{todaySummary.snack_count}</p>
               </div>
             </div>
@@ -318,31 +316,31 @@ export const MealPage: React.FC = () => {
                   data: chartData.map(d => d.breakfast),
                   stack: 'total',
                   label: 'Breakfast',
-                  color: '#FFE082'
+                  color: MEAL_TYPES.breakfast.chartColor
                 },
                 {
                   data: chartData.map(d => d.lunch),
                   stack: 'total',
                   label: 'Lunch',
-                  color: '#81D4FA'
+                  color: MEAL_TYPES.lunch.chartColor
                 },
                 {
                   data: chartData.map(d => d.dinner),
                   stack: 'total',
                   label: 'Dinner',
-                  color: '#CE93D8'
+                  color: MEAL_TYPES.dinner.chartColor
                 },
                 {
                   data: chartData.map(d => d.snack),
                   stack: 'total',
                   label: 'Snack',
-                  color: '#F48FB1'
+                  color: MEAL_TYPES.snack.chartColor
                 },
                 {
                   data: chartData.map(d => d.unclassified),
                   stack: 'total',
                   label: 'Other',
-                  color: '#B0BEC5'
+                  color: MEAL_TYPES.unclassified.chartColor
                 }
               ]}
               height={300}
@@ -390,15 +388,12 @@ export const MealPage: React.FC = () => {
                   key={meal.id}
                   className="rounded-lg p-4 border-2 border-gray-200 hover:border-mint/50 transition-colors"
                   style={{
-                    backgroundColor: meal.meal_type ? MEAL_TYPE_COLORS[meal.meal_type] : '#f9fafb'
+                    backgroundColor: meal.meal_type ? MEAL_TYPE_COLORS[meal.meal_type] : COLORS.mealTypes.unclassified
                   }}
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        {meal.meal_type && (
-                          <span className="text-lg">{MEAL_TYPE_ICONS[meal.meal_type]}</span>
-                        )}
                         <span className="text-sm font-medium text-gray-600">
                           {formatLocalDate(meal.timestamp)}
                         </span>
@@ -449,7 +444,7 @@ export const MealPage: React.FC = () => {
             <button
               onClick={() => setIsCreateFoodOpen(true)}
               className="btn-3d px-3 py-1 text-sm text-white"
-              style={{ backgroundColor: '#F4C2A1' }}
+              style={{ backgroundColor: COLORS.orange }}
             >
               <Plus className="w-4 h-4 inline mr-1" />
               Add Food
@@ -514,7 +509,7 @@ export const MealPage: React.FC = () => {
                     <p className="text-xs text-gray-600 truncate">{food.product_name}</p>
                     <div className="flex items-center justify-between mt-2 pt-2 border-t">
                       <span className="text-xs text-gray-500">
-                        {food.food_type === 'wet_food' ? '🥫' : '🍖'} {food.target_pet}
+                        {food.food_type === 'wet_food' ? 'Wet' : 'Dry'} · {food.target_pet}
                       </span>
                       <span className="text-xs font-semibold text-orange">
                         {food.calories} kcal/100g

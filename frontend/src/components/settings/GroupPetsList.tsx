@@ -1,57 +1,13 @@
 import React from 'react';
-import { PawPrint, Crown, Users as UsersIcon, Eye } from 'lucide-react';
+import { PawPrint } from 'lucide-react';
 import { useGroup } from '../../hooks';
+import { getRoleIcon, getPermissionColor, getPermissionLabel } from '../../utils/roleUtils';
 
 interface GroupPetsListProps {
   groupId: string;
   groupName: string;
   userRole: 'creator' | 'member' | 'viewer';
 }
-
-const getPermissionIcon = (permission: string) => {
-  switch (permission) {
-    case 'owner':
-      return <Crown className="w-3 h-3 text-orange" />;
-    case 'creator':
-      return <Crown className="w-3 h-3 text-mint" />;
-    case 'member':
-      return <UsersIcon className="w-3 h-3 text-mint" />;
-    case 'viewer':
-      return <Eye className="w-3 h-3 text-gray-500" />;
-    default:
-      return null;
-  }
-};
-
-const getPermissionColor = (permission: string) => {
-  switch (permission) {
-    case 'owner':
-      return 'bg-orange/20 text-orange border-orange/30';
-    case 'creator':
-      return 'bg-mint/20 text-mint border-mint/30';
-    case 'member':
-      return 'bg-mint/10 text-mint border-mint/20';
-    case 'viewer':
-      return 'bg-gray-100 text-gray-600 border-gray-300';
-    default:
-      return 'bg-gray-100 text-gray-600 border-gray-300';
-  }
-};
-
-const getPermissionLabel = (permission: string) => {
-  switch (permission) {
-    case 'owner':
-      return 'Owner';
-    case 'creator':
-      return 'Group Creator';
-    case 'member':
-      return 'Group Member';
-    case 'viewer':
-      return 'Viewer';
-    default:
-      return permission;
-  }
-};
 
 export const GroupPetsList: React.FC<GroupPetsListProps> = ({
   groupId,
@@ -135,7 +91,7 @@ export const GroupPetsList: React.FC<GroupPetsListProps> = ({
                       pet.user_permission
                     )}`}
                   >
-                    {getPermissionIcon(pet.user_permission)}
+                    {getRoleIcon(pet.user_permission as 'owner' | 'creator' | 'member' | 'viewer', { size: 'small' })}
                     <span className="ml-1">{getPermissionLabel(pet.user_permission)}</span>
                   </div>
                 </div>

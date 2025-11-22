@@ -3,8 +3,6 @@ import {
   User,
   Mail,
   Users,
-  Crown,
-  Eye,
   ChevronDown,
   ChevronUp,
   Plus,
@@ -18,38 +16,13 @@ import { useAuth, useGroup, usePet } from '../../hooks';
 import { useAppDispatch } from '../../hooks/redux';
 import { refreshCurrentUser } from '../../store/slices/authSlice';
 import { fetchAccessiblePets } from '../../store/slices/petSlice';
-import type { UserRole, GroupRole, PetInfo } from '../../types';
+import type { GroupRole, PetInfo } from '../../types';
 import { CreateGroupForm, CreateInvitationForm, EditUserInfoModal, EditPetInfoModal, CreatePetForm, AssignPetToGroupModal, EnterInviteCodeModal, InvitationPreviewModal } from '../forms';
 import { DeleteConfirmDialog } from '../common/DeleteConfirmDialog';
 import { GroupPetsList } from './GroupPetsList';
 import { groupService } from '../../api';
-// Helper function to convert API role to UI role
-const normalizeRole = (role: GroupRole): UserRole => {
-  return (role.charAt(0).toUpperCase() + role.slice(1)) as UserRole;
-};
-
-// Helper functions for role styling (same as PetSelectionPage)
-const getRoleIcon = (role: UserRole) => {
-  switch (role) {
-    case 'Creator':
-      return <Crown className="w-4 h-4 text-orange" />;
-    case 'Member':
-      return <Users className="w-4 h-4 text-mint" />;
-    case 'Viewer':
-      return <Eye className="w-4 h-4 text-gray-500" />;
-  }
-};
-
-const getRoleColor = (role: UserRole) => {
-  switch (role) {
-    case 'Creator':
-      return 'bg-orange/20 text-orange border-orange/30';
-    case 'Member':
-      return 'bg-mint/20 text-mint border-mint/30';
-    case 'Viewer':
-      return 'bg-gray-100 text-gray-600 border-gray-300';
-  }
-};
+import { normalizeRole, getRoleIcon, getRoleColor } from '../../utils/roleUtils';
+import { COLORS } from '../../constants/colors';
 
 export const SettingsPage: React.FC = () => {
   const { user, logout } = useAuth();
@@ -581,7 +554,7 @@ export const SettingsPage: React.FC = () => {
                                     }}
                                     className="btn-3d flex-1 py-2 text-sm text-white hover:bg-mint/90 transition-colors flex items-center justify-center gap-2"
                                     style={{
-                                      backgroundColor: '#B8D8D8',
+                                      backgroundColor: COLORS.mint,
                                     }}
                                   >
                                     <UserPlus className="w-4 h-4" />
@@ -597,7 +570,7 @@ export const SettingsPage: React.FC = () => {
                                       }}
                                       className="btn-3d flex-1 py-2 text-sm text-white hover:bg-red-600 transition-colors flex items-center justify-center gap-2"
                                       style={{
-                                        backgroundColor: '#EF4444',
+                                        backgroundColor: COLORS.danger,
                                       }}
                                     >
                                       <Trash2 className="w-4 h-4" />
@@ -629,8 +602,8 @@ export const SettingsPage: React.FC = () => {
         onClick={handleCreatePet}
         className="btn-3d w-full py-4 text-white bg-orange hover:bg-orange/90 transition-all duration-200 flex items-center justify-center gap-3"
         style={{
-          backgroundColor: '#F4C2A1',
-          border: '2px solid #e8b690'
+          backgroundColor: COLORS.orange,
+          border: `2px solid ${COLORS.orangeBorder}`
         }}
       >
         <Plus className="w-5 h-5" />
@@ -642,7 +615,7 @@ export const SettingsPage: React.FC = () => {
         onClick={handleJoinGroupClick}
         className="btn-3d w-full py-4 text-white hover:bg-mint/90 transition-all duration-200 flex items-center justify-center gap-3"
         style={{
-          backgroundColor: '#B8D8D8',
+          backgroundColor: COLORS.mint,
         }}
       >
         <UserPlus className="w-5 h-5" />
@@ -654,7 +627,7 @@ export const SettingsPage: React.FC = () => {
         onClick={handleCreateGroup}
         className="btn-3d w-full py-4 text-white hover:bg-mint/90 transition-all duration-200 flex items-center justify-center gap-3"
         style={{
-          backgroundColor: '#B8D8D8',
+          backgroundColor: COLORS.mint,
         }}
       >
         <Users className="w-5 h-5" />
@@ -666,7 +639,7 @@ export const SettingsPage: React.FC = () => {
         onClick={handleLogout}
         className="btn-3d w-full py-4 text-white hover:bg-mint/90 transition-all duration-200 flex items-center justify-center gap-3"
         style={{
-          backgroundColor: '#4A5568',
+          backgroundColor: COLORS.darkGray,
         }}
       >
         <LogOut className="w-5 h-5" />

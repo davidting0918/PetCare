@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, UserPlus } from 'lucide-react';
+import { COLORS } from '../../constants/colors';
 
 interface EnterInviteCodeModalProps {
   isOpen: boolean;
@@ -131,7 +132,7 @@ export const EnterInviteCodeModal: React.FC<EnterInviteCodeModalProps> = ({
               disabled={inviteCode.length !== 6 || isLoading}
               className="flex-1 px-4 py-3 rounded-lg font-medium text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               style={{
-                backgroundColor: inviteCode.length === 6 && !isLoading ? '#B8D8D8' : '#E5E7EB',
+                backgroundColor: inviteCode.length === 6 && !isLoading ? COLORS.mint : '#E5E7EB',
               }}
             >
               {isLoading ? 'Checking...' : 'Continue'}

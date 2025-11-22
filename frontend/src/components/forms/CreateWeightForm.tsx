@@ -43,6 +43,7 @@ export const CreateWeightForm: React.FC<CreateWeightFormProps> = ({
     }
   };
 
+
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
 

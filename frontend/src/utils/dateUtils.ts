@@ -21,6 +21,52 @@ export function utcToLocal(utcString: string): Date {
 }
 
 /**
+ * Format date for display (short format)
+ * Shows "Jan 15" for current year, "Jan 15, 2024" for other years
+ * @param date - Date to format
+ * @returns Formatted date string
+ */
+export function formatDateShort(date: Date): string {
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: date.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
+  });
+}
+
+/**
+ * Format date for input fields (YYYY-MM-DD)
+ * @param date - Date to format
+ * @returns Date string in YYYY-MM-DD format
+ */
+export function formatDateForInput(date: Date): string {
+  return date.toLocaleDateString('en-CA'); // Returns YYYY-MM-DD format
+}
+
+/**
+ * Format relative date ("Expires today", "Expires in 3 days")
+ * @param targetDate - The target date
+ * @param fromDate - The date to calculate from (defaults to now)
+ * @returns Formatted relative date string
+ */
+export function formatRelativeDate(targetDate: Date, fromDate: Date = new Date()): string {
+  const days = Math.ceil((targetDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (days < 1) return 'Expires today';
+  if (days === 1) return 'Expires tomorrow';
+  return `Expires in ${days} days`;
+}
+
+/**
+ * Format date for chart axis display
+ * @param date - Date to format
+ * @returns Formatted date string (e.g., "1/15")
+ */
+export function formatDateForAxis(date: Date): string {
+  return `${date.getMonth() + 1}/${date.getDate()}`;
+}
+
+/**
  * Convert local Date to UTC ISO string for sending to backend
  * @param date - Local Date object or ISO string
  * @returns ISO 8601 string in UTC

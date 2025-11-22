@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { UserPlus, X, Copy, Check } from 'lucide-react';
 import { groupService } from '../../api';
 import type { GroupRole } from '../../types';
+import { COLORS } from '../../constants/colors';
 
 interface CreateInvitationFormProps {
   isOpen: boolean;
@@ -156,7 +157,7 @@ export const CreateInvitationForm: React.FC<CreateInvitationFormProps> = ({
                   disabled={isLoading}
                   className="flex-1 btn-3d text-white disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{
-                    backgroundColor: '#B8D8D8',
+                    backgroundColor: COLORS.mint,
                   }}
                 >
                   {isLoading ? 'Creating...' : 'Create Invitation'}
@@ -205,7 +206,7 @@ export const CreateInvitationForm: React.FC<CreateInvitationFormProps> = ({
                 onClick={handleClose}
                 className="w-full btn-3d py-2 text-white"
                 style={{
-                  backgroundColor: '#B8D8D8',
+                  backgroundColor: COLORS.mint,
                   border: '2px solid #a8c8c8'
                 }}
               >

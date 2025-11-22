@@ -4,8 +4,9 @@ import { format } from 'date-fns';
 import { LineChart } from '@mui/x-charts/LineChart';
 import { usePet, useWeight } from '../../hooks';
 import { CreateWeightForm, UpdateWeightForm } from '../forms';
-import { formatLocalDate, utcToLocal } from '../../utils/dateUtils';
+import { formatLocalDate, utcToLocal, formatDateShort } from '../../utils/dateUtils';
 import type { WeightRecord, TimeIntervalType, CustomDateRange } from '../../types';
+import { COLORS } from '../../constants/colors';
 
 // Calculate date range based on interval type
 const getDateRange = (
@@ -50,20 +51,6 @@ const getDateRange = (
 
   start.setHours(0, 0, 0, 0);
   return { start, end };
-};
-
-// Format date for display
-const formatDate = (date: Date): string => {
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: date.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
-  });
-};
-
-// Format datetime for display (using UTC to local conversion)
-const formatDateTime = (dateString: string): string => {
-  return formatLocalDate(dateString);
 };
 
 export const WeightPage: React.FC = () => {
@@ -178,10 +165,10 @@ export const WeightPage: React.FC = () => {
     }));
   }, [chartData]);
 
-  // Format date for xAxis
-  const formatDateForAxis = (value: number) => {
+  // Format date for xAxis display
+  const formatAxisDate = (value: number) => {
     const date = new Date(value);
-    return formatDate(date);
+    return formatDateShort(date);
   };
 
   const handleFormSuccess = async (message: string) => {
@@ -362,7 +349,7 @@ export const WeightPage: React.FC = () => {
               <LineChart
                 xAxis={[{
                   data: chartDataForMUI.map(d => d.date),
-                  valueFormatter: (value) => formatDateForAxis(value),
+                  valueFormatter: (value) => formatAxisDate(value),
                   scaleType: 'time',
                   label: 'Date',
                   labelStyle: {
@@ -405,7 +392,7 @@ export const WeightPage: React.FC = () => {
                   tooltip: {
                     sx: {
                       backgroundColor: 'white',
-                      border: '1px solid #e5e7eb',
+                      border: `1px solid ${COLORS.chart.border}`,
                       borderRadius: '8px',
                       padding: '8px 12px'
                     }
@@ -414,24 +401,24 @@ export const WeightPage: React.FC = () => {
                 sx={{
                   '& .MuiLineElement-root': {
                     strokeWidth: 3,
-                    stroke: '#B8E6D3'
+                    stroke: COLORS.chart.mint
                   },
                   '& .MuiMarkElement-root': {
-                    fill: '#B8E6D3',
+                    fill: COLORS.chart.mint,
                     stroke: '#ffffff',
                     strokeWidth: 2,
                     r: 4
                   },
                   '& .MuiChartsGrid-root line': {
-                    stroke: '#e5e7eb',
+                    stroke: COLORS.chart.border,
                     strokeWidth: 1
                   },
                   '& .MuiChartsAxis-root line': {
-                    stroke: '#d1d5db',
+                    stroke: COLORS.chart.borderDark,
                     strokeWidth: 1
                   },
                   '& .MuiChartsAxis-root text': {
-                    fill: '#6b7280',
+                    fill: COLORS.chart.gray,
                     fontSize: 11
                   }
                 }}
@@ -532,7 +519,7 @@ export const WeightPage: React.FC = () => {
                   <div className="flex items-center gap-3">
                   <div className="flex items-center text-sm text-gray-600">
                     <Calendar className="w-4 h-4 mr-1" />
-                    <span>{formatDateTime(record.timestamp)}</span>
+                    <span>{formatLocalDate(record.timestamp)}</span>
                     </div>
                     <button
                       onClick={() => handleUpdateClick(record)}
