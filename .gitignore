@@ -8,3 +8,5 @@ node_modules
 storage
 .vite
 repo
+
+.claude/settings.json
