@@ -290,7 +290,7 @@ Both `/be` and `/fe` end their issue flow by committing, pushing, and opening a 
 - **Target branch**: `master`. CI runs on push/PR to both `master` and `develop`, but the canonical PR base is `master`.
 - **Draft, never ready-for-review**: PRs are always opened with `gh pr create --draft`. The user marks them ready themselves after review. Never auto-merge, never force-push.
 - **PR title**: `[#N] <issue title>` for a single issue, `[#N1 #N2] Combined: <short combined title>` for a batch.
-- **PR body** must include: `Closes #N` lines (one per issue), a `## Summary` bullet list, `## Files changed by layer` grouping, the manual test plan or steps from self-review, any non-obvious decisions in `## Notes`, and a `🤖 Generated with Claude Code` footer. `/be` adds `## Manual SQL to run` and `## Pre-existing coverage gaps`. `/fe` adds `## Backend endpoints consumed` (with `file:line` refs) and `## Mobile viewport check`. If `/summary` applied doc updates, both add `## Doc updates`.
+- **PR body** must include: `Closes #N` lines (one per issue), a `## Summary` bullet list, `## Files changed by layer` grouping, the manual test plan or steps from self-review, and any non-obvious decisions in `## Notes`. `/be` adds `## Manual SQL to run` and `## Pre-existing coverage gaps`. `/fe` adds `## Backend endpoints consumed` (with `file:line` refs) and `## Mobile viewport check`. If `/summary` applied doc updates, both add `## Doc updates`. **No Claude attribution footer.**
 - **Commit cadence**: `/fe` makes one commit (feat / fix). `/be` makes one commit for the implementation plus a second commit (`test(<domain>): ...`) if `/bte` wrote unit tests in the same run. Both add a third commit (`docs: sync after #N`) if `/summary` applied doc drift fixes. All commits go on the same branch in the same PR.
 - **Quality gate before commit**: `/be` runs `cd backend && pre-commit run --all-files`. `/fe` runs `cd frontend && npm run lint && npm run build`. If either fails, fix the underlying issue and re-stage. **Never use `--no-verify`.** If the gate fails twice in a row, **stop the skill** and report the failure to the user — do not commit broken code.
 - **Existing PR collision**: if a draft PR with the same `Closes #N` already exists on `origin`, **stop and report** — do not push or open a duplicate. The user decides whether to reuse or close it first.
@@ -385,23 +385,13 @@ The repo uses a `category:value` label system. **Source of truth is [.claude/lab
 
 Total: **21 custom labels**. All 9 GitHub default labels were deleted on 2026-04-08 (`bug` / `documentation` / `enhancement` were replaced by `type:fix` / `type:docs` / `type:feat`; the other 6 were unused on this single-developer repo).
 
-### How skills auto-apply labels
+### Where labels live
 
-`/be`, `/fe`, and `/bte` set labels at PR creation time based on the commit prefix and touched paths. The mapping:
+**Labels live on issues, not on PRs.** `/pm plan` is the only skill that applies labels (when it creates issues from a feature breakdown). `/be`, `/fe`, `/bte`, and `/summary` do **not** pass `--label` to `gh pr create` — PRs inherit context from the `Closes #N` linkage in the PR body, and the issue's labels remain visible there.
 
-| Skill / Commit | Auto-applied labels |
-|---|---|
-| `/be` `feat(<domain>): ...` | `type:feat` + `area:backend` + `domain:<domain>` (+ `area:database` if `db_schema.sql` touched) |
-| `/be` `fix(<domain>): ...` | `type:fix` + `area:backend` + `domain:<domain>` |
-| `/be` `refactor(<domain>): ...` | `type:refactor` + `area:backend` + `domain:<domain>` |
-| `/fe` `feat(<resource>): ...` | `type:feat` + `area:frontend` + `domain:<resource>` (when the resource maps to a known domain) |
-| `/fe` `fix(<resource>): ...` | `type:fix` + `area:frontend` + `domain:<resource>` |
-| `/bte unit <domain>` (bootstrap) | `type:test` + `test:unit` + `area:backend` + `domain:<domain>` |
-| `/bte integration <domain>` (write) | `type:test` + `test:integration` + `area:backend` + `domain:<domain>` (or `area:database` if `<domain>` is `schema`) |
-| `/summary` (`docs: sync after #N`) | `type:docs` + `area:claude` |
-| `/be` / `/fe` touching `.github/workflows/` | also adds `area:ci` |
+The reason: labels exist so the user can filter the issue list (`type:feat`, `area:frontend`, `domain:meal`, etc.). Re-attaching them to PRs is duplicate noise that slows the dev flow without adding signal — every PR that closes an issue is already discoverable by clicking through the issue.
 
-`gh pr create` accepts repeated `--label "<name>"` flags. The skill should pass them at PR creation rather than `gh issue edit`-ing afterwards.
+If a PR is opened by hand (not via `/be` / `/fe`) and the user wants it to appear in some label-filtered view, they can `gh pr edit <N> --add-label <name>` themselves.
 
 ### Manual conventions
 

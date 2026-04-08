@@ -115,7 +115,7 @@ The domain already has a unit test file. Review it; do **not** write or modify a
 The domain has no unit tests at all. Plan and write a fresh test file from scratch, synchronously in main checkout per `CLAUDE.md > Dev Flow`.
 
 1. **Build a coverage plan from the service file**: for each public method, list every important code path (happy path, validation failures, authz failures, not-found, conflict, edge cases). For group-scoped resources, every method that touches `pets` / `foods` / `meals` must include viewer / non-member / member / creator authorization cases.
-2. **Show the plan to the user in Traditional Chinese before writing.** Use the same structure as the review report (覆蓋摘要 + planned cases per method) but framed as "我準備新增以下測試". Append a final line **預計 PR labels** listing the label set you intend to pass to `gh pr create` in Step 7 (only relevant when running standalone — when invoked inline by `/be`, the parent skill owns labels). This gives the user visibility into what is about to be written, even though no confirmation is required to proceed.
+2. **Show the plan to the user in Traditional Chinese before writing.** Use the same structure as the review report (覆蓋摘要 + planned cases per method) but framed as "我準備新增以下測試". This gives the user visibility into what is about to be written, even though no confirmation is required to proceed.
 3. **Branch decision**:
    - **If invoked inline by `/be`** → skip pre-flight and branch creation. Write directly to `/be`'s existing branch. `/be` will commit + push + PR.
    - **If invoked standalone** → run pre-flight checks per `CLAUDE.md > Dev Flow`: `git status --porcelain` (must be empty), `git fetch origin master`, then `git checkout -b claude/bte-bootstrap-<domain> origin/master` (append `-2`, `-3`, ... on collision).
@@ -134,23 +134,12 @@ The domain has no unit tests at all. Plan and write a fresh test file from scrat
    ```
    Fix any failures. **Never use `--no-verify`.** Two failures in a row → stop and report.
 7. **Commit / push / PR** (standalone only — skip if invoked inline by `/be`):
-   - Commit message: `test(<domain>): bootstrap unit tests for <domain> service`
+   - Commit message: `test(<domain>): bootstrap unit tests for <domain> service`. Commit messages do **not** include a `Co-Authored-By: Claude` trailer.
    - `git push -u origin <branch>`
-   - **Decide PR labels** based on the touched paths (full rules: `CLAUDE.md > GitHub Labels`; canonical name list: [.claude/labels.yaml](.claude/labels.yaml)):
-     - **`type:test`** — always (this PR's purpose is bootstrap tests)
-     - **`test:unit`** — always (this PR adds files under `backend/tests/unit/`)
-     - **`area:backend`** — always
-     - **`area:claude`** — only if `/summary` chained from this run touched `CLAUDE.md` / `.claude/skills/` / `.claude/labels.yaml` / memory (rare for a pure bootstrap)
-     - **`domain:<d>`** — exactly one, matching the `<domain>` argument that `/bte unit` was invoked with. Pick from `auth` / `user` / `group` / `pet` / `food` / `meal` / `weight` / `medicine`.
-     - **Never invent a new label name on the fly.** All labels must already exist on the repo. If a needed label is missing, **stop** and tell the user — adding labels is a separate `chore(labels): add <name>` flow.
-   - Open the PR with one `--label "<name>"` flag per decided label:
+   - Open a **draft** PR. **Do not pass `--label` flags** — labels live on issues, not PRs.
      ```bash
      gh pr create --draft --base master \
        --title "[bte] bootstrap unit tests for <domain>" \
-       --label "type:test" \
-       --label "test:unit" \
-       --label "area:backend" \
-       --label "domain:<domain>" \
        --body "$(cat <<'EOF'
      ## Summary
      - Bootstrap unit test file for <domain> service
@@ -167,15 +156,12 @@ The domain has no unit tests at all. Plan and write a fresh test file from scrat
 
      ## Notes
      - <any non-obvious decisions>
-
-     🤖 Generated with Claude Code
      EOF
      )"
      ```
-   - **`gh` label failure mode:** `gh pr create` will fail with `pull request create failed: GraphQL: Could not resolve to a label named "<name>"` if any `--label` value does not exist on the repo. When that happens, **stop** and tell the user the missing label name verbatim. Do not retry without `--label`, do not invent a fallback, do not run `gh label create` to "fix" it on the user's behalf.
 8. **Report back in Traditional Chinese**:
-   - **If standalone** → PR URL, branch name, **Labels applied** (comma-separated list of every `--label` actually passed), files created, pytest result, switch-back hint (`git switch <previous>`)
-   - **If inline** → branch name (= `/be`'s branch), files created, pytest result, hand control back to `/be` (the parent skill owns the PR labels for inline runs)
+   - **If standalone** → PR URL, branch name, files created, pytest result, switch-back hint (`git switch <previous>`)
+   - **If inline** → branch name (= `/be`'s branch), files created, pytest result, hand control back to `/be`
 
 ---
 
@@ -219,8 +205,7 @@ Produce a discussion document in Traditional Chinese:
 End the discussion document with:
 
 1. An itemised list of the proposed cases, each numbered.
-2. A line **預計 PR labels** stating the label set you would pass to `gh pr create` if the user approves any of the cases (only relevant when running standalone — when invoked inline by `/be`, the parent skill owns labels). This lets the user correct label mistakes in the same approval round.
-3. The selection prompt:
+2. The selection prompt:
 
 > 「以上案例要我實作哪幾個？回 `1,3,5` 指定編號、回 `all` 全寫、或回 `no` 停止。整合測試會新增到 `backend/tests/integration/test_<domain>.py`，不會被加入 CI。」
 
@@ -248,23 +233,12 @@ When writing:
    ```
    Fix any failures. **Never use `--no-verify`.** Two failures in a row → stop and report.
 4. **Commit / push / PR** (standalone only):
-   - Commit message: `test(<domain>): add integration tests for <list of scenarios>`
+   - Commit message: `test(<domain>): add integration tests for <list of scenarios>`. Commit messages do **not** include a `Co-Authored-By: Claude` trailer.
    - `git push -u origin <branch>`
-   - **Decide PR labels** based on the touched paths (full rules: `CLAUDE.md > GitHub Labels`; canonical name list: [.claude/labels.yaml](.claude/labels.yaml)):
-     - **`type:test`** — always
-     - **`test:integration`** — always (this PR adds files under `backend/tests/integration/`)
-     - **`area:backend`** — always
-     - **`area:database`** — only when `<domain>` is `schema` (the schema-match test exists to verify `database/db_schema.sql` against the live DB)
-     - **`domain:<d>`** — exactly one when `<domain>` is one of `auth` / `user` / `group` / `pet` / `food` / `meal` / `weight` / `medicine`. **Skip `domain:*` entirely when `<domain>` is `schema`** — schema verification is cross-domain.
-     - **Never invent a new label name on the fly.** All labels must already exist on the repo. If a needed label is missing, **stop** and tell the user.
-   - Open the PR with one `--label "<name>"` flag per decided label:
+   - Open a **draft** PR. **Do not pass `--label` flags** — labels live on issues, not PRs.
      ```bash
      gh pr create --draft --base master \
        --title "[bte] integration tests for <domain>" \
-       --label "type:test" \
-       --label "test:integration" \
-       --label "area:backend" \
-       --label "domain:<domain>" \
        --body "$(cat <<'EOF'
      ## Summary
      - Integration tests for <domain>: <list of scenarios>
@@ -280,15 +254,11 @@ When writing:
      ## Notes
      - These tests are manual-only. CI workflow files were NOT touched.
      - <any non-obvious decisions>
-
-     🤖 Generated with Claude Code
      EOF
      )"
      ```
-   - **`gh` label failure mode:** `gh pr create` will fail with `pull request create failed: GraphQL: Could not resolve to a label named "<name>"` if any `--label` value does not exist on the repo. When that happens, **stop** and tell the user the missing label name verbatim. Do not retry without `--label`, do not invent a fallback, do not run `gh label create` to "fix" it on the user's behalf.
 5. **Report back in Traditional Chinese**:
    - PR URL + branch name (standalone) OR branch name (inline)
-   - **Labels applied** — comma-separated list of every `--label` actually passed (standalone only; inline runs let `/be` own the labels)
    - Files created / modified
    - Tests added (count + brief list of scenarios)
    - **Manual run command** the user should use to verify (highlight prominently — these tests are manual-only)
