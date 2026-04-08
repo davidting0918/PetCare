@@ -69,7 +69,7 @@ If the issue describes an endpoint that does **not** exist in `backend/routers/`
 The full text lives in [CLAUDE.md > Frontend > Styling rules](../../../CLAUDE.md). Summary:
 
 - **Tailwind is the default for everything.** No `sx={...}`, no `styled(...)` from `@emotion/styled` in new code.
-- **Use project design tokens**, not raw Tailwind colors: `mint`, `earth`, `orange` (colors); `card-3d`, `btn-3d`, `btn-3d-mint`, `shadow-3d` (utility classes). Match the nearest sibling component.
+- **Use project design tokens**, not raw Tailwind colors. Canonical SoT: `frontend/src/styles/tokens.css` (CSS variables) → exposed via `tailwind.config.js` as `surface.{0-3}` / `border.{subtle,DEFAULT,strong}` / `text.{primary,secondary,tertiary,disabled}` / `accent.{pink,teal,purple,blue}` (+ `-hover`) / `success` / `warning` / `danger` / `info`. Component classes: `surface-card` / `surface-elevated` / `btn-primary` / `btn-secondary` / `input-field` (in `index.css`). Shadows: `shadow-card` / `shadow-elevated` / `shadow-selected-{pink,teal,purple,blue}`. Legacy `mint` / `earth` / `orange` / `primary` colors and `card-3d` / `btn-3d*` / `input-3d` / `shadow-3d` classes are deprecated — kept only for unswept consumer files (#54-#57 sweep), do NOT use in new code.
 - **Icons are `lucide-react`**, never `@mui/icons-material`.
 - **`@mui/material` is reserved for complex specialized widgets** (currently only `@mui/x-charts`). Reaching for any other MUI component requires justification in the plan.
 - **`@emotion/*` is never imported directly** — it is only a transitive dependency of MUI.
@@ -113,7 +113,8 @@ Before declaring an issue "done", inside the worktree:
 - `frontend/src/utils/dateUtils.ts` — `formatLocalDate`, `utcToLocal`, `getCurrentLocalDateTime`, `datetimeLocalToUtc`. Reuse for any date handling.
 - `frontend/src/constants/` — colors, mealTypes, etc. Add new constants here, not inline.
 - `frontend/vite.config.ts` — PWA config
-- `frontend/tailwind.config.js` — design tokens
+- `frontend/tailwind.config.js` — Tailwind colors / shadows, all values reference CSS variables in `frontend/src/styles/tokens.css`
+- `frontend/src/styles/tokens.css` — single source of truth for all design tokens (dark theme + legacy compatibility variables)
 
 ---
 
@@ -207,7 +208,7 @@ Write the code directly in main checkout. Rules:
 - One layer at a time, in canonical order: `types` → `api/services` → `store/slices` → `hooks` → `components` → `routing`.
 - Reuse shared shells: `common/Modal.tsx`, `common/DeleteConfirmDialog.tsx`, `useFormState`, `useFileUpload`, `dateUtils`.
 - Match the nearest sibling file's style (imports, naming, default vs named exports, prop typing).
-- Honour the **styling rules**: Tailwind everywhere, project tokens (`mint`/`earth`/`orange`/`card-3d`/`btn-3d`), `lucide-react` icons only, no `sx={}`, no `styled()`, no direct `@emotion/*` imports, no `@mui/icons-material`, no MUI primitives (only `@mui/x-charts` is allowed).
+- Honour the **styling rules**: Tailwind everywhere, project tokens (`surface.*` / `border.*` / `text.*` / `accent.*` from `tailwind.config.js`, sourced from `frontend/src/styles/tokens.css`; component classes `surface-card` / `btn-primary` / `btn-secondary` / `input-field`), `lucide-react` icons only, no `sx={}`, no `styled()`, no direct `@emotion/*` imports, no `@mui/icons-material`, no MUI primitives (only `@mui/x-charts` is allowed). Do NOT use legacy `mint` / `earth` / `orange` / `primary` colors or `card-3d` / `btn-3d*` / `input-3d` / `shadow-3d` classes in new code — they are deprecated and being swept out by #54-#57.
 - All API calls go through `src/api/services/`, never `import axios` in components or hooks.
 - All cross-component shared state goes through Redux slices. Local form state uses `useFormState`.
 - Mobile-first layout. Bottom nav is the primary nav.
