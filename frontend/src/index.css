@@ -1,3 +1,5 @@
+@import './styles/tokens.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -10,15 +12,93 @@
 
 body {
   margin: 0;
-  background-color: #F2EAD3;
+  /* Background flows through the legacy CSS variable to keep the warm cream
+   * fallback during initial paint. Will be re-pointed to surface-0 once
+   * #54-#57 sweep all pages onto the dark token system. */
+  background-color: rgb(var(--legacy-primary));
 }
 
-/* 3D Button Styles */
 @layer components {
+  /* ─────────────────────────────────────────────────────────────────────
+   * New token-driven component classes (#53 onward).
+   * Built from CSS variables in tokens.css. Use these in any new code.
+   * ───────────────────────────────────────────────────────────────────── */
+
+  .surface-card {
+    @apply bg-surface-1 rounded-2xl border border-border-subtle shadow-card transition-colors duration-200;
+  }
+
+  .surface-elevated {
+    @apply bg-surface-2 rounded-2xl border border-border-default shadow-elevated;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold;
+    @apply transition-colors duration-200 outline-none;
+    background-color: rgb(var(--primary));
+    color: rgb(var(--text-primary));
+  }
+  .btn-primary:hover {
+    background-color: rgb(var(--accent-pink-hover));
+  }
+  .btn-primary:focus-visible {
+    box-shadow: var(--shadow-selected-pink);
+  }
+  .btn-primary:disabled {
+    background-color: rgb(var(--text-disabled));
+    color: rgb(var(--text-tertiary));
+    cursor: not-allowed;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold;
+    @apply transition-colors duration-200 outline-none;
+    background-color: rgb(var(--surface-2));
+    color: rgb(var(--text-primary));
+    border: 1px solid rgb(var(--border-default));
+  }
+  .btn-secondary:hover {
+    background-color: rgb(var(--surface-3));
+    border-color: rgb(var(--border-strong));
+  }
+  .btn-secondary:focus-visible {
+    box-shadow: 0 0 0 2px rgb(var(--accent-pink) / 0.4);
+  }
+
+  .input-field {
+    @apply block w-full rounded-xl px-4 py-2.5 text-sm transition-colors duration-200;
+    background-color: rgb(var(--surface-2));
+    color: rgb(var(--text-primary));
+    border: 1px solid rgb(var(--border-default));
+    outline: none;
+  }
+  .input-field::placeholder {
+    color: rgb(var(--text-tertiary));
+  }
+  .input-field:focus {
+    border-color: rgb(var(--accent-pink));
+    box-shadow: 0 0 0 1px rgb(var(--accent-pink) / 0.5);
+  }
+  .input-field:disabled {
+    background-color: rgb(var(--surface-1));
+    color: rgb(var(--text-disabled));
+    cursor: not-allowed;
+  }
+
+  /* ─────────────────────────────────────────────────────────────────────
+   * Legacy 3D component classes — DO NOT use in new code.
+   * Color values now flow through `--legacy-*` CSS variables in tokens.css
+   * so visual fidelity is preserved while the token system is in place.
+   * Will be deleted once issues #54-#57 sweep all consumer files.
+   * ───────────────────────────────────────────────────────────────────── */
+
   .btn-3d {
     @apply relative overflow-hidden rounded-lg transition-all duration-200 ease-out;
     @apply shadow-3d active:shadow-3d-pressed;
-    background: linear-gradient(135deg, #F4C2A1 0%, #F4C2A1 50%, #e8b690 100%);
+    background: linear-gradient(135deg,
+      rgb(var(--legacy-orange)) 0%,
+      rgb(var(--legacy-orange)) 50%,
+      rgb(var(--legacy-orange-deeper)) 100%);
     transform: translateY(0px);
   }
 
@@ -33,20 +113,31 @@ body {
   }
 
   .btn-3d-mint {
-    background: linear-gradient(135deg, #B8E6D3 0%, #B8E6D3 50%, #a3d8c4 100%);
+    background: linear-gradient(135deg,
+      rgb(var(--legacy-mint)) 0%,
+      rgb(var(--legacy-mint)) 50%,
+      rgb(var(--legacy-mint-deeper)) 100%);
   }
 
   .btn-3d-earth {
-    background: linear-gradient(135deg, #8D7053 0%, #8D7053 50%, #7a6147 100%);
+    background: linear-gradient(135deg,
+      rgb(var(--legacy-earth)) 0%,
+      rgb(var(--legacy-earth)) 50%,
+      rgb(var(--legacy-earth-deeper)) 100%);
   }
 
   .btn-3d-orange {
-    background: linear-gradient(135deg, #F4C2A1 0%, #F4C2A1 50%, #e8b690 100%);
+    background: linear-gradient(135deg,
+      rgb(var(--legacy-orange)) 0%,
+      rgb(var(--legacy-orange)) 50%,
+      rgb(var(--legacy-orange-deeper)) 100%);
   }
 
   .card-3d {
     @apply bg-white rounded-xl shadow-3d transition-all duration-200;
-    background: linear-gradient(135deg, #ffffff 0%, #fafafa 100%);
+    background: linear-gradient(135deg,
+      rgb(var(--legacy-card-from)) 0%,
+      rgb(var(--legacy-card-to)) 100%);
   }
 
   .card-3d:hover {
@@ -55,32 +146,47 @@ body {
   }
 
   .input-3d {
-    @apply border-2 border-gray-200 rounded-lg px-4 py-3 transition-all duration-200;
+    @apply border-2 rounded-lg px-4 py-3 transition-all duration-200;
     @apply focus:border-orange focus:shadow-3d focus:outline-none;
-    background: linear-gradient(135deg, #ffffff 0%, #fafafa 100%);
+    border-color: rgb(var(--legacy-input-border));
+    background: linear-gradient(135deg,
+      rgb(var(--legacy-card-from)) 0%,
+      rgb(var(--legacy-card-to)) 100%);
   }
 
-  /* Gradient Progress Bar Styles */
   .progress-gradient {
-    background: linear-gradient(90deg, #B8E6D3 0%, #F4C2A1 50%, #8D7053 100%);
+    background: linear-gradient(90deg,
+      rgb(var(--legacy-mint)) 0%,
+      rgb(var(--legacy-orange)) 50%,
+      rgb(var(--legacy-earth)) 100%);
     background-size: 200% 100%;
     animation: shimmer 2s ease-in-out infinite alternate;
   }
 
   .progress-gradient-ring {
-    background: conic-gradient(from 0deg, #B8E6D3 0%, #F4C2A1 50%, #8D7053 100%, #B8E6D3 100%);
+    background: conic-gradient(from 0deg,
+      rgb(var(--legacy-mint)) 0%,
+      rgb(var(--legacy-orange)) 50%,
+      rgb(var(--legacy-earth)) 100%,
+      rgb(var(--legacy-mint)) 100%);
   }
 
   .weight-trend-up {
-    background: linear-gradient(135deg, #10B981 0%, #34D399 100%);
+    background: linear-gradient(135deg,
+      rgb(var(--legacy-trend-up-from)) 0%,
+      rgb(var(--legacy-trend-up-to)) 100%);
   }
 
   .weight-trend-down {
-    background: linear-gradient(135deg, #EF4444 0%, #F87171 100%);
+    background: linear-gradient(135deg,
+      rgb(var(--legacy-trend-down-from)) 0%,
+      rgb(var(--legacy-trend-down-to)) 100%);
   }
 
   .weight-trend-stable {
-    background: linear-gradient(135deg, #6B7280 0%, #9CA3AF 100%);
+    background: linear-gradient(135deg,
+      rgb(var(--legacy-trend-stable-from)) 0%,
+      rgb(var(--legacy-trend-stable-to)) 100%);
   }
 
   @keyframes shimmer {
@@ -120,7 +226,7 @@ body {
   }
 
   .circular-progress-bg {
-    stroke: #E5E7EB;
+    stroke: rgb(var(--legacy-input-border));
   }
 
   .circular-progress-fill {
@@ -131,18 +237,20 @@ body {
 
   /* Toggle Checkbox */
   .toggle-checkbox {
-    @apply relative w-11 h-6 bg-gray-200 rounded-full outline-none cursor-pointer transition-colors duration-200;
+    @apply relative w-11 h-6 rounded-full outline-none cursor-pointer transition-colors duration-200;
+    background-color: rgb(var(--legacy-input-border));
     -webkit-appearance: none;
     -moz-appearance: none;
     appearance: none;
   }
 
   .toggle-checkbox:checked {
-    @apply bg-orange;
+    background-color: rgb(var(--legacy-orange));
   }
 
   .toggle-checkbox::before {
-    @apply absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200;
+    @apply absolute top-0.5 left-0.5 w-5 h-5 rounded-full shadow-sm transition-transform duration-200;
+    background-color: rgb(var(--legacy-card-from));
     content: '';
   }
 
@@ -156,13 +264,15 @@ body {
 
   /* Scale Display Animation */
   .scale-display {
-    background: linear-gradient(135deg, #1F2937 0%, #374151 100%);
-    color: #10B981;
+    background: linear-gradient(135deg,
+      rgb(var(--legacy-scale-bg-from)) 0%,
+      rgb(var(--legacy-scale-bg-to)) 100%);
+    color: rgb(var(--legacy-scale-text));
     font-family: 'Courier New', monospace;
-    text-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+    text-shadow: 0 0 10px var(--legacy-scale-text-glow);
   }
 
   .weight-card-glow {
-    box-shadow: 0 4px 20px rgba(180, 230, 211, 0.3), 0 2px 10px rgba(180, 230, 211, 0.2);
+    box-shadow: var(--legacy-weight-card-glow);
   }
 }

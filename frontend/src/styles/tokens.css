@@ -1,0 +1,122 @@
+/*
+ * tokens.css — single source of truth for all design tokens.
+ *
+ * Format notes:
+ * - Color tokens are stored as space-separated `r g b` triplets so Tailwind's
+ *   alpha-modifier syntax (`bg-surface-1/50`, `text-text-primary/80`) keeps
+ *   working via `rgb(var(--token) / <alpha-value>)` in tailwind.config.js.
+ * - Shadow tokens are stored as fully-formed `box-shadow` strings, ready to
+ *   drop into a `box-shadow:` declaration or `theme.boxShadow.*` mapping.
+ * - Glow tokens are stored as full `rgba(...)` strings for direct use inside
+ *   composite shadow declarations.
+ *
+ * Section order:
+ *   1. Dark theme tokens (default — applied via :root)
+ *   2. Light theme placeholder ([data-theme="light"], values to be filled later)
+ *   3. Legacy compatibility tokens (preserve the warm-pastel palette consumed
+ *      by the .tsx files that still reference `mint` / `orange` / `earth` /
+ *      `primary` / `card-3d` / `btn-3d` etc. — to be removed once #54-#57
+ *      finish sweeping all consumers).
+ */
+
+:root {
+  /* ─── Surfaces (background layers, deepest → highest) ───────────────── */
+  --surface-0: 14 18 24;     /* page background */
+  --surface-1: 26 31 43;     /* card background */
+  --surface-2: 36 41 56;     /* nested surface, input field background */
+  --surface-3: 46 52 74;     /* popover, tooltip, elevated overlay */
+
+  /* ─── Borders ───────────────────────────────────────────────────────── */
+  --border-subtle: 38 44 57;
+  --border-default: 51 57 73;
+  --border-strong: 74 80 102;
+
+  /* ─── Text ──────────────────────────────────────────────────────────── */
+  --text-primary: 245 247 250;
+  --text-secondary: 142 148 166;
+  --text-tertiary: 93 99 120;
+  --text-disabled: 61 66 84;
+
+  /* ─── Categorical accents (4 colors, each with -hover + -glow) ──────── */
+  --accent-pink: 255 45 135;
+  --accent-pink-hover: 255 75 155;
+  --accent-pink-glow: rgba(255, 45, 135, 0.4);
+
+  --accent-teal: 16 217 176;
+  --accent-teal-hover: 36 237 196;
+  --accent-teal-glow: rgba(16, 217, 176, 0.4);
+
+  --accent-purple: 168 85 247;
+  --accent-purple-hover: 188 105 255;
+  --accent-purple-glow: rgba(168, 85, 247, 0.4);
+
+  --accent-blue: 59 130 246;
+  --accent-blue-hover: 79 150 255;
+  --accent-blue-glow: rgba(59, 130, 246, 0.4);
+
+  /* ─── Semantic aliases ──────────────────────────────────────────────── *
+   * Aliases reference accent tokens via nested var() so future re-mapping
+   * touches one line. Use these CSS variables inside @layer components,
+   * not the accent-* names directly.
+   */
+  --primary: var(--accent-pink);
+  --success: var(--accent-teal);
+  --info: var(--accent-blue);
+  --warning: 245 158 11;
+  --danger: 239 68 68;
+
+  /* ─── Shadows (full box-shadow strings) ─────────────────────────────── */
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-elevated: 0 4px 12px rgba(0, 0, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.4);
+  --shadow-selected-pink: 0 0 0 1px rgb(var(--accent-pink) / 0.5), 0 0 24px rgb(var(--accent-pink) / 0.35);
+  --shadow-selected-teal: 0 0 0 1px rgb(var(--accent-teal) / 0.5), 0 0 24px rgb(var(--accent-teal) / 0.35);
+  --shadow-selected-purple: 0 0 0 1px rgb(var(--accent-purple) / 0.5), 0 0 24px rgb(var(--accent-purple) / 0.35);
+  --shadow-selected-blue: 0 0 0 1px rgb(var(--accent-blue) / 0.5), 0 0 24px rgb(var(--accent-blue) / 0.35);
+
+  /* ─── Legacy compatibility (warm-pastel palette, to be retired) ─────── *
+   * Used by `bg-mint` / `bg-orange` / `text-earth` / `bg-primary` Tailwind
+   * utilities and by the `card-3d` / `btn-3d*` / `input-3d` / `progress-*`
+   * / `scale-display` / `weight-card-glow` component classes in index.css.
+   * Will be removed once issues #54-#57 sweep all consumer .tsx files.
+   */
+  --legacy-primary: 242 234 211;        /* #F2EAD3 (cream — page bg) */
+  --legacy-mint: 184 230 211;           /* #B8E6D3 */
+  --legacy-mint-deeper: 163 216 196;    /* #A3D8C4 */
+  --legacy-orange: 244 194 161;         /* #F4C2A1 */
+  --legacy-orange-deeper: 232 182 144;  /* #E8B690 */
+  --legacy-earth: 141 112 83;           /* #8D7053 */
+  --legacy-earth-deeper: 122 97 71;     /* #7A6147 */
+
+  --legacy-card-from: 255 255 255;      /* #FFFFFF (card-3d gradient start) */
+  --legacy-card-to: 250 250 250;        /* #FAFAFA (card-3d gradient end) */
+  --legacy-input-border: 229 231 235;   /* #E5E7EB (gray-200, input-3d border, circular-progress-bg) */
+
+  --legacy-trend-up-from: 16 185 129;     /* #10B981 */
+  --legacy-trend-up-to: 52 211 153;       /* #34D399 */
+  --legacy-trend-down-from: 239 68 68;    /* #EF4444 */
+  --legacy-trend-down-to: 248 113 113;    /* #F87171 */
+  --legacy-trend-stable-from: 107 114 128;/* #6B7280 */
+  --legacy-trend-stable-to: 156 163 175;  /* #9CA3AF */
+
+  --legacy-scale-bg-from: 31 41 55;       /* #1F2937 */
+  --legacy-scale-bg-to: 55 65 81;         /* #374151 */
+  --legacy-scale-text: 16 185 129;        /* #10B981 */
+  --legacy-scale-text-glow: rgba(16, 185, 129, 0.5);
+
+  --legacy-weight-card-glow: 0 4px 20px rgba(180, 230, 211, 0.3), 0 2px 10px rgba(180, 230, 211, 0.2);
+
+  /* Shadow strings for the legacy 3D button/card system. */
+  --legacy-shadow-3d: 0 4px 8px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1);
+  --legacy-shadow-3d-hover: 0 6px 12px rgba(0, 0, 0, 0.2), 0 3px 6px rgba(0, 0, 0, 0.15);
+  --legacy-shadow-3d-pressed: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/*
+ * Light theme placeholder.
+ *
+ * Architecturally prepared but no values yet — populate this block when
+ * a light theme is added. Activate by setting `data-theme="light"` on <html>.
+ */
+[data-theme="light"] {
+  /* light theme tokens to be defined here */
+}
