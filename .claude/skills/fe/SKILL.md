@@ -165,31 +165,41 @@ Produce a structured plan in Traditional Chinese. Eight required fields:
 
 Otherwise — including for changes that touch `vite.config.ts`, `App.tsx`, `src/api/client.ts`, the Redux store root, npm dependencies, or `public/manifest.webmanifest` — **proceed directly to Step 4**. The user will catch issues during manual testing.
 
-### Step 4 — Pre-flight + branch creation
+### Step 4 — Pre-flight + worktree creation
 
-Run the pre-flight checks from `CLAUDE.md > Dev Flow` in order, one tool call at a time:
+Run the pre-flight checks from `CLAUDE.md > Dev Flow` in order, one tool call at a time. **Pre-flight runs in the user's main checkout (read-only).** Do NOT touch the main checkout's working tree.
 
 ```bash
-git status --porcelain                    # must print nothing
-git fetch origin master                   # must succeed
-git ls-remote --heads origin claude/issue-<N>-<slug>   # detect collision
+git fetch origin master                                       # must succeed
+git ls-remote --heads origin claude/issue-<N>-<slug>          # collision check (remote)
+git branch --list claude/issue-<N>-<slug>                     # collision check (local)
+git worktree list                                             # collision check (worktree)
 ```
 
-- **Working tree dirty** → STOP. Tell the user exactly which files are dirty and ask them to commit / stash before re-running. **Never** stage / stash / discard on their behalf.
+Compute:
+
+- **Branch name**: `claude/issue-<N>-<slug>` for a single issue, `claude/issues-<N1>-<N2>-<slug>` for a batch. Slug is a kebab-case 2–4 word summary of the issue title (e.g. `add-meal-tags`).
+- **Worktree path**: `~/codebase-worktrees/PetCare-issue-<N>-<slug>` (or `PetCare-issues-<N1>-<N2>-<slug>` for batch). Use the absolute path.
+
+Failure modes:
+
 - **`git fetch` fails** → report verbatim and stop.
-- **Branch-name collision** (local or remote) → append `-2`, `-3`, ... until unique.
+- **Branch-name collision** → append `-2`, `-3`, ... until unique.
+- **Worktree path collision on disk OR `git worktree list` already contains this path** → append `-2`, `-3`, ... until unique. **Never** delete an existing worktree on the user's behalf.
 
-Then create the branch in a single command:
+Then create the worktree in a single command:
 
 ```bash
-git checkout -b claude/issue-<N>-<slug> origin/master
+git worktree add <abs-worktree-path> -b <branch> origin/master
 ```
 
-For batch issues: `claude/issues-<N1>-<N2>-<slug>`. Slug is a kebab-case 2–4 word summary of the issue title (e.g. `add-meal-tags`). The chosen branch name **must** appear in your reply to the user before any code is written, so they know what they're sitting on.
+The chosen worktree path AND branch name **must** appear in your reply to the user before any code is written.
+
+**Critical**: from this point onward, every Bash call is `cd <abs-worktree-path> && <command>` (or `git -C <abs-worktree-path> ...`). Every Read / Edit / Write uses an absolute path under `<abs-worktree-path>`. **Never** edit a file under the main checkout. The user's IDE checkout is not touched by anything past this step.
 
 ### Step 5 — Verify API contracts
 
-For every backend endpoint the plan calls, `Read` the corresponding `backend/routers/<domain>_router.py` and `backend/services/<domain>_service.py`. Confirm:
+For every backend endpoint the plan calls, `Read` the corresponding `<abs-worktree-path>/backend/routers/<domain>_router.py` and `<abs-worktree-path>/backend/services/<domain>_service.py` (the worktree contains the same `origin/master` snapshot as main checkout, so the contracts are identical). Confirm:
 
 1. Exact URL (including the `/{id}/update` vs `/update/{id}` position)
 2. HTTP verb (always `GET` or `POST`)
@@ -202,7 +212,7 @@ If anything in the plan does not match reality, **stop** and tell the user. If t
 
 ### Step 6 — Implement
 
-Write the code directly in main checkout. Rules:
+Write the code **inside the worktree** at `<abs-worktree-path>`. Every file path is absolute under `<abs-worktree-path>`. Rules:
 
 - One layer at a time, in canonical order: `types` → `api/services` → `store/slices` → `hooks` → `components` → `routing`.
 - Reuse shared shells: `common/Modal.tsx`, `common/DeleteConfirmDialog.tsx`, `useFormState`, `useFileUpload`, `dateUtils`.
@@ -230,30 +240,36 @@ If any blocker is found, fix it and re-run Step 7. Do not proceed to Step 8 with
 ### Step 8 — Quality gate
 
 ```bash
-cd frontend && npm run lint
-cd frontend && npm run build
+cd <abs-worktree-path>/frontend && npm install
+cd <abs-worktree-path>/frontend && npm run lint
+cd <abs-worktree-path>/frontend && npm run build
 ```
 
-`build` runs `tsc -b` first, so it doubles as the full typecheck. If either fails: read the failure, fix the underlying issue, re-run. **Never use `--no-verify`** on commits later. If the gate fails twice in a row, **stop the skill** and report the failure to the user — do not commit broken code.
+The first `npm install` is on each new worktree (~1 GB, several minutes). Acceptable trade-off for isolation; revisit with pnpm if it becomes painful.
+
+`build` runs `tsc -b` first, so it doubles as the full typecheck. If either fails: read the failure, fix the underlying issue (still inside the worktree), re-run. **Never use `--no-verify`** on commits later. If the gate fails twice in a row, **stop the skill** and report the failure to the user — do not commit broken code.
 
 ### Step 9 — `/summary` auto-chain
 
-Invoke `/summary` inline against `git diff HEAD..origin/master`. `/summary` will scan the diff for doc drift across CLAUDE.md, skill files, and memory, propose per-file diffs, and wait for user confirmation. If the user approves, the doc updates are staged for the doc commit in Step 10. If `/summary` reports "no doc drift", skip the doc commit.
+Invoke `/summary` inline against `git diff HEAD..origin/master` **inside the worktree**. The diff is computed correctly because each worktree has its own HEAD pointing at the in-progress branch. `/summary` will scan the diff for doc drift across CLAUDE.md, skill files, and memory, propose per-file diffs, and wait for user confirmation. If the user approves, the doc updates are staged for the doc commit in Step 10 — the doc edits land inside `<abs-worktree-path>` and travel with the PR. If `/summary` reports "no doc drift", skip the doc commit.
 
 See `.claude/skills/summary/SKILL.md` (at the repo root) for `/summary`'s rules.
 
 ### Step 10 — Commit, push, open PR
 
-Stage all changes. Cadence:
+Stage all changes **inside the worktree**. Use `git -C <abs-worktree-path> ...` or `cd <abs-worktree-path> && git ...` for every git command.
+
+Cadence:
 
 - **Commit 1**: `feat: <issue title>` (or `fix:` for bug issues). Body lists files changed by layer and references `Closes #N` for each issue.
 - **Commit 2** (if `/summary` applied doc updates): `docs: sync after #N`.
 
 Commits use HEREDOC to preserve formatting. **Never use `--no-verify`.** Commit messages do **not** include a `Co-Authored-By: Claude` trailer.
 
-Then push and open the PR ready-for-review (no `--draft`). **Do not pass `--label` flags** — labels live on issues, not PRs (see `CLAUDE.md > GitHub Labels > Where labels live`).
+Then push and open the PR ready-for-review (no `--draft`). **Do not pass `--label` flags** — labels live on issues, not PRs (see `CLAUDE.md > GitHub Labels > Where labels live`). `gh pr create` must run from inside `<abs-worktree-path>` so it picks up the correct branch.
 
 ```bash
+cd <abs-worktree-path>
 git push -u origin <branch>
 gh pr create --base master \
   --title "[#N] <issue title>" \
@@ -311,12 +327,18 @@ Reply to the user in Traditional Chinese with:
 
 - **PR URL** (clickable)
 - **Branch name**
+- **Worktree path** (absolute) — where all the work landed
 - **What changed** — one-paragraph summary
 - **Lint + build result** — pass / fail
 - **Manual test steps** — copy from Step 7 so the user can verify in their own browser
 - **Doc updates applied** — list of files `/summary` touched, if any
 - **Non-obvious decisions** — anything you decided on your own that the user should know
-- **Switch back hint**: `git switch <previous-branch>`
+- **Cleanup hint** — exact commands to run after the PR is merged:
+  ```bash
+  git worktree remove <abs-worktree-path>
+  git branch -D <branch>
+  ```
+- **Confirmation** — "Your main IDE checkout was NOT modified."
 
 Never auto-merge. Never force-push.
 

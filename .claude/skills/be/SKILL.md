@@ -144,31 +144,41 @@ Produce a structured plan in Traditional Chinese:
 
 Otherwise proceed to Step 4 immediately.
 
-### Step 4 — Pre-flight + branch creation
+### Step 4 — Pre-flight + worktree creation
 
-Run the pre-flight checks from `CLAUDE.md > Dev Flow` in order, one tool call at a time:
+Run the pre-flight checks from `CLAUDE.md > Dev Flow` in order, one tool call at a time. **Pre-flight runs in the user's main checkout (read-only).** Do NOT touch the main checkout's working tree.
 
 ```bash
-git status --porcelain                    # must print nothing
-git fetch origin master                   # must succeed
-git ls-remote --heads origin claude/issue-<N>-<slug>   # detect collision
+git fetch origin master                                       # must succeed
+git ls-remote --heads origin claude/issue-<N>-<slug>          # collision check (remote)
+git branch --list claude/issue-<N>-<slug>                     # collision check (local)
+git worktree list                                             # collision check (existing worktree)
 ```
 
-- **Working tree dirty** → STOP. Tell the user exactly which files are dirty and ask them to commit / stash before re-running. **Never** stage / stash / discard on their behalf.
+Compute:
+
+- **Branch name**: `claude/issue-<N>-<slug>` for a single issue, `claude/issues-<N1>-<N2>-<slug>` for a batch. Slug is a kebab-case 2–4 word summary of the issue title (e.g. `add-meal-tags`).
+- **Worktree path**: `~/codebase-worktrees/PetCare-issue-<N>-<slug>` (or `PetCare-issues-<N1>-<N2>-<slug>` for batch). Use the absolute path (`$HOME/codebase-worktrees/...` or the literal expansion).
+
+Failure modes:
+
 - **`git fetch` fails** → report verbatim and stop.
 - **Branch-name collision** (local or remote) → append `-2`, `-3`, ... until unique.
+- **Worktree path already exists on disk OR `git worktree list` already contains this path** → append `-2`, `-3`, ... until unique. **Never** delete an existing worktree on the user's behalf — it may contain in-progress work from another session.
 
-Then create the branch in a single command:
+Then create the worktree in a single command:
 
 ```bash
-git checkout -b claude/issue-<N>-<slug> origin/master
+git worktree add <abs-worktree-path> -b <branch> origin/master
 ```
 
-For batch issues: `claude/issues-<N1>-<N2>-<slug>`. Slug is a kebab-case 2–4 word summary of the issue title (e.g. `add-meal-tags`). The chosen branch name **must** appear in your reply to the user before any code is written, so they know what they're sitting on.
+The chosen worktree path AND branch name **must** appear in your reply to the user before any code is written.
+
+**Critical**: from this point onward, every Bash call is `cd <abs-worktree-path> && <command>` (or `git -C <abs-worktree-path> ...`). Every Read / Edit / Write uses an absolute path under `<abs-worktree-path>`. **Never** edit a file under the main checkout. The user's IDE checkout is not touched by anything past this step.
 
 ### Step 5 — Implement
 
-Write the code directly in main checkout. Rules:
+Write the code **inside the worktree** at `<abs-worktree-path>`. Rules:
 
 - One logical change at a time, in canonical order: model → service → router → register in `main.py` → schema.
 - Reuse existing helpers (id generation, response envelope, auth deps, group-role checks). Do not invent parallel utilities.
@@ -177,6 +187,7 @@ Write the code directly in main checkout. Rules:
 - Keep diffs minimal. No refactor of unrelated code, no added docstrings/comments/type hints to untouched code.
 - If `db_schema.sql` changes, also update `database/staging_data.json` only if the issue requires seed data.
 - **Do not write tests** — that is Step 7's job (`/bte`).
+- **Every file path is absolute under `<abs-worktree-path>`.** If the issue mentions `backend/services/meal_service.py`, you write to `<abs-worktree-path>/backend/services/meal_service.py`.
 
 ### Step 6 — Self-review
 
@@ -193,7 +204,7 @@ If any blocker is found, fix it and re-run Step 6. Do not proceed to Step 7 with
 
 ### Step 7 — Inline `/bte` for each touched domain
 
-For each touched domain in `auth`/`user`/`group`/`pet`/`food`/`meal`/`weight`, run the `/bte unit <domain>` flow inline (in the same main checkout, on the same branch — do not create a new branch). Read `.claude/skills/bte/SKILL.md` (at the repo root) for the canonical rules. Note that when invoked inline by `/be`, `/bte` does **not** run its own pre-flight or branch creation — it writes to the branch `/be` already created.
+For each touched domain in `auth`/`user`/`group`/`pet`/`food`/`meal`/`weight`, run the `/bte unit <domain>` flow inline **inside the same worktree** `<abs-worktree-path>` — do not create a new worktree, do not switch branches. Read `.claude/skills/bte/SKILL.md` (at the repo root) for the canonical rules. When invoked inline by `/be`, `/bte` does **not** run its own pre-flight or worktree creation — it writes to `<abs-worktree-path>` and adds a `test(<domain>): ...` commit that lands in `/be`'s same PR.
 
 - **If `backend/tests/unit/services/test_<domain>_service.py` does not exist** → bootstrap mode: produce a coverage plan, write a fresh test file for the service (creating `backend/tests/unit/conftest.py` with the bcrypt stub if needed), run `python -m pytest backend/tests/unit/services/test_<domain>_service.py -n auto`, capture the result.
 - **If the file already exists** → review-only mode: produce a coverage map and a P0/P1/P2 list. For gaps caused by **this issue's changes** (P0 only), write the new test cases. **Do not** fix pre-existing gaps unrelated to this issue — list them for the PR body's `## Pre-existing coverage gaps` section instead.
@@ -201,20 +212,22 @@ For each touched domain in `auth`/`user`/`group`/`pet`/`food`/`meal`/`weight`, r
 ### Step 8 — Pre-commit gate
 
 ```bash
-cd backend && pre-commit run --all-files
+cd <abs-worktree-path>/backend && pre-commit run --all-files
 ```
 
-If it fails: read the failure, fix the underlying issue, re-stage, re-run. **Never use `--no-verify`.** If it fails twice in a row, **stop the skill** and report the failure to the user — do not commit broken code.
+If it fails: read the failure, fix the underlying issue (still inside the worktree), re-stage, re-run. **Never use `--no-verify`.** If it fails twice in a row, **stop the skill** and report the failure to the user — do not commit broken code.
 
 ### Step 9 — `/summary` auto-chain
 
-Invoke `/summary` inline against `git diff HEAD..origin/master`. `/summary` will scan the diff for doc drift across CLAUDE.md, skill files, and memory, propose per-file diffs, and wait for user confirmation. If the user approves, the doc updates are staged for the doc commit in Step 10. If `/summary` reports "no doc drift", skip the doc commit.
+Invoke `/summary` inline against `git diff HEAD..origin/master` **inside the worktree**. The diff is computed correctly because each worktree has its own HEAD pointing at the in-progress branch, while `origin/master` is shared via the common `.git/objects`. `/summary` will scan the diff for doc drift across CLAUDE.md, skill files, and memory, propose per-file diffs, and wait for user confirmation. If the user approves, the doc updates are staged for the doc commit in Step 10 — the doc edits land inside `<abs-worktree-path>` and travel with the PR. If `/summary` reports "no doc drift", skip the doc commit.
 
 See `.claude/skills/summary/SKILL.md` (at the repo root) for `/summary`'s rules.
 
 ### Step 10 — Commit, push, open PR
 
-Stage all changes. Cadence:
+Stage all changes **inside the worktree**. Use `git -C <abs-worktree-path> ...` or `cd <abs-worktree-path> && git ...` for every git command.
+
+Cadence:
 
 - **Commit 1**: `feat: <issue title>` (or `fix:` for bug issues). Body lists files changed by layer and references `Closes #N` for each issue.
 - **Commit 2** (if `/bte` wrote tests): `test(<domain>): add unit tests for <service methods>`.
@@ -222,9 +235,10 @@ Stage all changes. Cadence:
 
 Commits use HEREDOC to preserve formatting. **Never use `--no-verify`.** Commit messages do **not** include a `Co-Authored-By: Claude` trailer.
 
-Then push and open the PR ready-for-review (no `--draft`). **Do not pass `--label` flags** — labels live on issues, not PRs (see `CLAUDE.md > GitHub Labels > Where labels live`).
+Then push and open the PR ready-for-review (no `--draft`). **Do not pass `--label` flags** — labels live on issues, not PRs (see `CLAUDE.md > GitHub Labels > Where labels live`). `gh pr create` must run from inside `<abs-worktree-path>` so it picks up the correct branch.
 
 ```bash
+cd <abs-worktree-path>
 git push -u origin <branch>
 gh pr create --base master \
   --title "[#N] <issue title>" \
@@ -282,12 +296,18 @@ Reply to the user in Traditional Chinese with:
 
 - **PR URL** (clickable)
 - **Branch name**
+- **Worktree path** (absolute) — where all the work landed
 - **What changed** — one-paragraph summary
 - **Test results** — pytest output from Step 7 (pass / fail counts)
 - **Manual SQL the user must run** — if any (highlight prominently)
 - **Doc updates applied** — list of files `/summary` touched, if any
 - **Non-obvious decisions** — anything you decided on your own that the user should know
-- **Switch back hint**: `git switch <previous-branch>` (you can read the previous branch from `git reflog -1` before Step 4, or just remind the user generically)
+- **Cleanup hint** — exact commands to run after the PR is merged:
+  ```bash
+  git worktree remove <abs-worktree-path>
+  git branch -D <branch>
+  ```
+- **Confirmation** — "Your main IDE checkout was NOT modified."
 
 Never auto-merge. Never force-push.
 
@@ -390,35 +410,40 @@ For each domain's router, walk every `@router.get(...)` / `@router.post(...)` de
 
 Otherwise proceed to Step 5 immediately.
 
-### Step 5 — Pre-flight + branch creation
+### Step 5 — Pre-flight + worktree creation
 
-Run pre-flight per `CLAUDE.md > Dev Flow`, one tool call at a time:
+Run pre-flight per `CLAUDE.md > Dev Flow` against the user's main checkout (read-only):
 
 ```bash
-git status --porcelain                              # must print nothing
-git fetch origin master                             # must succeed
-git ls-remote --heads origin claude/be-doc-<slug>   # detect collision
+git fetch origin master                                       # must succeed
+git ls-remote --heads origin claude/be-doc-<slug>             # collision check (remote)
+git branch --list claude/be-doc-<slug>                        # collision check (local)
+git worktree list                                             # collision check (worktree)
 ```
 
-- **Working tree dirty** → STOP. Tell the user which files are dirty and ask them to commit / stash before re-running. **Never** stage / stash / discard on their behalf.
+Compute:
+
+- **Branch name**: `claude/be-doc-<domain>` for single (e.g. `claude/be-doc-meal`), `claude/be-doc-<d1>-<d2>` for batch (e.g. `claude/be-doc-meal-food`), `claude/be-doc-all` for `all`.
+- **Worktree path**: `~/codebase-worktrees/PetCare-be-doc-<slug>` where `<slug>` is the domain or domain list joined with `-` (e.g. `PetCare-be-doc-meal`, `PetCare-be-doc-meal-food`, `PetCare-be-doc-all`).
+
+Failure modes:
+
 - **`git fetch` fails** → report verbatim and stop.
-- **Branch-name collision** → append `-2`, `-3`, ... until unique.
+- **Branch / worktree path collision** → append `-2`, `-3`, ... until unique.
 
-Branch name:
-
-- Single domain: `claude/be-doc-<domain>` (e.g. `claude/be-doc-meal`)
-- Batch: `claude/be-doc-<d1>-<d2>` (e.g. `claude/be-doc-meal-food`)
-- All: `claude/be-doc-all`
-
-Create the branch in a single command:
+Create the worktree in a single command:
 
 ```bash
-git checkout -b <branch> origin/master
+git worktree add <abs-worktree-path> -b <branch> origin/master
 ```
+
+The worktree path AND branch name **must** appear in the user-facing report.
+
+**From here onward, every Bash call is `cd <abs-worktree-path> && ...` and every Read / Edit / Write uses an absolute path under `<abs-worktree-path>`.**
 
 ### Step 6 — Generate doc files
 
-For each domain, write `backend/docs/api/<domain>.md` using the **Standard API Doc Template** below. Create the `backend/docs/api/` directory if it does not exist.
+For each domain, write `<abs-worktree-path>/backend/docs/api/<domain>.md` using the **Standard API Doc Template** below. Create the `<abs-worktree-path>/backend/docs/api/` directory if it does not exist.
 
 Overwrite the entire file — do not preserve any existing content. The doc is 100% auto-generated and any manual edits will be lost on the next regeneration. This is by design (decided in `/be discuss` on 2026-04-08).
 
@@ -434,11 +459,13 @@ If any blocker is found, fix and rewrite. Do not commit a doc with blockers.
 
 ### Step 8 — `/summary` auto-chain
 
-Invoke `/summary` inline against `git diff HEAD..origin/master`. `/summary` will scan whether the new doc files need to be referenced from `CLAUDE.md` (e.g. adding a "Static API docs live in `backend/docs/api/`" line to the `## Backend` section, or noting `/be doc` in the `## Project Skills > /be` section). If `/summary` reports drift, the user confirms, and the updates are staged for the doc-sync commit in Step 9.
+Invoke `/summary` inline against `git diff HEAD..origin/master` **inside the worktree**. `/summary` will scan whether the new doc files need to be referenced from `CLAUDE.md` (e.g. adding a "Static API docs live in `backend/docs/api/`" line to the `## Backend` section, or noting `/be doc` in the `## Project Skills > /be` section). If `/summary` reports drift, the user confirms, and the updates are staged for the doc-sync commit in Step 9 — they land inside the worktree and travel with the PR.
 
 See `.claude/skills/summary/SKILL.md` for `/summary`'s rules.
 
 ### Step 9 — Commit, push, open PR
+
+All git commands run inside the worktree. Use `git -C <abs-worktree-path> ...` or `cd <abs-worktree-path> && git ...`.
 
 Commit cadence:
 
@@ -447,9 +474,10 @@ Commit cadence:
 
 Use HEREDOC for commit messages. **Never use `--no-verify`.** Commit messages do **not** include a `Co-Authored-By: Claude` trailer. There is no `pre-commit` quality gate for this subcommand because no `.py` files change.
 
-Push and open the PR ready-for-review (no `--draft`). **Do not pass `--label` flags** — labels live on issues, not PRs.
+Push and open the PR ready-for-review (no `--draft`). **Do not pass `--label` flags** — labels live on issues, not PRs. Run `gh pr create` from inside `<abs-worktree-path>`.
 
 ```bash
+cd <abs-worktree-path>
 git push -u origin <branch>
 gh pr create --base master \
   --title "[docs] Document <domain> API endpoints" \
@@ -492,11 +520,17 @@ Reply to the user in Traditional Chinese with:
 
 - **PR URL** (clickable)
 - **Branch name**
+- **Worktree path** (absolute)
 - **Domains documented** — list with endpoint count per domain (e.g. `meal: 8 endpoints`)
 - **Authorization findings** — flag any group-scoped endpoint without a role check (P0)
 - **Parser issues** — anything the parser could not resolve and wrote `TBD` for
 - **Doc updates applied** — list of files `/summary` touched, if any
-- **Switch back hint**: `git switch <previous-branch>`
+- **Cleanup hint** — exact commands to run after the PR is merged:
+  ```bash
+  git worktree remove <abs-worktree-path>
+  git branch -D <branch>
+  ```
+- **Confirmation** — "Your main IDE checkout was NOT modified."
 
 Never auto-merge. Never force-push.
 
