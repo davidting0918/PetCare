@@ -24,7 +24,12 @@ export const CreateMealForm: React.FC<CreateMealFormProps> = ({
   const { getCachedGroupFoods, shouldFetchGroupFoods, getGroupFoods } = useFood();
 
   const groupId = selectedPet?.group_id;
-  const foods = groupId ? getCachedGroupFoods(groupId) : [];
+  // Memoize so referential identity is stable across renders — required because
+  // it feeds the dependency array of selectedFood / calculations useMemo below.
+  const foods = useMemo(
+    () => (groupId ? getCachedGroupFoods(groupId) : []),
+    [groupId, getCachedGroupFoods]
+  );
 
   const [formData, setFormData] = useState<CreateMealRequest>({
     pet_id: selectedPet?.id || '',
@@ -71,7 +76,7 @@ export const CreateMealForm: React.FC<CreateMealFormProps> = ({
     };
   }, [selectedFood, formData.serving_amount, formData.serving_type]);
 
-  const handleInputChange = (field: keyof CreateMealRequest, value: any) => {
+  const handleInputChange = <K extends keyof CreateMealRequest>(field: K, value: CreateMealRequest[K]) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
@@ -133,15 +138,18 @@ export const CreateMealForm: React.FC<CreateMealFormProps> = ({
 
       onSuccess?.('Meal recorded successfully!');
       handleClose();
-    } catch (error: any) {
+    } catch (error) {
       console.error('❌ CreateMealForm: Error recording meal:', error);
 
       let errorMessage = 'Failed to record meal';
-      if (error.response?.data?.detail) {
-        errorMessage = typeof error.response.data.detail === 'string'
-          ? error.response.data.detail
-          : 'Validation error';
-      } else if (error.message) {
+      if (error && typeof error === 'object' && 'response' in error) {
+        const detail = (error as { response?: { data?: { detail?: unknown } } }).response?.data?.detail;
+        if (typeof detail === 'string') {
+          errorMessage = detail;
+        } else if (detail !== undefined) {
+          errorMessage = 'Validation error';
+        }
+      } else if (error instanceof Error) {
         errorMessage = error.message;
       }
 

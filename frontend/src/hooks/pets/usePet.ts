@@ -35,8 +35,6 @@ export const usePet = () => {
             await petService.updatePet(petId, request);
             // Refresh pets after successful update
             await dispatch(fetchAccessiblePets());
-        } catch (error) {
-            throw error;
         } finally {
             setIsLoading(false);
         }
@@ -49,8 +47,6 @@ export const usePet = () => {
             await petService.uploadPetPhoto(petId, file);
             // Refresh pets after successful upload
             await dispatch(fetchAccessiblePets());
-        } catch (error) {
-            throw error;
         } finally {
             setIsLoading(false);
         }

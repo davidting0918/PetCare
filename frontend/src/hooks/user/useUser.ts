@@ -1,11 +1,30 @@
 import { useState } from 'react';
-import { useDispatch } from 'react-redux';
+import { useAppDispatch } from '../redux';
 import { userService } from '../../api';
 import { refreshCurrentUser } from '../../store/slices/authSlice';
 import type { UpdateUserInfoRequest } from '../../types';
 
+/**
+ * Extract a human-readable error message from an unknown error.
+ * Prefers FastAPI's `response.data.detail`, falls back to `Error.message`,
+ * then to a default message.
+ */
+const extractErrorMessage = (err: unknown, fallback: string): string => {
+  if (err && typeof err === 'object' && 'response' in err) {
+    const response = (err as { response?: { data?: { detail?: unknown } } }).response;
+    const detail = response?.data?.detail;
+    if (typeof detail === 'string') {
+      return detail;
+    }
+  }
+  if (err instanceof Error) {
+    return err.message;
+  }
+  return fallback;
+};
+
 export const useUser = () => {
-  const dispatch = useDispatch();
+  const dispatch = useAppDispatch();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
@@ -22,13 +41,13 @@ export const useUser = () => {
 
       if (response.status === 1) {
         // Refresh user data in Redux store
-        await dispatch(refreshCurrentUser() as any);
+        await dispatch(refreshCurrentUser());
         return response.data;
       } else {
         throw new Error(response.message || 'Failed to update user info');
       }
-    } catch (err: any) {
-      const errorMessage = err.response?.data?.detail || err.message || 'Failed to update user info';
+    } catch (err) {
+      const errorMessage = extractErrorMessage(err, 'Failed to update user info');
       setError(errorMessage);
       throw new Error(errorMessage);
     } finally {
@@ -64,13 +83,13 @@ export const useUser = () => {
 
       if (response.status === 1) {
         // Refresh user data to get updated picture URL
-        await dispatch(refreshCurrentUser() as any);
+        await dispatch(refreshCurrentUser());
         return response.data;
       } else {
         throw new Error(response.message || 'Failed to upload photo');
       }
-    } catch (err: any) {
-      const errorMessage = err.response?.data?.detail || err.message || 'Failed to upload photo';
+    } catch (err) {
+      const errorMessage = extractErrorMessage(err, 'Failed to upload photo');
       setError(errorMessage);
       throw new Error(errorMessage);
     } finally {
@@ -94,8 +113,8 @@ export const useUser = () => {
       } else {
         throw new Error(response.message || 'Failed to change password');
       }
-    } catch (err: any) {
-      const errorMessage = err.response?.data?.detail || err.message || 'Failed to change password';
+    } catch (err) {
+      const errorMessage = extractErrorMessage(err, 'Failed to change password');
       setError(errorMessage);
       throw new Error(errorMessage);
     } finally {

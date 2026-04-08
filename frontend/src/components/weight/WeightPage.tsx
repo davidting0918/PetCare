@@ -76,8 +76,13 @@ export const WeightPage: React.FC = () => {
   });
   const [customDateError, setCustomDateError] = useState<string>('');
 
-  // Get weight records from cache
-  const weightRecords = selectedPet ? getCachedWeightRecords(selectedPet.id) : [];
+  // Get weight records from cache. Memoize so referential identity is stable
+  // across renders — required because it feeds the dependency array of
+  // filteredRecords useMemo below.
+  const weightRecords = useMemo(
+    () => (selectedPet ? getCachedWeightRecords(selectedPet.id) : []),
+    [selectedPet, getCachedWeightRecords]
+  );
   const isLoadingRecords = selectedPet ? isLoadingWeightRecords(selectedPet.id) : false;
   const recordsError = selectedPet ? getWeightError(selectedPet.id) : null;
 
@@ -145,7 +150,7 @@ export const WeightPage: React.FC = () => {
     }
 
     return points;
-  }, [filteredRecords, selectedInterval]);
+  }, [filteredRecords, selectedInterval, customDateError, customDateRange]);
 
   // Calculate min/max weight for chart scaling
   const weightRange = useMemo(() => {

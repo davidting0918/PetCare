@@ -1,5 +1,5 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
-import type { GroupWithMembers, CreateGroupRequest, JoinGroupRequest, GroupPetInfo, FetchGroupsWithMembersResult } from '../../types';
+import type { GroupWithMembers, CreateGroupRequest, JoinGroupRequest, GroupPetInfo, FetchGroupsWithMembersResult, GroupInfo } from '../../types';
 import { groupService } from '../../api';
 import { logout } from './authSlice';
 
@@ -23,7 +23,7 @@ const initialState: GroupState = {
 
 // Async thunk to create a new group
 export const createGroup = createAsyncThunk<
-    any,
+    unknown,
     CreateGroupRequest,
     { rejectValue: string }
 >(
@@ -37,8 +37,9 @@ export const createGroup = createAsyncThunk<
             }
 
             return response.data;
-        } catch (error: any) {
-            return rejectWithValue(error.message || 'Failed to create group');
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to create group';
+            return rejectWithValue(message);
         }
     }
 );
@@ -59,15 +60,16 @@ export const deleteGroup = createAsyncThunk<
             }
 
             return groupId; // Return the groupId to remove it from state
-        } catch (error: any) {
-            return rejectWithValue(error.message || 'Failed to delete group');
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to delete group';
+            return rejectWithValue(message);
         }
     }
 );
 
 // Async thunk to join a group using invitation code
 export const joinGroup = createAsyncThunk<
-    any,
+    GroupInfo,
     JoinGroupRequest,
     { rejectValue: string }
 >(
@@ -84,8 +86,9 @@ export const joinGroup = createAsyncThunk<
             await dispatch(fetchMyGroupsWithMembers());
 
             return response.data;
-        } catch (error: any) {
-            return rejectWithValue(error.message || 'Failed to join group');
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to join group';
+            return rejectWithValue(message);
         }
     }
 );
@@ -195,8 +198,9 @@ export const fetchMyGroupsWithMembers = createAsyncThunk<
 
             return result;
 
-        } catch (error: any) {
-            return rejectWithValue(error.message || 'Failed to fetch groups with members');
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to fetch groups with members';
+            return rejectWithValue(message);
         }
     }
 );
@@ -232,10 +236,11 @@ export const fetchGroupPets = createAsyncThunk<
                 groupId,
                 pets: response.data || [],
             };
-        } catch (error: any) {
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to fetch group pets';
             return rejectWithValue({
                 groupId,
-                error: error.message || 'Failed to fetch group pets'
+                error: message
             });
         }
     }

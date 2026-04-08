@@ -248,7 +248,7 @@ export const SignUpPage: React.FC = () => {
               disabled={isLoading}
               className="btn-3d w-full py-4 px-4 text-white font-semibold text-lg disabled:opacity-50 disabled:cursor-not-allowed transform transition-all duration-200 hover:scale-105"
             >
-              {false ? (
+              {isLoading ? (
                 <div className="flex items-center justify-center">
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
                   Creating Account...

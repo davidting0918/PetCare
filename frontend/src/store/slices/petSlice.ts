@@ -35,8 +35,9 @@ export const createPet = createAsyncThunk(
             } else {
                 throw new Error(response.message || 'Failed to create pet');
             }
-        } catch (error: any) {
-            return rejectWithValue(error.message || 'Failed to create pet');
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to create pet';
+            return rejectWithValue(message);
         }
     }
 )
@@ -87,8 +88,9 @@ export const fetchAccessiblePets = createAsyncThunk(
             } else {
                 throw new Error(response.message || 'Failed to fetch accessible pets');
             }
-        } catch (error: any) {
-            return rejectWithValue(error.message || 'Failed to fetch accessible pets');
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to fetch accessible pets';
+            return rejectWithValue(message);
         }
     }
 )
@@ -103,8 +105,9 @@ export const deletePet = createAsyncThunk(
             } else {
                 throw new Error(response.message || 'Failed to delete pet');
             }
-        } catch (error: any) {
-            return rejectWithValue(error.message || 'Failed to delete pet');
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to delete pet';
+            return rejectWithValue(message);
         }
     }
 )

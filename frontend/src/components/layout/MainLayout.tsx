@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ArrowLeft, ChevronDown, RefreshCw } from 'lucide-react';
 import { BottomNavigation } from './BottomNavigation';
 import type { NavigationTab } from '../../types';
+import type { PetAccess } from '../../store/slices/petSlice';
 import { usePet, useRefresh } from '../../hooks';
 
 interface MainLayoutProps {
@@ -25,7 +26,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   const { refreshAll, isRefreshing } = useRefresh();
   const [showPetSelector, setShowPetSelector] = useState(false);
 
-  const handlePetChange = (petAccess: any) => {
+  const handlePetChange = (petAccess: PetAccess) => {
     selectPet(petAccess.pet);
     setShowPetSelector(false);
   };

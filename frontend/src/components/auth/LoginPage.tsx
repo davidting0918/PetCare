@@ -57,7 +57,7 @@ export const LoginPage: React.FC = () => {
     try {
       await login(email, password);
       navigate('/select-pet');
-    } catch (error) {
+    } catch {
       setError('Login failed. Please check your email and password');
     }
   };

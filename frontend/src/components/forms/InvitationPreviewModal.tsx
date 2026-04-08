@@ -4,9 +4,8 @@ import type { GroupRole } from '../../types';
 import { getRoleIcon, getRoleColor, getRoleLabel } from '../../utils/roleUtils';
 import { COLORS } from '../../constants/colors';
 
-interface InvitationData {
+export interface InvitationData {
   id: string;
-  group_id: string;
   group_name: string;
   invited_by_name: string;
   invite_code: string;

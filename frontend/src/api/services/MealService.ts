@@ -33,7 +33,7 @@ class MealService {
         return response.data;
     }
 
-    async deleteMeal(mealId: string): Promise<ApiResponse<any>> {
+    async deleteMeal(mealId: string): Promise<ApiResponse<unknown>> {
         const response = await apiClient.post(`${this.basePath}/${mealId}/delete`);
         return response.data;
     }

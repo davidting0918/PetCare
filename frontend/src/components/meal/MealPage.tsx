@@ -53,7 +53,13 @@ export const MealPage: React.FC = () => {
   const petId = selectedPet?.id;
   const groupId = selectedPet?.group_id;
 
-  const meals = petId ? getCachedMealRecords(petId) : [];
+  // Memoize cached collections so referential identity is stable across renders.
+  // This is required because they feed dependency arrays of useMemo / useEffect
+  // below; without memoization those hooks would re-run every render.
+  const meals = useMemo(
+    () => (petId ? getCachedMealRecords(petId) : []),
+    [petId, getCachedMealRecords]
+  );
   const todaySummary = petId ? getCachedTodaySummary(petId) : null;
   const foods = groupId ? getCachedGroupFoods(groupId) : [];
   const isLoading = petId ? isLoadingMealRecords(petId) : false;
@@ -93,7 +99,15 @@ export const MealPage: React.FC = () => {
   const chartData = useMemo(() => {
     const days = selectedTimeRange === 'last_3_days' ? 3 : selectedTimeRange === 'last_7_days' ? 7 : 14;
     const today = new Date();
-    const dataPoints: any[] = [];
+    type ChartPoint = {
+      date: string;
+      breakfast: number;
+      lunch: number;
+      dinner: number;
+      snack: number;
+      unclassified: number;
+    };
+    const dataPoints: ChartPoint[] = [];
 
     for (let i = days - 1; i >= 0; i--) {
       const date = new Date(today);

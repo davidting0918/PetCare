@@ -62,7 +62,7 @@ export const CreateFoodForm: React.FC<CreateFoodFormProps> = ({
     }
   }, [fileError]);
 
-  const handleInputChange = (field: keyof CreateFoodRequest, value: any) => {
+  const handleInputChange = <K extends keyof CreateFoodRequest>(field: K, value: CreateFoodRequest[K]) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
@@ -131,7 +131,7 @@ export const CreateFoodForm: React.FC<CreateFoodFormProps> = ({
       if (selectedFile && createdFood && createdFood.id) {
         try {
           await foodService.uploadFoodPhoto(createdFood.id, selectedFile);
-        } catch (photoError: any) {
+        } catch (photoError) {
           console.error('Error uploading photo:', photoError);
           // Don't fail the whole operation if photo upload fails
           setErrors({ submit: 'Food created but photo upload failed. Please try uploading the photo again.' });
@@ -141,9 +141,10 @@ export const CreateFoodForm: React.FC<CreateFoodFormProps> = ({
 
       onSuccess?.('Food added successfully!');
       handleClose();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error creating food:', error);
-      setErrors({ submit: error.message || 'Failed to create food' });
+      const message = error instanceof Error ? error.message : 'Failed to create food';
+      setErrors({ submit: message });
     } finally {
       setIsLoading(false);
     }
