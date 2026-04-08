@@ -39,7 +39,7 @@ export const UpdateWeightForm: React.FC<UpdateWeightFormProps> = ({
     }
   }, [weightRecord]);
 
-  const handleInputChange = (field: keyof UpdateWeightRequest, value: any) => {
+  const handleInputChange = <K extends keyof UpdateWeightRequest>(field: K, value: UpdateWeightRequest[K]) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
@@ -98,23 +98,27 @@ export const UpdateWeightForm: React.FC<UpdateWeightFormProps> = ({
       console.log('✅ UpdateWeightForm: Weight updated successfully');
       onSuccess?.('Weight record updated successfully!');
       handleClose();
-    } catch (error: any) {
+    } catch (error) {
       console.error('❌ UpdateWeightForm: Error updating weight:', error);
 
       // Extract error message from different error formats
       let errorMessage = 'Failed to update weight record';
 
-      if (error.response?.data?.detail) {
-        // FastAPI validation error or custom error
-        if (typeof error.response.data.detail === 'string') {
-          errorMessage = error.response.data.detail;
-        } else if (Array.isArray(error.response.data.detail)) {
-          // Validation errors from Pydantic
-          errorMessage = error.response.data.detail.map((err: any) => err.msg).join(', ');
+      if (error && typeof error === 'object' && 'response' in error) {
+        const data = (error as { response?: { data?: { detail?: unknown; message?: string } } }).response?.data;
+        if (data?.detail) {
+          if (typeof data.detail === 'string') {
+            errorMessage = data.detail;
+          } else if (Array.isArray(data.detail)) {
+            errorMessage = data.detail
+              .map((err: { msg?: string }) => err.msg ?? '')
+              .filter(Boolean)
+              .join(', ');
+          }
+        } else if (typeof data?.message === 'string') {
+          errorMessage = data.message;
         }
-      } else if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.message) {
+      } else if (error instanceof Error) {
         errorMessage = error.message;
       }
 

@@ -30,7 +30,7 @@ class FoodService {
         return response.data;
     }
 
-    async deleteFood(foodId: string): Promise<ApiResponse<any>> {
+    async deleteFood(foodId: string): Promise<ApiResponse<unknown>> {
         const response = await apiClient.post(`${this.basePath}/${foodId}/delete`);
         return response.data;
     }
@@ -40,7 +40,7 @@ class FoodService {
         foodType?: FoodType,
         targetPet?: TargetPet
     ): Promise<ApiResponse<FoodInfo[]>> {
-        const params: any = { group_id: groupId };
+        const params: { group_id: string; food_type?: FoodType; target_pet?: TargetPet } = { group_id: groupId };
         if (foodType) params.food_type = foodType;
         if (targetPet) params.target_pet = targetPet;
         // Don't include keyword parameter to get all foods
@@ -55,7 +55,7 @@ class FoodService {
         foodType?: FoodType,
         targetPet?: TargetPet
     ): Promise<ApiResponse<FoodSearchResult[]>> {
-        const params: any = { group_id: groupId, keyword };
+        const params: { group_id: string; keyword: string; food_type?: FoodType; target_pet?: TargetPet } = { group_id: groupId, keyword };
         if (foodType) params.food_type = foodType;
         if (targetPet) params.target_pet = targetPet;
 
@@ -63,7 +63,7 @@ class FoodService {
         return response.data;
     }
 
-    async uploadFoodPhoto(foodId: string, file: File): Promise<ApiResponse<any>> {
+    async uploadFoodPhoto(foodId: string, file: File): Promise<ApiResponse<unknown>> {
         const formData = new FormData();
         formData.append('file', file);
 
@@ -75,7 +75,7 @@ class FoodService {
         return response.data;
     }
 
-    async deleteFoodPhoto(foodId: string): Promise<ApiResponse<any>> {
+    async deleteFoodPhoto(foodId: string): Promise<ApiResponse<unknown>> {
         const response = await apiClient.post(`${this.basePath}/${foodId}/photo/delete`);
         return response.data;
     }

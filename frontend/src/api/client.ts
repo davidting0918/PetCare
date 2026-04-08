@@ -92,19 +92,19 @@ class ApiClient {
         return this.client;
     }
 
-    private removeUndefined(data: any): any {
+    private removeUndefined<T>(data: T): T {
         if (typeof data !== 'object' || data === null) {
             return data;
         }
 
-        const cleaned: any = {};
-        for (const [key, value] of Object.entries(data)) {
-            if (value !== undefined ) {
+        const cleaned: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(data as Record<string, unknown>)) {
+            if (value !== undefined) {
                 cleaned[key] = value;
             }
         }
         console.log(cleaned);
-        return cleaned;
+        return cleaned as T;
     }
 }
 

@@ -37,8 +37,9 @@ export const fetchGroupFoods = createAsyncThunk(
             } else {
                 throw new Error(response.message || 'Failed to fetch group foods');
             }
-        } catch (error: any) {
-            return rejectWithValue({ groupId, error: error.message || 'Failed to fetch group foods' });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to fetch group foods';
+            return rejectWithValue({ groupId, error: message });
         }
     }
 );
@@ -56,8 +57,9 @@ export const createFood = createAsyncThunk(
             } else {
                 throw new Error(response.message || 'Failed to create food');
             }
-        } catch (error: any) {
-            return rejectWithValue({ groupId, error: error.message || 'Failed to create food' });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to create food';
+            return rejectWithValue({ groupId, error: message });
         }
     }
 );
@@ -75,8 +77,9 @@ export const updateFood = createAsyncThunk(
             } else {
                 throw new Error(response.message || 'Failed to update food');
             }
-        } catch (error: any) {
-            return rejectWithValue({ groupId, error: error.message || 'Failed to update food' });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to update food';
+            return rejectWithValue({ groupId, error: message });
         }
     }
 );
@@ -94,8 +97,9 @@ export const deleteFood = createAsyncThunk(
             } else {
                 throw new Error(response.message || 'Failed to delete food');
             }
-        } catch (error: any) {
-            return rejectWithValue({ groupId, error: error.message || 'Failed to delete food' });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to delete food';
+            return rejectWithValue({ groupId, error: message });
         }
     }
 );

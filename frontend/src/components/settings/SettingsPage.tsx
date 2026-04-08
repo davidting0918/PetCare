@@ -18,6 +18,7 @@ import { refreshCurrentUser } from '../../store/slices/authSlice';
 import { fetchAccessiblePets } from '../../store/slices/petSlice';
 import type { GroupRole, PetInfo } from '../../types';
 import { CreateGroupForm, CreateInvitationForm, EditUserInfoModal, EditPetInfoModal, CreatePetForm, AssignPetToGroupModal, EnterInviteCodeModal, InvitationPreviewModal } from '../forms';
+import type { InvitationData } from '../forms/InvitationPreviewModal';
 import { DeleteConfirmDialog } from '../common/DeleteConfirmDialog';
 import { GroupPetsList } from './GroupPetsList';
 import { groupService } from '../../api';
@@ -40,7 +41,7 @@ export const SettingsPage: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [showEnterCodeModal, setShowEnterCodeModal] = useState(false);
   const [showInvitationPreview, setShowInvitationPreview] = useState(false);
-  const [invitationData, setInvitationData] = useState<any>(null);
+  const [invitationData, setInvitationData] = useState<InvitationData | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showCreatePetForm, setShowCreatePetForm] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);

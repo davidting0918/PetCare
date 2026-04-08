@@ -28,7 +28,7 @@ class GroupService {
         return response.data;
     }
 
-    async createGroup(request: CreateGroupRequest): Promise<ApiResponse<any>> {
+    async createGroup(request: CreateGroupRequest): Promise<ApiResponse<unknown>> {
         const response = await apiClient.post(`${this.basePath}/create`, request);
         return response.data;
     }
@@ -38,7 +38,7 @@ class GroupService {
         return response.data;
     }
 
-    async deleteGroup(groupId: string): Promise<ApiResponse<any>> {
+    async deleteGroup(groupId: string): Promise<ApiResponse<unknown>> {
         const response = await apiClient.post(`${this.basePath}/delete/${groupId}`);
         return response.data;
     }

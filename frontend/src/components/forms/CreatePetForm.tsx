@@ -33,7 +33,7 @@ export const CreatePetForm: React.FC<CreatePetFormProps> = ({
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const handleInputChange = (field: keyof CreatePetRequest, value: any) => {
+  const handleInputChange = <K extends keyof CreatePetRequest>(field: K, value: CreatePetRequest[K]) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
@@ -165,7 +165,7 @@ export const CreatePetForm: React.FC<CreatePetFormProps> = ({
               </label>
               <select
                 value={formData.pet_type}
-                onChange={(e) => handleInputChange('pet_type', e.target.value)}
+                onChange={(e) => handleInputChange('pet_type', e.target.value as PetType)}
                 className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange/50 focus:border-orange ${
                   errors.pet_type ? 'border-red-300' : 'border-gray-300'
                 }`}
@@ -187,7 +187,7 @@ export const CreatePetForm: React.FC<CreatePetFormProps> = ({
               </label>
               <select
                 value={formData.gender}
-                onChange={(e) => handleInputChange('gender', e.target.value)}
+                onChange={(e) => handleInputChange('gender', e.target.value as PetGender)}
                 className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange/50 focus:border-orange ${
                   errors.gender ? 'border-red-300' : 'border-gray-300'
                 }`}

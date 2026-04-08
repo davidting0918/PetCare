@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { X, Edit2, Trash2, UtensilsCrossed, Upload, Camera, Apple } from 'lucide-react';
 import { foodService } from '../../api';
 import { useFood } from '../../hooks';
@@ -49,23 +49,7 @@ export const FoodDetailsModal: React.FC<FoodDetailsModalProps> = ({
   const [formData, setFormData] = useState<UpdateFoodRequest>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  useEffect(() => {
-    if (isOpen && foodId) {
-      loadFoodDetails();
-      setIsEditMode(initialEditMode);
-    }
-  }, [isOpen, foodId, initialEditMode]);
-
-  // Clean up preview URL on unmount
-  useEffect(() => {
-    return () => {
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-      }
-    };
-  }, [previewUrl]);
-
-  const loadFoodDetails = async () => {
+  const loadFoodDetails = useCallback(async () => {
     if (!foodId) return;
 
     setIsLoading(true);
@@ -94,13 +78,30 @@ export const FoodDetailsModal: React.FC<FoodDetailsModalProps> = ({
           setPhotoUrl('');
         }
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error loading food details:', err);
-      setError(err.message || 'Failed to load food details');
+      const message = err instanceof Error ? err.message : 'Failed to load food details';
+      setError(message);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [foodId]);
+
+  useEffect(() => {
+    if (isOpen && foodId) {
+      loadFoodDetails();
+      setIsEditMode(initialEditMode);
+    }
+  }, [isOpen, foodId, initialEditMode, loadFoodDetails]);
+
+  // Clean up preview URL on unmount
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
 
   // Sync file upload error with form errors
   useEffect(() => {
@@ -115,7 +116,7 @@ export const FoodDetailsModal: React.FC<FoodDetailsModalProps> = ({
     }
   }, [fileError]);
 
-  const handleInputChange = (field: keyof UpdateFoodRequest, value: any) => {
+  const handleInputChange = <K extends keyof UpdateFoodRequest>(field: K, value: UpdateFoodRequest[K]) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
@@ -190,7 +191,7 @@ export const FoodDetailsModal: React.FC<FoodDetailsModalProps> = ({
       if (selectedFile) {
         try {
           await foodService.uploadFoodPhoto(foodId, selectedFile);
-        } catch (photoError: any) {
+        } catch (photoError) {
           console.error('Error uploading photo:', photoError);
           setErrors({ submit: 'Food updated but photo upload failed. Please try uploading the photo again.' });
           setIsLoading(false);
@@ -204,9 +205,10 @@ export const FoodDetailsModal: React.FC<FoodDetailsModalProps> = ({
 
       setIsEditMode(false);
       onSuccess?.('Food updated successfully!');
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error updating food:', error);
-      setErrors({ submit: error.message || 'Failed to update food' });
+      const message = error instanceof Error ? error.message : 'Failed to update food';
+      setErrors({ submit: message });
     } finally {
       setIsLoading(false);
     }

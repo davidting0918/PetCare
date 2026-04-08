@@ -34,9 +34,7 @@ export const EnterInviteCodeModal: React.FC<EnterInviteCodeModalProps> = ({
     setError(null);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
+  const submitInviteCode = async () => {
     // Validate input
     if (inviteCode.length !== 6) {
       setError('Invite code must be 6 characters');
@@ -57,9 +55,15 @@ export const EnterInviteCodeModal: React.FC<EnterInviteCodeModalProps> = ({
     }
   };
 
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    void submitInviteCode();
+  };
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && inviteCode.length === 6 && !isLoading) {
-      handleSubmit(e as any);
+      e.preventDefault();
+      void submitInviteCode();
     }
   };
 

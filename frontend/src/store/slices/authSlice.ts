@@ -44,8 +44,9 @@ export const loginUser = createAsyncThunk(
       } else {
         throw new Error(response.message || 'Login failed');
       }
-    } catch (error: any) {
-      return rejectWithValue(error.message || 'Login failed');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Login failed';
+      return rejectWithValue(message);
     }
   }
 );
@@ -72,8 +73,9 @@ export const loginGoogleUser = createAsyncThunk(
       } else {
         throw new Error(response.message || 'Google login failed');
       }
-    } catch (error: any) {
-      return rejectWithValue(error.message || 'Google login failed');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Google login failed';
+      return rejectWithValue(message);
     }
   }
 );
@@ -90,8 +92,9 @@ export const signupUser = createAsyncThunk(
       });
 
       return response;
-    } catch (error: any) {
-      return rejectWithValue(error.message || 'Registration failed');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Registration failed';
+      return rejectWithValue(message);
     }
   }
 );
@@ -118,8 +121,9 @@ export const initializeAuth = createAsyncThunk(
       } else {
         return null;
       }
-    } catch (error: any) {
-      return rejectWithValue(error.message || 'Initialization failed');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Initialization failed';
+      return rejectWithValue(message);
     }
   }
 );
@@ -145,8 +149,9 @@ export const refreshCurrentUser = createAsyncThunk(
       } else {
         throw new Error(response.message || 'Failed to refresh user data');
       }
-    } catch (error: any) {
-      return rejectWithValue(error.message || 'Failed to refresh user data');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to refresh user data';
+      return rejectWithValue(message);
     }
   }
 );

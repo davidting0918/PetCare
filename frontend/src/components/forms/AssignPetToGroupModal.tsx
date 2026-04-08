@@ -66,9 +66,10 @@ export const AssignPetToGroupModal: React.FC<AssignPetToGroupModalProps> = ({
 
       onSuccess(`${pet.name} has been assigned to ${groupName}`);
       handleClose();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to assign pet to group:', err);
-      setError(err.message || 'Failed to assign pet. Please try again.');
+      const message = err instanceof Error ? err.message : 'Failed to assign pet. Please try again.';
+      setError(message);
     } finally {
       setIsSubmitting(false);
     }

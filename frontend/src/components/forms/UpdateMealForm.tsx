@@ -21,7 +21,12 @@ export const UpdateMealForm: React.FC<UpdateMealFormProps> = ({
   const { getCachedGroupFoods, shouldFetchGroupFoods, getGroupFoods } = useFood();
 
   const groupId = mealDetails?.group_id;
-  const foods = groupId ? getCachedGroupFoods(groupId) : [];
+  // Memoize so referential identity is stable across renders — required because
+  // it feeds the dependency arrays of filteredFoods / selectedFood useMemos below.
+  const foods = useMemo(
+    () => (groupId ? getCachedGroupFoods(groupId) : []),
+    [groupId, getCachedGroupFoods]
+  );
 
   const [formData, setFormData] = useState<UpdateMealRequest>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -85,7 +90,7 @@ export const UpdateMealForm: React.FC<UpdateMealFormProps> = ({
     };
   }, [selectedFood, formData.serving_amount, formData.serving_type]);
 
-  const handleInputChange = (field: keyof UpdateMealRequest, value: any) => {
+  const handleInputChange = <K extends keyof UpdateMealRequest>(field: K, value: UpdateMealRequest[K]) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
@@ -138,9 +143,10 @@ export const UpdateMealForm: React.FC<UpdateMealFormProps> = ({
 
       onSuccess?.('Meal updated successfully!');
       handleClose();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error updating meal:', error);
-      setErrors({ submit: error.message || 'Failed to update meal' });
+      const message = error instanceof Error ? error.message : 'Failed to update meal';
+      setErrors({ submit: message });
     } finally {
       setIsLoading(false);
     }
@@ -154,9 +160,10 @@ export const UpdateMealForm: React.FC<UpdateMealFormProps> = ({
       await deleteMeal(mealDetails.id, mealDetails.pet_id);
       onSuccess?.('Meal deleted successfully!');
       handleClose();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error deleting meal:', error);
-      setErrors({ submit: error.message || 'Failed to delete meal' });
+      const message = error instanceof Error ? error.message : 'Failed to delete meal';
+      setErrors({ submit: message });
     } finally {
       setIsLoading(false);
       setShowDeleteConfirm(false);

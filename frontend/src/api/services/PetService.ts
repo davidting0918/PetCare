@@ -35,7 +35,7 @@ class PetService {
         return response.data;
     }
 
-    async assignPetToGroup(petId: string, groupId: string | null): Promise<ApiResponse<any>> {
+    async assignPetToGroup(petId: string, groupId: string | null): Promise<ApiResponse<unknown>> {
         const response = await apiClient.post(
             `${this.basePath}/${petId}/assign_group`,
             { group_id: groupId }

@@ -28,8 +28,9 @@ export const fetchWeightRecords = createAsyncThunk(
             } else {
                 throw new Error(response.message || 'Failed to fetch weight records');
             }
-        } catch (error: any) {
-            return rejectWithValue({ petId, error: error.message || 'Failed to fetch weight records' });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to fetch weight records';
+            return rejectWithValue({ petId, error: message });
         }
     }
 );
@@ -44,8 +45,9 @@ export const createWeight = createAsyncThunk(
             } else {
                 throw new Error(response.message || 'Failed to create weight record');
             }
-        } catch (error: any) {
-            return rejectWithValue({ petId: request.pet_id, error: error.message || 'Failed to create weight record' });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to create weight record';
+            return rejectWithValue({ petId: request.pet_id, error: message });
         }
     }
 );
@@ -63,8 +65,9 @@ export const updateWeight = createAsyncThunk(
             } else {
                 throw new Error(response.message || 'Failed to update weight record');
             }
-        } catch (error: any) {
-            return rejectWithValue({ petId, error: error.message || 'Failed to update weight record' });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to update weight record';
+            return rejectWithValue({ petId, error: message });
         }
     }
 );

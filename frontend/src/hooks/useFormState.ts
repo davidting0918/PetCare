@@ -14,7 +14,7 @@ export interface UseFormStateReturn<T> {
   setErrors: Dispatch<SetStateAction<Record<string, string>>>;
 
   /** Handle field change and auto-clear errors */
-  handleChange: (field: keyof T, value: any) => void;
+  handleChange: (field: keyof T, value: unknown) => void;
 
   /** Set a single field error */
   setError: (field: keyof T, message: string) => void;
@@ -66,7 +66,7 @@ export interface UseFormStateReturn<T> {
  * {errors.name && <span>{errors.name}</span>}
  * ```
  */
-export function useFormState<T extends Record<string, any>>(
+export function useFormState<T extends Record<string, unknown>>(
   initialValues: T
 ): UseFormStateReturn<T> {
   const [formData, setFormData] = useState<T>(initialValues);
@@ -75,7 +75,7 @@ export function useFormState<T extends Record<string, any>>(
   /**
    * Handle field value change and automatically clear the field's error
    */
-  const handleChange = useCallback((field: keyof T, value: any) => {
+  const handleChange = useCallback((field: keyof T, value: unknown) => {
     setFormData(prev => ({
       ...prev,
       [field]: value

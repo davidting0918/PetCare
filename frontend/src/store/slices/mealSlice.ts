@@ -41,8 +41,9 @@ export const fetchMealRecords = createAsyncThunk(
             } else {
                 throw new Error(response.message || 'Failed to fetch meal records');
             }
-        } catch (error: any) {
-            return rejectWithValue({ petId, error: error.message || 'Failed to fetch meal records' });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to fetch meal records';
+            return rejectWithValue({ petId, error: message });
         }
     }
 );
@@ -57,8 +58,9 @@ export const createMeal = createAsyncThunk(
             } else {
                 throw new Error(response.message || 'Failed to create meal');
             }
-        } catch (error: any) {
-            return rejectWithValue({ petId: request.pet_id, error: error.message || 'Failed to create meal' });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to create meal';
+            return rejectWithValue({ petId: request.pet_id, error: message });
         }
     }
 );
@@ -76,8 +78,9 @@ export const updateMeal = createAsyncThunk(
             } else {
                 throw new Error(response.message || 'Failed to update meal');
             }
-        } catch (error: any) {
-            return rejectWithValue({ petId, error: error.message || 'Failed to update meal' });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to update meal';
+            return rejectWithValue({ petId, error: message });
         }
     }
 );
@@ -95,8 +98,9 @@ export const deleteMeal = createAsyncThunk(
             } else {
                 throw new Error(response.message || 'Failed to delete meal');
             }
-        } catch (error: any) {
-            return rejectWithValue({ petId, error: error.message || 'Failed to delete meal' });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to delete meal';
+            return rejectWithValue({ petId, error: message });
         }
     }
 );
@@ -118,8 +122,9 @@ export const fetchTodayMeals = createAsyncThunk(
             } else {
                 throw new Error(response.message || 'Failed to fetch today meals');
             }
-        } catch (error: any) {
-            return rejectWithValue({ petId, error: error.message || 'Failed to fetch today meals' });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to fetch today meals';
+            return rejectWithValue({ petId, error: message });
         }
     }
 );
