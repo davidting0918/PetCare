@@ -1,6 +1,6 @@
 ---
 name: fe
-description: Frontend engineer for the PetCare repo. Owns frontend development end-to-end — reads GitHub issues, plans, dispatches a worktree agent that implements / self-reviews / commits / pushes / opens a draft PR. Also runs structured five-section discussions on frontend / UX / state design questions.
+description: Frontend engineer for the PetCare repo. Owns frontend development end-to-end — reads GitHub issues, plans, implements, self-reviews, commits, pushes, and opens a PR. Also runs structured five-section discussions on frontend / UX / state design questions.
 argument-hint: "[issue_numbers | discuss] [topic]"
 ---
 
@@ -242,7 +242,7 @@ Invoke `/summary` inline against `git diff HEAD..origin/master`. `/summary` will
 
 See `.claude/skills/summary/SKILL.md` (at the repo root) for `/summary`'s rules.
 
-### Step 10 — Commit, push, open draft PR
+### Step 10 — Commit, push, open PR
 
 Stage all changes. Cadence:
 
@@ -251,11 +251,11 @@ Stage all changes. Cadence:
 
 Commits use HEREDOC to preserve formatting. **Never use `--no-verify`.** Commit messages do **not** include a `Co-Authored-By: Claude` trailer.
 
-Then push and open a **draft** PR. **Do not pass `--label` flags** — labels live on issues, not PRs (see `CLAUDE.md > GitHub Labels > Where labels live`).
+Then push and open the PR ready-for-review (no `--draft`). **Do not pass `--label` flags** — labels live on issues, not PRs (see `CLAUDE.md > GitHub Labels > Where labels live`).
 
 ```bash
 git push -u origin <branch>
-gh pr create --draft --base master \
+gh pr create --base master \
   --title "[#N] <issue title>" \
   --body "$(cat <<'EOF'
 <body per template below>
@@ -303,7 +303,7 @@ Closes #N2
 - <any non-obvious decisions>
 ```
 
-If a draft PR with the same `Closes #N` already exists on `origin`, **stop and report** — do not push or open a duplicate.
+If a PR with the same `Closes #N` already exists on `origin`, **stop and report** — do not push or open a duplicate.
 
 ### Step 11 — Final report
 
@@ -318,7 +318,7 @@ Reply to the user in Traditional Chinese with:
 - **Non-obvious decisions** — anything you decided on your own that the user should know
 - **Switch back hint**: `git switch <previous-branch>`
 
-Never mark the PR ready-for-review on the user's behalf. Never auto-merge. Never force-push.
+Never auto-merge. Never force-push.
 
 ---
 
@@ -371,7 +371,7 @@ Forward-looking list of related improvements or follow-ups that would naturally 
 ```
 /fe 用法：
 
-  /fe <issue_number>[,<issue_number>...]   讀 issue → 規劃 → 派發 worktree agent → 自審 → 自動 commit/push/draft PR
+  /fe <issue_number>[,<issue_number>...]   讀 issue → 規劃 → 實作 → 自審 → 自動 commit/push/PR
   /fe discuss <topic>                       針對 frontend / UX / state 設計問題進行五段式討論
 
 範例：

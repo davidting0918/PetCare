@@ -24,7 +24,7 @@ This skill embeds the test architecture decisions made for PetCare. Always opera
 
 `/bte` runs in two contexts. The flow differs slightly:
 
-- **Standalone** — user types `/bte unit <domain>` or `/bte integration <domain>` directly. In bootstrap / write modes, `/bte` runs the full Dev Flow itself: pre-flight (`git status` clean, `git fetch origin master`, branch-name collision check) → branch creation (`claude/bte-bootstrap-<domain>` or `claude/bte-integration-<domain>` from latest `origin/master`) → write tests → `pre-commit` → commit → `git push -u origin` → `gh pr create --draft` → final report.
+- **Standalone** — user types `/bte unit <domain>` or `/bte integration <domain>` directly. In bootstrap / write modes, `/bte` runs the full Dev Flow itself: pre-flight (`git status` clean, `git fetch origin master`, branch-name collision check) → branch creation (`claude/bte-bootstrap-<domain>` or `claude/bte-integration-<domain>` from latest `origin/master`) → write tests → `pre-commit` → commit → `git push -u origin` → `gh pr create` (ready-for-review) → final report.
 - **Inline from `/be`** — `/be` invokes `/bte` mid-flow on the branch `/be` already created. `/bte` does **not** run pre-flight and does **not** create a new branch — it writes tests directly into the existing branch and adds a `test(<domain>): ...` commit that lands in `/be`'s same PR. `/be` handles the push and PR creation, not `/bte`.
 
 You can detect inline invocation by the parent skill's instruction in your task prompt. When in doubt, ask.
@@ -136,9 +136,9 @@ The domain has no unit tests at all. Plan and write a fresh test file from scrat
 7. **Commit / push / PR** (standalone only — skip if invoked inline by `/be`):
    - Commit message: `test(<domain>): bootstrap unit tests for <domain> service`. Commit messages do **not** include a `Co-Authored-By: Claude` trailer.
    - `git push -u origin <branch>`
-   - Open a **draft** PR. **Do not pass `--label` flags** — labels live on issues, not PRs.
+   - Open the PR ready-for-review (no `--draft`). **Do not pass `--label` flags** — labels live on issues, not PRs.
      ```bash
-     gh pr create --draft --base master \
+     gh pr create --base master \
        --title "[bte] bootstrap unit tests for <domain>" \
        --body "$(cat <<'EOF'
      ## Summary
@@ -235,9 +235,9 @@ When writing:
 4. **Commit / push / PR** (standalone only):
    - Commit message: `test(<domain>): add integration tests for <list of scenarios>`. Commit messages do **not** include a `Co-Authored-By: Claude` trailer.
    - `git push -u origin <branch>`
-   - Open a **draft** PR. **Do not pass `--label` flags** — labels live on issues, not PRs.
+   - Open the PR ready-for-review (no `--draft`). **Do not pass `--label` flags** — labels live on issues, not PRs.
      ```bash
-     gh pr create --draft --base master \
+     gh pr create --base master \
        --title "[bte] integration tests for <domain>" \
        --body "$(cat <<'EOF'
      ## Summary
@@ -309,6 +309,7 @@ This is open Q&A about backend testing. The topic can be anything: a specific me
 
 note：bootstrap / integration 寫測試時，依 CLAUDE.md > Dev Flow 同步在主
       checkout 跑 — pre-flight → branch → 寫檔 → pre-commit → commit →
-      push → draft PR。當 /be 內聯呼叫 /bte 時，/bte 不會自己開 branch
-      或開 PR，而是寫到 /be 已建好的 branch 上，由 /be 負責 commit / push / PR。
+      push → PR (ready-for-review)。當 /be 內聯呼叫 /bte 時，/bte 不會
+      自己開 branch 或開 PR，而是寫到 /be 已建好的 branch 上，由 /be
+      負責 commit / push / PR。
 ```

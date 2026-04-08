@@ -22,7 +22,7 @@ Parse the arguments:
 `/pm` is the **only entry point** that touches GitHub issues and milestones. The other skills consume issues (`/be`, `/fe`) but never create them. The full skill chain looks like this:
 
 ```
-/pm discuss  →  /pm plan  →  /be / /fe / /bte  →  /summary  →  draft PR
+/pm discuss  →  /pm plan  →  /be / /fe / /bte  →  /summary  →  PR
    (Q&A)        (issues)      (implement)         (doc sync)
 ```
 

@@ -212,7 +212,7 @@ Invoke `/summary` inline against `git diff HEAD..origin/master`. `/summary` will
 
 See `.claude/skills/summary/SKILL.md` (at the repo root) for `/summary`'s rules.
 
-### Step 10 — Commit, push, open draft PR
+### Step 10 — Commit, push, open PR
 
 Stage all changes. Cadence:
 
@@ -222,11 +222,11 @@ Stage all changes. Cadence:
 
 Commits use HEREDOC to preserve formatting. **Never use `--no-verify`.** Commit messages do **not** include a `Co-Authored-By: Claude` trailer.
 
-Then push and open a **draft** PR. **Do not pass `--label` flags** — labels live on issues, not PRs (see `CLAUDE.md > GitHub Labels > Where labels live`).
+Then push and open the PR ready-for-review (no `--draft`). **Do not pass `--label` flags** — labels live on issues, not PRs (see `CLAUDE.md > GitHub Labels > Where labels live`).
 
 ```bash
 git push -u origin <branch>
-gh pr create --draft --base master \
+gh pr create --base master \
   --title "[#N] <issue title>" \
   --body "$(cat <<'EOF'
 <body per template below>
@@ -274,7 +274,7 @@ Closes #N2
 - <any non-obvious decisions>
 ```
 
-If a draft PR with the same `Closes #N` already exists on `origin`, **stop and report** — do not push or open a duplicate.
+If a PR with the same `Closes #N` already exists on `origin`, **stop and report** — do not push or open a duplicate.
 
 ### Step 11 — Final report
 
@@ -289,7 +289,7 @@ Reply to the user in Traditional Chinese with:
 - **Non-obvious decisions** — anything you decided on your own that the user should know
 - **Switch back hint**: `git switch <previous-branch>` (you can read the previous branch from `git reflog -1` before Step 4, or just remind the user generically)
 
-Never mark the PR ready-for-review on the user's behalf. Never auto-merge. Never force-push.
+Never auto-merge. Never force-push.
 
 ---
 
@@ -438,7 +438,7 @@ Invoke `/summary` inline against `git diff HEAD..origin/master`. `/summary` will
 
 See `.claude/skills/summary/SKILL.md` for `/summary`'s rules.
 
-### Step 9 — Commit, push, open draft PR
+### Step 9 — Commit, push, open PR
 
 Commit cadence:
 
@@ -447,11 +447,11 @@ Commit cadence:
 
 Use HEREDOC for commit messages. **Never use `--no-verify`.** Commit messages do **not** include a `Co-Authored-By: Claude` trailer. There is no `pre-commit` quality gate for this subcommand because no `.py` files change.
 
-Push and open a **draft** PR. **Do not pass `--label` flags** — labels live on issues, not PRs.
+Push and open the PR ready-for-review (no `--draft`). **Do not pass `--label` flags** — labels live on issues, not PRs.
 
 ```bash
 git push -u origin <branch>
-gh pr create --draft --base master \
+gh pr create --base master \
   --title "[docs] Document <domain> API endpoints" \
   --body "$(cat <<'EOF'
 <body per template below>
@@ -484,7 +484,7 @@ PR body template:
 - <file>: <one-line description>
 ```
 
-If a draft PR with the same branch already exists on `origin`, **stop and report** — do not push or open a duplicate.
+If a PR with the same branch already exists on `origin`, **stop and report** — do not push or open a duplicate.
 
 ### Step 10 — Final report
 
@@ -498,7 +498,7 @@ Reply to the user in Traditional Chinese with:
 - **Doc updates applied** — list of files `/summary` touched, if any
 - **Switch back hint**: `git switch <previous-branch>`
 
-Never mark the PR ready-for-review on the user's behalf. Never auto-merge. Never force-push.
+Never auto-merge. Never force-push.
 
 ### Standard API Doc Template
 
