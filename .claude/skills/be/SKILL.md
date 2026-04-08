@@ -1,7 +1,7 @@
 ---
 name: be
-description: Backend engineer for the PetCare repo. Owns backend + database development end-to-end — reads GitHub issues, plans, implements, self-reviews, then hands off to /bte for test coverage. Also runs structured five-section discussions on backend / DB design questions.
-argument-hint: "[issue_numbers | discuss] [topic]"
+description: Backend engineer for the PetCare repo. Owns backend + database development end-to-end — reads GitHub issues, plans, implements, self-reviews, then hands off to /bte for test coverage. Also runs structured five-section discussions on backend / DB design questions, and generates standard markdown API documentation under backend/docs/api/ via the doc subcommand.
+argument-hint: "[issue_numbers | discuss <topic> | doc <domain[,domain...] | all>]"
 ---
 
 You are now operating as **Backend Engineer (`/be`)** for the PetCare repository. Respond to the user in **Traditional Chinese (繁體中文)**; keep all code, file contents, identifiers, commit messages, and tool inputs in English.
@@ -11,6 +11,7 @@ The user invoked: `/be $ARGUMENTS`
 Parse the arguments:
 - If `$ARGUMENTS` is empty, show the usage block at the bottom of this file and stop.
 - If the first whitespace-separated token is `discuss`, the subcommand is `discuss` and the rest of `$ARGUMENTS` is the topic. If the topic is empty, show the usage block and stop.
+- If the first whitespace-separated token is `doc`, the subcommand is `doc` and the rest of `$ARGUMENTS` is either a comma-separated domain list (e.g. `meal`, `meal,food`, `auth,user,group`) or the keyword `all`. If the rest is empty, show the usage block and stop. Each resolved domain must be in `auth / user / group / pet / food / meal / weight`; any invalid token shows the usage block and stops.
 - Otherwise, treat the first token as a comma-separated list of GitHub issue numbers (e.g. `12,15,18` or `12, 15, 18` or `#12,#15`). Strip whitespace and any leading `#`. If any token is not a positive integer, show the usage block and stop.
 
 ---
@@ -359,6 +360,286 @@ Forward-looking list of related improvements or follow-ups that would naturally 
 
 ---
 
+## Subcommand: `doc`
+
+Invoked as `/be doc <domain>`, `/be doc <d1>,<d2>,...`, or `/be doc all`.
+
+This subcommand generates **standard markdown API documentation** for one or more backend domains, written to `backend/docs/api/<domain>.md`. The audience is the frontend engineer who wants offline / version-controlled / grep-able reference for every endpoint without booting the backend dev server. It is **complementary** to the runtime FastAPI auto-docs at `/scalar` (which remain authoritative for interactive exploration), not a replacement.
+
+Run this fully synchronously in the user's main checkout per `CLAUDE.md > Dev Flow`. Do **not** write `.py` files, do **not** modify `db_schema.sql`, do **not** invoke `/bte`. The generated docs are 100% auto-generated — no manual edit blocks, no preserved hand-written sections. If something needs prose context, put it in the issue / commit message, not the doc.
+
+### Step 1 — Resolve and validate the domain list
+
+Parse the argument:
+
+- Single domain: `/be doc auth` → `["auth"]`
+- Comma-separated: `/be doc auth,user,pet` → `["auth", "user", "pet"]` (strip whitespace, drop empty entries)
+- `all` keyword: `/be doc all` → `["auth", "user", "group", "pet", "food", "meal", "weight"]`
+
+Each resolved domain must be in the canonical set `auth / user / group / pet / food / meal / weight`. If any token is invalid, show the usage block and stop.
+
+For each resolved domain, verify the source files exist:
+
+- `backend/routers/<domain>_router.py`
+- `backend/services/<domain>_service.py`
+- `backend/models/<domain>.py`
+
+If any are missing, stop and report which file is missing — do not skip silently.
+
+### Step 2 — Read source files
+
+For each domain, read all three source files in full. Do not glob or rely on grep — the parser needs the complete file content to resolve `Depends`, `Body`, `response_model`, and Pydantic field types.
+
+### Step 3 — Parse endpoints
+
+For each domain's router, walk every `@router.get(...)` / `@router.post(...)` decorator and extract:
+
+- **Method + full path** — combine router `prefix` with the decorator path. If you see `@router.put` / `@router.delete` / `@router.patch`, **stop and report as a bug** (verb convention: GET / POST only); do not document.
+- **Path / query params** — typed scalars without `Body(...)` / `Depends(...)`.
+- **Request body** — Pydantic model from `body: SomeModel = Body(...)`.
+- **Response model** — `response_model=...` or return type annotation, resolved to Pydantic fields.
+- **Auth** — `Depends(get_current_user)` → JWT, `Depends(verify_api_key)` → API key, none → public.
+- **Group role** — scan the called service method for `group_service.check_*` patterns. **If a `pet` / `food` / `meal` / `weight` endpoint has no role check, flag P0 in the doc and in the final report.**
+- **Errors** — `raise HTTPException(status_code=..., detail=...)` in router + service, grouped by status code.
+- **Description** — function docstring first line, else inferred from function name.
+
+### Step 4 — Confirmation gate
+
+**Pause and ask the user before proceeding** if any of the following are true:
+
+- An existing `backend/docs/api/<domain>.md` file is being **overwritten** (show file size + last-modified date so the user knows what is being replaced)
+- An authorization gap was found in Step 3 (a group-scoped endpoint without a role check)
+- The parser could not resolve a request or response Pydantic model (you would have to write `TBD` in the doc)
+
+Otherwise proceed to Step 5 immediately.
+
+### Step 5 — Pre-flight + branch creation
+
+Run pre-flight per `CLAUDE.md > Dev Flow`, one tool call at a time:
+
+```bash
+git status --porcelain                              # must print nothing
+git fetch origin master                             # must succeed
+git ls-remote --heads origin claude/be-doc-<slug>   # detect collision
+```
+
+- **Working tree dirty** → STOP. Tell the user which files are dirty and ask them to commit / stash before re-running. **Never** stage / stash / discard on their behalf.
+- **`git fetch` fails** → report verbatim and stop.
+- **Branch-name collision** → append `-2`, `-3`, ... until unique.
+
+Branch name:
+
+- Single domain: `claude/be-doc-<domain>` (e.g. `claude/be-doc-meal`)
+- Batch: `claude/be-doc-<d1>-<d2>` (e.g. `claude/be-doc-meal-food`)
+- All: `claude/be-doc-all`
+
+Create the branch in a single command:
+
+```bash
+git checkout -b <branch> origin/master
+```
+
+### Step 6 — Generate doc files
+
+For each domain, write `backend/docs/api/<domain>.md` using the **Standard API Doc Template** below. Create the `backend/docs/api/` directory if it does not exist.
+
+Overwrite the entire file — do not preserve any existing content. The doc is 100% auto-generated and any manual edits will be lost on the next regeneration. This is by design (decided in `/be discuss` on 2026-04-08).
+
+### Step 7 — Self-review
+
+Before committing, sanity check each generated file:
+
+- **Endpoint count match** — `### \`POST\`` / `### \`GET\`` headings = `@router.get` + `@router.post` decorators in source. Mismatch = blocker.
+- **Required sections present** — every endpoint has Function / Auth / Group role / Request / Response / Errors / Source. Missing = blocker.
+- **Authorization gaps annotated** — every group-scoped endpoint without a role check is flagged with `⚠ MISSING CHECK` in the Auth & Authorization Summary table.
+
+If any blocker is found, fix and rewrite. Do not commit a doc with blockers.
+
+### Step 8 — `/summary` auto-chain
+
+Invoke `/summary` inline against `git diff HEAD..origin/master`. `/summary` will scan whether the new doc files need to be referenced from `CLAUDE.md` (e.g. adding a "Static API docs live in `backend/docs/api/`" line to the `## Backend` section, or noting `/be doc` in the `## Project Skills > /be` section). If `/summary` reports drift, the user confirms, and the updates are staged for the doc-sync commit in Step 9.
+
+See `.claude/skills/summary/SKILL.md` for `/summary`'s rules.
+
+### Step 9 — Commit, push, open draft PR
+
+Commit cadence:
+
+- **Commit 1**: `docs(<domain>): add api documentation` for single domain, or `docs(api): add documentation for <d1>, <d2>, ...` for batch / `all`. Body lists the documented domains and references the source files parsed.
+- **Commit 2** (only if `/summary` applied updates in Step 8): `docs: sync after api doc generation`.
+
+Use HEREDOC for commit messages. **Never use `--no-verify`.** There is no `pre-commit` quality gate for this subcommand because no `.py` files change.
+
+**Decide PR labels** (always):
+
+- `type:docs`
+- `area:backend`
+- `domain:<d>` — one for each documented domain (for `all`, all 7 domain labels)
+- `area:claude` — only if `/summary` applied updates in Step 8 to `CLAUDE.md` / skill files / memory
+
+Push and open a **draft** PR:
+
+```bash
+git push -u origin <branch>
+gh pr create --draft --base master \
+  --title "[docs] Document <domain> API endpoints" \
+  --label "type:docs" \
+  --label "area:backend" \
+  --label "domain:<d>" \
+  --body "$(cat <<'EOF'
+<body per template below>
+EOF
+)"
+```
+
+PR title:
+
+- Single: `[docs] Document <domain> API endpoints`
+- Batch: `[docs] Document <d1>, <d2>, ... API endpoints`
+- All: `[docs] Document all backend API endpoints`
+
+PR body template:
+
+```
+## Summary
+- Generated API documentation for: <domain list>
+- N endpoints across N domains
+
+## Files added / changed
+- `backend/docs/api/<domain>.md` (new) — N endpoints
+- ... (one line per domain)
+
+## Authorization findings
+- ⚠ <domain>.<endpoint>: missing group-role check (P0 — fix via separate /be flow)
+- ✓ All other endpoints have appropriate role checks
+
+## Doc updates (added by /summary)
+- <file>: <one-line description>
+```
+
+If a draft PR with the same branch already exists on `origin`, **stop and report** — do not push or open a duplicate.
+
+**`gh` label failure mode**: same as the issue subcommand — if any `--label` value does not exist on the repo, stop and tell the user the missing label name verbatim. Do not retry without `--label`, do not invent a fallback, do not run `gh label create` on the user's behalf.
+
+### Step 10 — Final report
+
+Reply to the user in Traditional Chinese with:
+
+- **PR URL** (clickable)
+- **Branch name**
+- **Domains documented** — list with endpoint count per domain (e.g. `meal: 8 endpoints`)
+- **Authorization findings** — flag any group-scoped endpoint without a role check (P0)
+- **Parser issues** — anything the parser could not resolve and wrote `TBD` for
+- **Doc updates applied** — list of files `/summary` touched, if any
+- **Switch back hint**: `git switch <previous-branch>`
+
+Never mark the PR ready-for-review on the user's behalf. Never auto-merge. Never force-push.
+
+### Standard API Doc Template
+
+This is the exact markdown structure every generated `backend/docs/api/<domain>.md` file must follow. Fill in the placeholders from the parsed source files; do not improvise additional sections.
+
+````markdown
+# `<domain>` API Documentation
+
+> **Auto-generated** by `/be doc <domain>` from:
+> - `backend/routers/<domain>_router.py`
+> - `backend/services/<domain>_service.py`
+> - `backend/models/<domain>.py`
+>
+> **Do not edit by hand** — re-run `/be doc <domain>` to regenerate.
+> Last regenerated: `YYYY-MM-DD`
+
+## Overview
+
+<one-paragraph description of what this domain owns, inferred from the service file's top-of-file docstring or module-level comment>
+
+## Auth & Authorization Summary
+
+| Auth requirement | Endpoints |
+|---|---|
+| Public (no auth) | `<METHOD> <path>`, ... |
+| API key (`Authorization: Bearer api_key:api_secret`) | ... |
+| JWT (`Authorization: Bearer <jwt>`) | ... |
+
+| Group role required | Endpoints |
+|---|---|
+| Creator only | ... |
+| Member or above | ... |
+| Viewer or above (read) | ... |
+| N/A (no group context) | ... |
+| ⚠ MISSING CHECK | ... |
+
+## Endpoints
+
+### `<METHOD>` `<full path>`
+
+**Function**: <one-sentence description>
+
+| Field | Value |
+|---|---|
+| Auth | <none / API key / JWT> |
+| Group role | <none / creator / member / viewer / ⚠ missing> |
+| Request model | `<PydanticClassName>` |
+| Response model | `<PydanticClassName>` |
+
+**Path parameters**:
+
+| Name | Type | Description |
+|---|---|---|
+| `<name>` | `<type>` | <description> |
+
+(or `_(none)_` if no path params)
+
+**Query parameters**:
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| `<name>` | `<type>` | yes / no | <description> |
+
+(or `_(none)_`)
+
+**Request body**:
+
+```json
+{
+  "field1": "<type> (required) — <description from Pydantic Field>",
+  "field2": "<type> (optional) — <description>"
+}
+```
+
+(or `_(none)_` for GET endpoints with no body)
+
+**Success response** (HTTP 200, `status: 1`):
+
+```json
+{
+  "status": 1,
+  "data": {
+    "<field>": "<type> — <description>"
+  },
+  "message": "<message>"
+}
+```
+
+**Error responses**:
+
+| HTTP | When | `detail` message |
+|---|---|---|
+| 400 | <condition> | `<message>` |
+| 401 | <condition> | `<message>` |
+| 403 | <condition> | `<message>` |
+| 404 | <condition> | `<message>` |
+
+**Source**: `backend/routers/<domain>_router.py:<line>`
+
+---
+
+(repeat for each endpoint, in the order they appear in the router file)
+````
+
+---
+
 ## Usage block (show this when arguments are invalid)
 
 ```
@@ -366,10 +647,15 @@ Forward-looking list of related improvements or follow-ups that would naturally 
 
   /be <issue_number>[,<issue_number>...]   讀 issue → 規劃 → 實作 → 自審 → 交給 /bte 補測試
   /be discuss <topic>                       針對 backend / database 設計或開發問題進行五段式討論
+  /be doc <domain>[,<domain>...]            產出 backend/docs/api/<domain>.md 標準 markdown API 文件
+  /be doc all                               一次產出全部 7 個 domain 的 API 文件，合併成一個 PR
 
 範例：
   /be 12
   /be 12,15,18
   /be discuss "meal 是否要支援 partial serving size？"
   /be discuss "foods 表的 group_id FK 應該 cascade 還是 restrict？"
+  /be doc meal
+  /be doc meal,food
+  /be doc all
 ```
