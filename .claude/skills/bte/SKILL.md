@@ -24,8 +24,8 @@ This skill embeds the test architecture decisions made for PetCare. Always opera
 
 `/bte` runs in two contexts. The flow differs slightly:
 
-- **Standalone** — user types `/bte unit <domain>` or `/bte integration <domain>` directly. In bootstrap / write modes, `/bte` runs the full Dev Flow itself: pre-flight (`git status` clean, `git fetch origin master`, branch-name collision check) → branch creation (`claude/bte-bootstrap-<domain>` or `claude/bte-integration-<domain>` from latest `origin/master`) → write tests → `pre-commit` → commit → `git push -u origin` → `gh pr create` (ready-for-review) → final report.
-- **Inline from `/be`** — `/be` invokes `/bte` mid-flow on the branch `/be` already created. `/bte` does **not** run pre-flight and does **not** create a new branch — it writes tests directly into the existing branch and adds a `test(<domain>): ...` commit that lands in `/be`'s same PR. `/be` handles the push and PR creation, not `/bte`.
+- **Standalone** — user types `/bte unit <domain>` or `/bte integration <domain>` directly. In bootstrap / write modes, `/bte` runs the full Dev Flow itself: pre-flight (read-only against main checkout: `git fetch origin master`, branch + worktree collision checks) → worktree creation (`git worktree add ~/codebase-worktrees/PetCare-bte-bootstrap-<domain> -b claude/bte-bootstrap-<domain> origin/master`, or the integration variant) → all subsequent work runs **inside the worktree** → write tests → `pre-commit` → commit → `git push -u origin` → `gh pr create` (ready-for-review) → final report with worktree path + cleanup hint. The user's main IDE checkout is never modified.
+- **Inline from `/be`** — `/be` invokes `/bte` mid-flow inside the worktree `/be` already created. `/bte` does **not** run pre-flight and does **not** create a new worktree — it writes tests directly into `/be`'s worktree at `<abs-worktree-path>` and adds a `test(<domain>): ...` commit that lands in `/be`'s same PR. `/be` handles the push and PR creation, not `/bte`.
 
 You can detect inline invocation by the parent skill's instruction in your task prompt. When in doubt, ask.
 
@@ -91,7 +91,7 @@ Look for `backend/tests/unit/services/test_<domain>_service.py`.
 
 ### Step 3A — Review-only mode (existing test file)
 
-The domain already has a unit test file. Review it; do **not** write or modify any code.
+The domain already has a unit test file. Review it; do **not** write or modify any code. Read files from the user's main checkout (no worktree needed — review-only mode is read-only and doesn't open a PR).
 
 1. **Build a coverage map**: for each public method on the service class, list (a) what it does, (b) what code paths / branches exist (happy path, validation failures, authz failures, not-found, conflict, edge cases), (c) which paths are currently tested, (d) which are missing.
 2. **Review existing tests against the rules in the Shared Context**:
@@ -112,32 +112,37 @@ The domain already has a unit test file. Review it; do **not** write or modify a
 
 ### Step 3B — Bootstrap mode (no test file exists)
 
-The domain has no unit tests at all. Plan and write a fresh test file from scratch, synchronously in main checkout per `CLAUDE.md > Dev Flow`.
+The domain has no unit tests at all. Plan and write a fresh test file from scratch, inside a per-task git worktree per `CLAUDE.md > Dev Flow`.
 
-1. **Build a coverage plan from the service file**: for each public method, list every important code path (happy path, validation failures, authz failures, not-found, conflict, edge cases). For group-scoped resources, every method that touches `pets` / `foods` / `meals` must include viewer / non-member / member / creator authorization cases.
+1. **Build a coverage plan from the service file**: for each public method, list every important code path (happy path, validation failures, authz failures, not-found, conflict, edge cases). For group-scoped resources, every method that touches `pets` / `foods` / `meals` must include viewer / non-member / member / creator authorization cases. Read service files from main checkout (read-only).
 2. **Show the plan to the user in Traditional Chinese before writing.** Use the same structure as the review report (覆蓋摘要 + planned cases per method) but framed as "我準備新增以下測試". This gives the user visibility into what is about to be written, even though no confirmation is required to proceed.
-3. **Branch decision**:
-   - **If invoked inline by `/be`** → skip pre-flight and branch creation. Write directly to `/be`'s existing branch. `/be` will commit + push + PR.
-   - **If invoked standalone** → run pre-flight checks per `CLAUDE.md > Dev Flow`: `git status --porcelain` (must be empty), `git fetch origin master`, then `git checkout -b claude/bte-bootstrap-<domain> origin/master` (append `-2`, `-3`, ... on collision).
-4. **Write the test file**:
-   - Target: `backend/tests/unit/services/test_<domain>_service.py`
-   - If `backend/tests/unit/conftest.py` does not exist, create it with the bcrypt stub + any shared fixtures
+3. **Worktree decision**:
+   - **If invoked inline by `/be`** → skip pre-flight and worktree creation. Write directly inside `/be`'s existing worktree at `<abs-worktree-path>`. `/be` will commit + push + PR.
+   - **If invoked standalone** → run pre-flight (read-only against main checkout): `git fetch origin master`, then check no collision (`git ls-remote --heads origin claude/bte-bootstrap-<domain>`, `git branch --list ...`, `git worktree list`, `<path> not on disk`). Compute worktree path `~/codebase-worktrees/PetCare-bte-bootstrap-<domain>` (append `-2`, `-3`, ... on any collision), then create:
+     ```bash
+     git worktree add <abs-worktree-path> -b claude/bte-bootstrap-<domain> origin/master
+     ```
+     The worktree path AND branch name **must** appear in your reply to the user before any code is written. **From here onward, every Bash call is `cd <abs-worktree-path> && ...` and every Read / Edit / Write uses an absolute path under `<abs-worktree-path>`.**
+4. **Write the test file** (inside the worktree):
+   - Target: `<abs-worktree-path>/backend/tests/unit/services/test_<domain>_service.py`
+   - If `<abs-worktree-path>/backend/tests/unit/conftest.py` does not exist, create it with the bcrypt stub + any shared fixtures
    - Write all the planned test cases following the unit test rules (no `backend.main` import, mock `get_db()`, stub bcrypt, parallel-safe, AAA, stdlib `unittest.mock` only)
-5. **Run pytest**:
+5. **Run pytest** (inside the worktree):
    ```bash
-   python -m pytest backend/tests/unit/services/test_<domain>_service.py -n auto
+   cd <abs-worktree-path> && python -m pytest backend/tests/unit/services/test_<domain>_service.py -n auto
    ```
    If any test fails, fix the test file and re-run. Do not commit broken tests.
-6. **Pre-commit gate**:
+6. **Pre-commit gate** (inside the worktree):
    ```bash
-   cd backend && pre-commit run --all-files
+   cd <abs-worktree-path>/backend && pre-commit run --all-files
    ```
    Fix any failures. **Never use `--no-verify`.** Two failures in a row → stop and report.
-7. **Commit / push / PR** (standalone only — skip if invoked inline by `/be`):
+7. **Commit / push / PR** (standalone only — skip if invoked inline by `/be`). All git commands run inside the worktree.
    - Commit message: `test(<domain>): bootstrap unit tests for <domain> service`. Commit messages do **not** include a `Co-Authored-By: Claude` trailer.
-   - `git push -u origin <branch>`
-   - Open the PR ready-for-review (no `--draft`). **Do not pass `--label` flags** — labels live on issues, not PRs.
+   - `cd <abs-worktree-path> && git push -u origin <branch>`
+   - Open the PR ready-for-review (no `--draft`). **Do not pass `--label` flags** — labels live on issues, not PRs. `gh pr create` runs from inside `<abs-worktree-path>`.
      ```bash
+     cd <abs-worktree-path>
      gh pr create --base master \
        --title "[bte] bootstrap unit tests for <domain>" \
        --body "$(cat <<'EOF'
@@ -160,8 +165,8 @@ The domain has no unit tests at all. Plan and write a fresh test file from scrat
      )"
      ```
 8. **Report back in Traditional Chinese**:
-   - **If standalone** → PR URL, branch name, files created, pytest result, switch-back hint (`git switch <previous>`)
-   - **If inline** → branch name (= `/be`'s branch), files created, pytest result, hand control back to `/be`
+   - **If standalone** → PR URL, branch name, **worktree path** (absolute), files created, pytest result, cleanup hint (`git worktree remove <abs-worktree-path>` + `git branch -D <branch>` after PR is merged), confirmation that main IDE checkout was not modified
+   - **If inline** → confirmation that work landed inside `/be`'s worktree at `<abs-worktree-path>`, files created, pytest result, hand control back to `/be`
 
 ---
 
@@ -213,12 +218,18 @@ End the discussion document with:
 
 When writing:
 
-1. **Pre-flight + branch** (standalone only — skip if `/be` invoked you inline):
-   - `git status --porcelain` must be empty
-   - `git fetch origin master`
-   - `git checkout -b claude/bte-integration-<domain> origin/master` (append `-2`, `-3`, ... on collision)
-2. **Write the integration test file**:
-   - Target: `backend/tests/integration/test_<domain>.py` (or `test_schema_match.py` for `schema`)
+1. **Pre-flight + worktree** (standalone only — skip if `/be` invoked you inline):
+   - Run pre-flight against main checkout (read-only): `git fetch origin master`, then collision checks (`git ls-remote --heads origin claude/bte-integration-<domain>`, `git branch --list ...`, `git worktree list`, `<path> not on disk`).
+   - Compute worktree path `~/codebase-worktrees/PetCare-bte-integration-<domain>` (append `-2`, `-3`, ... on any collision).
+   - Create the worktree:
+     ```bash
+     git worktree add <abs-worktree-path> -b claude/bte-integration-<domain> origin/master
+     ```
+   - The worktree path AND branch name **must** appear in your reply to the user before any code is written.
+   - **From here onward, every Bash call is `cd <abs-worktree-path> && ...` and every Read / Edit / Write uses an absolute path under `<abs-worktree-path>`.**
+   - **If invoked inline by `/be`** → skip this step entirely. Write directly inside `/be`'s existing worktree.
+2. **Write the integration test file** (inside the worktree):
+   - Target: `<abs-worktree-path>/backend/tests/integration/test_<domain>.py` (or `test_schema_match.py` for `schema`)
    - Document required env vars inline at the top: `APP_ENV=test`, `POSTGRES_TEST`, plus any others
    - For each approved case: write the test with scenario, setup steps, real third-party resource usage, assertions
    - Hard rules:
@@ -227,16 +238,17 @@ When writing:
      - **Must NOT be added to `.github/workflows/ci.yml`** — integration tests are manual-only
      - Must be runnable individually with the documented env vars
      - For `schema`: no business-logic assertions; only structural diffs
-3. **Pre-commit gate**:
+3. **Pre-commit gate** (inside the worktree):
    ```bash
-   cd backend && pre-commit run --all-files
+   cd <abs-worktree-path>/backend && pre-commit run --all-files
    ```
    Fix any failures. **Never use `--no-verify`.** Two failures in a row → stop and report.
-4. **Commit / push / PR** (standalone only):
+4. **Commit / push / PR** (standalone only). All git commands run inside the worktree.
    - Commit message: `test(<domain>): add integration tests for <list of scenarios>`. Commit messages do **not** include a `Co-Authored-By: Claude` trailer.
-   - `git push -u origin <branch>`
-   - Open the PR ready-for-review (no `--draft`). **Do not pass `--label` flags** — labels live on issues, not PRs.
+   - `cd <abs-worktree-path> && git push -u origin <branch>`
+   - Open the PR ready-for-review (no `--draft`). **Do not pass `--label` flags** — labels live on issues, not PRs. `gh pr create` runs from inside `<abs-worktree-path>`.
      ```bash
+     cd <abs-worktree-path>
      gh pr create --base master \
        --title "[bte] integration tests for <domain>" \
        --body "$(cat <<'EOF'
@@ -258,12 +270,13 @@ When writing:
      )"
      ```
 5. **Report back in Traditional Chinese**:
-   - PR URL + branch name (standalone) OR branch name (inline)
+   - PR URL + branch name + **worktree path** (standalone) OR confirmation that work landed inside `/be`'s worktree at `<abs-worktree-path>` (inline)
    - Files created / modified
    - Tests added (count + brief list of scenarios)
    - **Manual run command** the user should use to verify (highlight prominently — these tests are manual-only)
    - Confirmation that CI workflow files were NOT touched
-   - Switch-back hint: `git switch <previous-branch>`
+   - **Cleanup hint** (standalone only): `git worktree remove <abs-worktree-path>` + `git branch -D <branch>` after PR is merged
+   - **Confirmation** (standalone only): "Your main IDE checkout was NOT modified."
 
 ---
 
@@ -307,9 +320,10 @@ This is open Q&A about backend testing. The topic can be anything: a specific me
   /bte integration meal
   /bte discuss "AsyncMock vs 自己寫 fake，哪個比較適合 group_service？"
 
-note：bootstrap / integration 寫測試時，依 CLAUDE.md > Dev Flow 同步在主
-      checkout 跑 — pre-flight → branch → 寫檔 → pre-commit → commit →
-      push → PR (ready-for-review)。當 /be 內聯呼叫 /bte 時，/bte 不會
-      自己開 branch 或開 PR，而是寫到 /be 已建好的 branch 上，由 /be
-      負責 commit / push / PR。
+note：bootstrap / integration 寫測試時，依 CLAUDE.md > Dev Flow 在獨立的
+      git worktree 裡跑 — pre-flight (read-only on main checkout) →
+      worktree 建立 → 寫檔 → pre-commit → commit → push → PR
+      (ready-for-review)。Main IDE checkout 完全不會被動到。當 /be
+      內聯呼叫 /bte 時，/bte 不會自己開 worktree 或 PR，而是寫到 /be
+      已建好的 worktree 裡，由 /be 負責 commit / push / PR。
 ```
