@@ -130,6 +130,7 @@ Produce a structured plan in Traditional Chinese:
 4. **Authorization 檢查** — for every new or modified service method, state which group-role check applies. If none, justify why explicitly.
 5. **邊界與錯誤處理** — what 4xx errors are raised and when.
 6. **不在這次範圍內的事** — explicitly list anything in the issue you are deferring, and why.
+7. **預計 PR labels** — list the label set you intend to pass to `gh pr create` in Step 10. Pick from the rules in Step 10's "Decide PR labels" block. State each label on its own line so the user can correct any mistake during Step 3 instead of after the PR is opened.
 
 ### Step 3 — Confirmation gate
 
@@ -185,6 +186,7 @@ Produce a structured self-review in Traditional Chinese before the test step:
 - **Authorization 檢查清單** — every new/changed service method × the group-role check applied. Missing = blocker.
 - **HTTP 動詞檢查** — every new/changed endpoint is `GET` or `POST` with the verb in the path. Any `PUT`/`DELETE`/`PATCH` = blocker.
 - **資料庫一致性** — `db_schema.sql` matches what services expect; no drift between code and schema. Drift = blocker.
+- **Label 對應檢查** — re-derive the PR label set from this PR's actual commit prefix and touched paths (see Step 10's "Decide PR labels" block) and confirm it matches the **預計 PR labels** declared in Step 2. If reality drifted from the plan (e.g. you ended up touching `food_service.py` for a meal feature), the *reality* wins — update the label set and note the drift in **Notes** of the PR body. Plan-vs-reality drift is not a blocker, but silently keeping the stale Step 2 list is.
 - **手動測試指令** — 2–3 `curl` / `httpie` commands the user can run locally.
 - **需要手動跑的 SQL**（若有）— exact statements for staging / prod, in a copy-pasteable block.
 
@@ -221,17 +223,35 @@ Stage all changes. Cadence:
 
 Commits use HEREDOC to preserve formatting. **Never use `--no-verify`.**
 
-Then push and open a **draft** PR:
+**Decide PR labels** based on the implementation commit's prefix and the touched paths (full rules: `CLAUDE.md > GitHub Labels`; canonical name list: [.claude/labels.yaml](.claude/labels.yaml)):
+
+- **`type:*`** — exactly one. `type:feat` if Commit 1 starts with `feat:`, `type:fix` if `fix:`, `type:refactor` if `refactor:`.
+- **`area:backend`** — always.
+- **`area:database`** — if this PR modifies `database/db_schema.sql` **or** `database/staging_data.json`.
+- **`area:ci`** — if this PR modifies `.github/workflows/`, `.pre-commit-config.yaml`, `pyproject.toml`, or `.flake8`.
+- **`area:claude`** — if `/summary` applied updates to `CLAUDE.md`, any `.claude/skills/*/SKILL.md`, `.claude/labels.yaml`, or memory files in Step 9.
+- **`domain:<d>`** — one for each backend domain touched. Pick from `auth` / `user` / `group` / `pet` / `food` / `meal` / `weight` / `medicine`. **A domain counts as "touched" only if this PR adds or modifies a file under `backend/services/<d>_service.py`, `backend/routers/<d>_router.py`, `backend/models/<d>.py`, or the matching test file. Reading or importing another domain's service does NOT count.**
+- **Do NOT add `type:test` / `test:unit`** even if `/bte` wrote tests in Commit 2 — those test commits are part of the feature implementation, not a test-only PR. The PR's `type:*` is the implementation type.
+- **Never invent a new label name on the fly.** All labels must already exist on the repo (run `gh label list` if uncertain). If a needed label is missing, **stop** and tell the user — adding labels is a separate `chore(labels): add <name>` flow that updates [.claude/labels.yaml](.claude/labels.yaml) and runs `gh label create`.
+
+Then push and open a **draft** PR with the label set, passing one `--label "<name>"` flag per decided label:
 
 ```bash
 git push -u origin <branch>
 gh pr create --draft --base master \
   --title "[#N] <issue title>" \
+  --label "type:feat" \
+  --label "area:backend" \
+  --label "domain:meal" \
   --body "$(cat <<'EOF'
 <body per template below>
 EOF
 )"
 ```
+
+(The `--label` lines above are illustrative — substitute the actual labels you decided.)
+
+**`gh` label failure mode:** `gh pr create` will fail with `pull request create failed: GraphQL: Could not resolve to a label named "<name>"` if any `--label` value does not exist on the repo. When that happens, **stop** and tell the user the missing label name verbatim. Do not retry without `--label`, do not invent a fallback label, do not run `gh label create` to "fix" it on the user's behalf — adding labels is a separate `chore(labels): add <name>` flow that the user must approve.
 
 For batch issues: `--title "[#N1 #N2] Combined: <short combined title>"`.
 
@@ -283,6 +303,7 @@ Reply to the user in Traditional Chinese with:
 
 - **PR URL** (clickable)
 - **Branch name**
+- **Labels applied** — comma-separated list of every `--label` flag that was actually passed to `gh pr create`. If this differs from the **預計 PR labels** in Step 2, also note the drift in one sentence.
 - **What changed** — one-paragraph summary
 - **Test results** — pytest output from Step 7 (pass / fail counts)
 - **Manual SQL the user must run** — if any (highlight prominently)

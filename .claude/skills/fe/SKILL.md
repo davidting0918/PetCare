@@ -154,6 +154,7 @@ Produce a structured plan in Traditional Chinese. Eight required fields:
 6. **UX 狀態** — loading state, error state, empty state. Be concrete: what UI shows in each. "Will handle errors" is not acceptable — say *which* component renders *which* fallback.
 7. **Mobile-first 注意事項** — confirm the layout works at phone widths (375px) before desktop. Note any responsive breakpoints.
 8. **不在範圍** — explicitly list anything in the issue you are deferring, and why.
+9. **預計 PR labels** — list the label set you intend to pass to `gh pr create` in Step 10. Pick from the rules in Step 10's "Decide PR labels" block. State each label on its own line so the user can correct any mistake during Step 3 instead of after the PR is opened.
 
 ### Step 3 — Confirmation gate
 
@@ -221,6 +222,7 @@ Produce a structured self-review in Traditional Chinese before the quality gate:
 - **Styling 規則檢查** — confirm no `sx={}`, no `styled()` from emotion, no `@mui/icons-material`, no hardcoded Tailwind colors (only project tokens), no new ad-hoc modals when `common/Modal.tsx` would have worked. Any violation = blocker.
 - **元件重用檢查** — confirm `Modal` / `DeleteConfirmDialog` / `useFormState` / `useFileUpload` / `dateUtils` were reused where applicable. Reinventing one of these without justification = blocker.
 - **State 規則檢查** — cross-component shared state lives in a Redux slice; no `import axios` in components / hooks; no duplicate 401 handling. Violation = blocker.
+- **Label 對應檢查** — re-derive the PR label set from this PR's actual commit prefix and touched paths (see Step 10's "Decide PR labels" block) and confirm it matches the **預計 PR labels** declared in Step 2. If reality drifted from the plan (e.g. you ended up touching `vite.config.ts` so `area:ci` was added), the *reality* wins — update the label set and note the drift in **Notes** of the PR body. Plan-vs-reality drift is not a blocker, but silently keeping the stale Step 2 list is.
 - **手動驗證指令** — give the user 2–3 concrete steps in the dev server, e.g. *"打開 dev server，登入後切到 /meal 頁，點 'Log Meal' 按鈕，預期看到 X 表單，填 Y 欄位送出後預期看到 Z toast 並回到列表"*. Not "test the form" — be specific.
 - **Mobile viewport 檢查** — confirm the new UI renders correctly at 375px width (Chrome devtools mobile emulation). Note any breakpoint that needed adjustment.
 
@@ -250,17 +252,33 @@ Stage all changes. Cadence:
 
 Commits use HEREDOC to preserve formatting. **Never use `--no-verify`.**
 
-Then push and open a **draft** PR:
+**Decide PR labels** based on the implementation commit's prefix and the touched paths (full rules: `CLAUDE.md > GitHub Labels`; canonical name list: [.claude/labels.yaml](.claude/labels.yaml)):
+
+- **`type:*`** — exactly one. `type:feat` if Commit 1 starts with `feat:`, `type:fix` if `fix:`, `type:refactor` if `refactor:`.
+- **`area:frontend`** — always.
+- **`area:ci`** — if this PR modifies `.github/workflows/`, `frontend/eslint.config.js`, `frontend/tsconfig*.json`, `frontend/postcss.config.js`, `frontend/tailwind.config.js`, or `frontend/vite.config.ts`. (Yes, `vite.config.ts` counts as CI/build config.)
+- **`area:claude`** — if `/summary` applied updates to `CLAUDE.md`, any `.claude/skills/*/SKILL.md`, `.claude/labels.yaml`, or memory files in Step 9.
+- **`domain:<d>`** — one for each frontend domain touched, **only when the domain maps cleanly to a backend domain** (`auth` / `user` / `group` / `pet` / `food` / `meal` / `weight` / `medicine`). A domain counts as "touched" only if this PR adds or modifies a file under `frontend/src/api/services/<X>Service.ts`, `frontend/src/store/slices/<x>Slice.ts`, `frontend/src/hooks/<x>s/`, `frontend/src/components/<x>/`, `frontend/src/types/<x>.ts`, or a form named `<X>Form.tsx` under `frontend/src/components/forms/`. Reading or importing another domain's files does NOT count. UI-shell-only changes (layout, common components, routing) get **no** `domain:*` label.
+- **Never invent a new label name on the fly.** All labels must already exist on the repo (run `gh label list` if uncertain). If a needed label is missing, **stop** and tell the user — adding labels is a separate `chore(labels): add <name>` flow that updates [.claude/labels.yaml](.claude/labels.yaml) and runs `gh label create`.
+
+Then push and open a **draft** PR with the label set, passing one `--label "<name>"` flag per decided label:
 
 ```bash
 git push -u origin <branch>
 gh pr create --draft --base master \
   --title "[#N] <issue title>" \
+  --label "type:feat" \
+  --label "area:frontend" \
+  --label "domain:meal" \
   --body "$(cat <<'EOF'
 <body per template below>
 EOF
 )"
 ```
+
+(The `--label` lines above are illustrative — substitute the actual labels you decided.)
+
+**`gh` label failure mode:** `gh pr create` will fail with `pull request create failed: GraphQL: Could not resolve to a label named "<name>"` if any `--label` value does not exist on the repo. When that happens, **stop** and tell the user the missing label name verbatim. Do not retry without `--label`, do not invent a fallback label, do not run `gh label create` to "fix" it on the user's behalf — adding labels is a separate `chore(labels): add <name>` flow that the user must approve.
 
 For batch issues: `--title "[#N1 #N2] Combined: <short combined title>"`.
 
@@ -312,6 +330,7 @@ Reply to the user in Traditional Chinese with:
 
 - **PR URL** (clickable)
 - **Branch name**
+- **Labels applied** — comma-separated list of every `--label` flag that was actually passed to `gh pr create`. If this differs from the **預計 PR labels** in Step 2, also note the drift in one sentence.
 - **What changed** — one-paragraph summary
 - **Lint + build result** — pass / fail
 - **Manual test steps** — copy from Step 7 so the user can verify in their own browser
