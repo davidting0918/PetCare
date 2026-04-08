@@ -121,15 +121,15 @@ Before declaring an issue "done", inside the worktree:
 
 Invoked as `/fe 12` or `/fe 12,15,18`.
 
-Run the following steps **in order**. Steps 1-3 run in the user's main checkout (read-only). Step 4 dispatches a single background worktree Agent that owns Steps A-E internally. Step 5 is the final report after the Agent finishes.
+Run the following steps **in order, synchronously, all in the user's main checkout** per `CLAUDE.md > Dev Flow`. There is no background worktree, no `Agent` tool dispatch — every step is visible to the user as it happens.
 
 When more than one issue number is given, treat them as a related batch and produce one combined plan + one combined implementation pass — unless they are clearly unrelated, in which case stop at Step 2 and ask the user whether to handle them separately.
 
-### Step 1 — Read the issue content (main checkout, read-only)
+### Step 1 — Read the issue content
 
 For each issue number, run:
 
-```
+```bash
 gh issue view <number> --json number,title,body,labels,state,comments
 ```
 
@@ -142,7 +142,7 @@ For each issue, summarise in Traditional Chinese:
 - 驗收條件（明示或推測；推測的條目要標 *推測*）
 - 受影響的範圍（routing / store / hooks / components / forms / styling / config）
 
-### Step 2 — Implementation plan (main checkout, read-only)
+### Step 2 — Implementation plan
 
 Produce a structured plan in Traditional Chinese. Eight required fields:
 
@@ -155,7 +155,7 @@ Produce a structured plan in Traditional Chinese. Eight required fields:
 7. **Mobile-first 注意事項** — confirm the layout works at phone widths (375px) before desktop. Note any responsive breakpoints.
 8. **不在範圍** — explicitly list anything in the issue you are deferring, and why.
 
-### Step 3 — Confirmation gate (main checkout)
+### Step 3 — Confirmation gate
 
 **Pause and ask the user for confirmation** only in these two cases:
 
@@ -164,101 +164,160 @@ Produce a structured plan in Traditional Chinese. Eight required fields:
 
 Otherwise — including for changes that touch `vite.config.ts`, `App.tsx`, `src/api/client.ts`, the Redux store root, npm dependencies, or `public/manifest.webmanifest` — **proceed directly to Step 4**. The user will catch issues during manual testing.
 
-### Step 4 — Dispatch the worktree Agent
+### Step 4 — Pre-flight + branch creation
 
-Dispatch **one** background worktree Agent per `CLAUDE.md > Dev Flow`:
+Run the pre-flight checks from `CLAUDE.md > Dev Flow` in order, one tool call at a time:
 
-- Tool: `Agent`
-- `isolation: "worktree"`
-- `run_in_background: true`
-- `subagent_type: "general-purpose"`
+```bash
+git status --porcelain                    # must print nothing
+git fetch origin master                   # must succeed
+git ls-remote --heads origin claude/issue-<N>-<slug>   # detect collision
+```
 
-The Agent's prompt is a complete, self-contained mega-task. It must include all of the following, in order:
+- **Working tree dirty** → STOP. Tell the user exactly which files are dirty and ask them to commit / stash before re-running. **Never** stage / stash / discard on their behalf.
+- **`git fetch` fails** → report verbatim and stop.
+- **Branch-name collision** (local or remote) → append `-2`, `-3`, ... until unique.
 
-1. **Bootstrap** — at the very top: *"Inside your worktree, run `git fetch origin && git checkout -b claude/issue-{N}-{slug} origin/master` before doing anything else. If multiple issues, branch name is `claude/issues-{N1}-{N2}-{slug}`. If a branch with that exact name already exists on `origin`, append `-2`, `-3`, etc. until unique."*
-2. **Context dump** — the full issue summary from Step 1, the full plan from Step 2, and a reference to the relevant CLAUDE.md sections (`## Frontend`, `## Frontend > Styling rules`, `## Project Skills > PR mechanics`).
-3. **Sub-step A — Verify API contracts** — for every backend endpoint the plan calls, `Read` the corresponding `backend/routers/<domain>_router.py` and `backend/services/<domain>_service.py`. Confirm URL, verb, request body model, response shape, status codes, auth/role requirements. If anything in the plan does not match reality, **abort and report** before touching frontend code.
-4. **Sub-step B — Implement** — apply the plan. Rules:
-   - One layer at a time, in canonical order: `types` → `api/services` → `store/slices` → `hooks` → `components` → `routing`.
-   - Reuse shared shells: `common/Modal.tsx`, `common/DeleteConfirmDialog.tsx`, `useFormState`, `useFileUpload`, `dateUtils`.
-   - Match the nearest sibling file's style (imports, naming, default vs named exports, prop typing).
-   - Honour the **styling rules**: Tailwind everywhere, project tokens (`mint`/`earth`/`orange`/`card-3d`/`btn-3d`), `lucide-react` icons only, no `sx={}`, no `styled()`, no direct `@emotion/*` imports, no `@mui/icons-material`, no MUI primitives (only `@mui/x-charts` is allowed).
-   - All API calls go through `src/api/services/`, never `import axios` in components or hooks.
-   - All cross-component shared state goes through Redux slices. Local form state uses `useFormState`.
-   - Mobile-first layout. Bottom nav is the primary nav.
-   - Keep diffs minimal. No refactor of unrelated code, no added JSDoc to untouched code.
-5. **Sub-step C — Self-review** — produce a structured review (in Traditional Chinese, included in the Agent's final report):
-   - **驗收條件對應表** — table of (criterion) × (where satisfied, with `file:line`). Unchecked = blocker.
-   - **API contract 一致性** — every endpoint called by new/changed services × the verified backend `file:line` × the matching type in `src/types/`. Mismatch = blocker.
-   - **Styling 規則檢查** — confirm no `sx={}`, no `styled()` from emotion, no `@mui/icons-material`, no hardcoded Tailwind colors (only project tokens), no new ad-hoc modals when `common/Modal.tsx` would have worked. Any violation = blocker.
-   - **元件重用檢查** — confirm `Modal` / `DeleteConfirmDialog` / `useFormState` / `useFileUpload` / `dateUtils` were reused where applicable. Reinventing one of these without justification = blocker.
-   - **State 規則檢查** — cross-component shared state lives in a Redux slice; no `import axios` in components / hooks; no duplicate 401 handling. Violation = blocker.
-   - **Lint** — `cd frontend && npm run lint`. Fix any failures before proceeding.
-   - **Build** — `cd frontend && npm run build`. This runs `tsc -b` first, so it's also the full typecheck. Fix any failures before proceeding.
-   - **手動驗證指令** — give the user 2–3 concrete steps in the dev server, e.g. *"打開 dev server，登入後切到 /meal 頁，點 'Log Meal' 按鈕，預期看到 X 表單，填 Y 欄位送出後預期看到 Z toast 並回到列表"*. Not "test the form" — be specific.
-   - **Mobile viewport 檢查** — confirm the new UI renders correctly at 375px width (Chrome devtools mobile emulation). Note any breakpoint that needed adjustment.
-   - If any blocker is found, fix it and re-run sub-step C. Do not proceed to sub-step D with open blockers.
-6. **Sub-step D — Commit, push, open draft PR** — once sub-step C passes:
-   - Stage all changes.
-   - Make **one commit**: `feat: <issue title>` (or `fix:` for bug issues), body lists files changed by layer and references `Closes #N` for each issue.
-   - `git push -u origin <branch>`.
-   - Open a **draft** PR via:
-     ```
-     gh pr create --draft --base master \
-       --title "[#N] <issue title>" \
-       --body "<body per template below>"
-     ```
-     For batch issues: `--title "[#N1 #N2] Combined: <short combined title>"`.
-   - PR body template:
-     ```
-     Closes #N1
-     Closes #N2
+Then create the branch in a single command:
 
-     ## Summary
-     - <bullet 1>
-     - <bullet 2>
+```bash
+git checkout -b claude/issue-<N>-<slug> origin/master
+```
 
-     ## Files changed by layer
-     - **Types**: ...
-     - **API services**: ...
-     - **Store / slices**: ...
-     - **Hooks**: ...
-     - **Components**: ...
-     - **Routing / config**: ...
+For batch issues: `claude/issues-<N1>-<N2>-<slug>`. Slug is a kebab-case 2–4 word summary of the issue title (e.g. `add-meal-tags`). The chosen branch name **must** appear in your reply to the user before any code is written, so they know what they're sitting on.
 
-     ## Backend endpoints consumed
-     - `POST /meal/{meal_id}/update` — backend/routers/meal_router.py:173
-     - ...
+### Step 5 — Verify API contracts
 
-     ## Manual test plan
-     1. <step 1>
-     2. <step 2>
-     3. <step 3>
+For every backend endpoint the plan calls, `Read` the corresponding `backend/routers/<domain>_router.py` and `backend/services/<domain>_service.py`. Confirm:
 
-     ## Mobile viewport check
-     - Verified at 375px: <result>
-     - Notable breakpoints: <list>
+1. Exact URL (including the `/{id}/update` vs `/update/{id}` position)
+2. HTTP verb (always `GET` or `POST`)
+3. Request body Pydantic model in `backend/models/<domain>.py`
+4. Response shape (what `data` actually contains)
+5. Status codes and error responses
+6. Auth requirement (API key vs JWT) and group-role requirement
 
-     ## Notes
-     - <any non-obvious decisions>
+If anything in the plan does not match reality, **stop** and tell the user. If the endpoint does not exist at all, tell the user backend must be implemented first via `/be`.
 
-     🤖 Generated with Claude Code
-     ```
-   - If a draft PR with the same `Closes #N` already exists on `origin`, **abort and report** — do not push or open a duplicate.
-7. **Sub-step E — Return** — the Agent's final message must include: branch name, PR URL, sub-step C self-review verbatim, lint + build output (pass/fail), and any non-obvious decisions made along the way.
+### Step 6 — Implement
 
-### Step 5 — Final report (main checkout, after Agent returns)
+Write the code directly in main checkout. Rules:
 
-When the dispatched Agent finishes, summarise to the user in Traditional Chinese:
+- One layer at a time, in canonical order: `types` → `api/services` → `store/slices` → `hooks` → `components` → `routing`.
+- Reuse shared shells: `common/Modal.tsx`, `common/DeleteConfirmDialog.tsx`, `useFormState`, `useFileUpload`, `dateUtils`.
+- Match the nearest sibling file's style (imports, naming, default vs named exports, prop typing).
+- Honour the **styling rules**: Tailwind everywhere, project tokens (`mint`/`earth`/`orange`/`card-3d`/`btn-3d`), `lucide-react` icons only, no `sx={}`, no `styled()`, no direct `@emotion/*` imports, no `@mui/icons-material`, no MUI primitives (only `@mui/x-charts` is allowed).
+- All API calls go through `src/api/services/`, never `import axios` in components or hooks.
+- All cross-component shared state goes through Redux slices. Local form state uses `useFormState`.
+- Mobile-first layout. Bottom nav is the primary nav.
+- Keep diffs minimal. No refactor of unrelated code, no added JSDoc to untouched code.
+
+### Step 7 — Self-review
+
+Produce a structured self-review in Traditional Chinese before the quality gate:
+
+- **驗收條件對應表** — table of (criterion) × (where satisfied, with `file:line`). Unchecked = blocker.
+- **API contract 一致性** — every endpoint called by new/changed services × the verified backend `file:line` × the matching type in `src/types/`. Mismatch = blocker.
+- **Styling 規則檢查** — confirm no `sx={}`, no `styled()` from emotion, no `@mui/icons-material`, no hardcoded Tailwind colors (only project tokens), no new ad-hoc modals when `common/Modal.tsx` would have worked. Any violation = blocker.
+- **元件重用檢查** — confirm `Modal` / `DeleteConfirmDialog` / `useFormState` / `useFileUpload` / `dateUtils` were reused where applicable. Reinventing one of these without justification = blocker.
+- **State 規則檢查** — cross-component shared state lives in a Redux slice; no `import axios` in components / hooks; no duplicate 401 handling. Violation = blocker.
+- **手動驗證指令** — give the user 2–3 concrete steps in the dev server, e.g. *"打開 dev server，登入後切到 /meal 頁，點 'Log Meal' 按鈕，預期看到 X 表單，填 Y 欄位送出後預期看到 Z toast 並回到列表"*. Not "test the form" — be specific.
+- **Mobile viewport 檢查** — confirm the new UI renders correctly at 375px width (Chrome devtools mobile emulation). Note any breakpoint that needed adjustment.
+
+If any blocker is found, fix it and re-run Step 7. Do not proceed to Step 8 with open blockers.
+
+### Step 8 — Quality gate
+
+```bash
+cd frontend && npm run lint
+cd frontend && npm run build
+```
+
+`build` runs `tsc -b` first, so it doubles as the full typecheck. If either fails: read the failure, fix the underlying issue, re-run. **Never use `--no-verify`** on commits later. If the gate fails twice in a row, **stop the skill** and report the failure to the user — do not commit broken code.
+
+### Step 9 — `/summary` auto-chain
+
+Invoke `/summary` inline against `git diff HEAD..origin/master`. `/summary` will scan the diff for doc drift across CLAUDE.md, skill files, and memory, propose per-file diffs, and wait for user confirmation. If the user approves, the doc updates are staged for the doc commit in Step 10. If `/summary` reports "no doc drift", skip the doc commit.
+
+See `.claude/skills/summary/SKILL.md` (at the repo root) for `/summary`'s rules.
+
+### Step 10 — Commit, push, open draft PR
+
+Stage all changes. Cadence:
+
+- **Commit 1**: `feat: <issue title>` (or `fix:` for bug issues). Body lists files changed by layer and references `Closes #N` for each issue.
+- **Commit 2** (if `/summary` applied doc updates): `docs: sync after #N`.
+
+Commits use HEREDOC to preserve formatting. **Never use `--no-verify`.**
+
+Then push and open a **draft** PR:
+
+```bash
+git push -u origin <branch>
+gh pr create --draft --base master \
+  --title "[#N] <issue title>" \
+  --body "$(cat <<'EOF'
+<body per template below>
+EOF
+)"
+```
+
+For batch issues: `--title "[#N1 #N2] Combined: <short combined title>"`.
+
+PR body template:
+
+```
+Closes #N1
+Closes #N2
+
+## Summary
+- <bullet 1>
+- <bullet 2>
+
+## Files changed by layer
+- **Types**: ...
+- **API services**: ...
+- **Store / slices**: ...
+- **Hooks**: ...
+- **Components**: ...
+- **Routing / config**: ...
+
+## Backend endpoints consumed
+- `POST /meal/{meal_id}/update` — backend/routers/meal_router.py:173
+- ...
+
+## Manual test plan
+1. <step 1>
+2. <step 2>
+3. <step 3>
+
+## Mobile viewport check
+- Verified at 375px: <result>
+- Notable breakpoints: <list>
+
+## Doc updates (added by /summary)
+- <file>: <one-line description>
+
+## Notes
+- <any non-obvious decisions>
+
+🤖 Generated with Claude Code
+```
+
+If a draft PR with the same `Closes #N` already exists on `origin`, **stop and report** — do not push or open a duplicate.
+
+### Step 11 — Final report
+
+Reply to the user in Traditional Chinese with:
 
 - **PR URL** (clickable)
 - **Branch name**
-- **Worktree path** (the Agent returns this)
-- **What changed** — one-paragraph summary lifted from the Agent's sub-step E report
+- **What changed** — one-paragraph summary
 - **Lint + build result** — pass / fail
-- **Manual test steps** — copy from sub-step C so the user can verify in their own browser
-- **Non-obvious decisions** — anything the Agent decided on its own that the user should know
-- **Blockers / failures** — if the Agent aborted (e.g. API contract mismatch, missing endpoint, lint/build failure that didn't recover), what failed and why
+- **Manual test steps** — copy from Step 7 so the user can verify in their own browser
+- **Doc updates applied** — list of files `/summary` touched, if any
+- **Non-obvious decisions** — anything you decided on your own that the user should know
+- **Switch back hint**: `git switch <previous-branch>`
 
 Never mark the PR ready-for-review on the user's behalf. Never auto-merge. Never force-push.
 

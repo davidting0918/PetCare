@@ -99,15 +99,15 @@ Before declaring an issue "done":
 
 Invoked as `/be 12` or `/be 12,15,18`.
 
-Run the following steps **in order**. Steps 1-3 run in the user's main checkout (read-only). Step 4 dispatches a single background worktree Agent that owns Steps A-F internally. Step 5 is the final report to the user after the Agent finishes.
+Run the following steps **in order, synchronously, all in the user's main checkout** per `CLAUDE.md > Dev Flow`. There is no background worktree, no `Agent` tool dispatch — every step is visible to the user as it happens.
 
 When more than one issue number is given, treat them as a related batch and produce one combined plan + one combined implementation pass — unless the issues turn out to be clearly unrelated, in which case stop at Step 2 and ask the user whether to handle them separately.
 
-### Step 1 — Read the issue content (main checkout, read-only)
+### Step 1 — Read the issue content
 
 For each issue number, run:
 
-```
+```bash
 gh issue view <number> --json number,title,body,labels,state,comments
 ```
 
@@ -120,7 +120,7 @@ For each issue, summarise in Traditional Chinese:
 - 驗收條件（明示或推測；推測的條目要標 *推測*）
 - 受影響的 domain（`auth` / `user` / `group` / `pet` / `food` / `meal` / `weight` / `schema`）
 
-### Step 2 — Implementation plan (main checkout, read-only)
+### Step 2 — Implementation plan
 
 Produce a structured plan in Traditional Chinese:
 
@@ -131,9 +131,9 @@ Produce a structured plan in Traditional Chinese:
 5. **邊界與錯誤處理** — what 4xx errors are raised and when.
 6. **不在這次範圍內的事** — explicitly list anything in the issue you are deferring, and why.
 
-### Step 3 — Confirmation gate (main checkout)
+### Step 3 — Confirmation gate
 
-**Pause and ask the user for confirmation before dispatching the worktree Agent** if any of the following are true:
+**Pause and ask the user for confirmation before proceeding to Step 4** if any of the following are true:
 
 - The plan touches `db_schema.sql`
 - The plan adds or removes a Python dependency
@@ -143,103 +143,152 @@ Produce a structured plan in Traditional Chinese:
 
 Otherwise proceed to Step 4 immediately.
 
-### Step 4 — Dispatch the worktree Agent
+### Step 4 — Pre-flight + branch creation
 
-Dispatch **one** background worktree Agent per the rules in `CLAUDE.md > Dev Flow`:
+Run the pre-flight checks from `CLAUDE.md > Dev Flow` in order, one tool call at a time:
 
-- Tool: `Agent`
-- `isolation: "worktree"`
-- `run_in_background: true`
-- `subagent_type: "general-purpose"`
+```bash
+git status --porcelain                    # must print nothing
+git fetch origin master                   # must succeed
+git ls-remote --heads origin claude/issue-<N>-<slug>   # detect collision
+```
 
-The Agent's prompt is a complete, self-contained mega-task. It must include all of the following, in order:
+- **Working tree dirty** → STOP. Tell the user exactly which files are dirty and ask them to commit / stash before re-running. **Never** stage / stash / discard on their behalf.
+- **`git fetch` fails** → report verbatim and stop.
+- **Branch-name collision** (local or remote) → append `-2`, `-3`, ... until unique.
 
-1. **Bootstrap** — at the very top: *"Inside your worktree, run `git fetch origin && git checkout -b claude/issue-{N}-{slug} origin/master` before doing anything else. If multiple issues, branch name is `claude/issues-{N1}-{N2}-{slug}`. If a branch with that exact name already exists on `origin`, append `-2`, `-3`, etc. until unique."*
-2. **Context dump** — paste the full issue summary from Step 1, the full plan from Step 2, and a link/reference to the relevant CLAUDE.md sections (`## Backend`, `## Backend > Tests`, `## Project Skills > PR mechanics`).
-3. **Sub-step A — Implement** — apply the plan. Rules:
-   - One logical change at a time, in canonical order: model → service → router → register in `main.py` → schema.
-   - Reuse existing helpers (id generation, response envelope, auth deps, group-role checks). Do not invent parallel utilities.
-   - Match the nearest sibling file's style.
-   - Honour the verb convention: `@router.get` or `@router.post` only — never `put`/`delete`/`patch`.
-   - Keep diffs minimal. No refactor of unrelated code, no added docstrings/comments/type hints to untouched code.
-   - If `db_schema.sql` changes, also update `database/staging_data.json` only if the issue requires seed data.
-   - Do **not** write tests in this sub-step — that is sub-step C's job.
-4. **Sub-step B — Self-review** — produce a structured review (in Traditional Chinese, included in the Agent's final report):
-   - **驗收條件對應表** — table of (criterion) × (where satisfied, with `file:line`). Unchecked = blocker.
-   - **Authorization 檢查清單** — every new/changed service method × the group-role check applied. Missing = blocker.
-   - **HTTP 動詞檢查** — every new/changed endpoint is `GET` or `POST` with the verb in the path. Any `PUT`/`DELETE`/`PATCH` = blocker.
-   - **資料庫一致性** — `db_schema.sql` matches what services expect; no drift between code and schema. Drift = blocker.
-   - **手動測試指令** — 2–3 `curl` / `httpie` commands the user can run locally.
-   - **需要手動跑的 SQL**（若有）— exact statements for staging / prod, in a copy-pasteable block.
-   - If any blocker is found, fix it and re-run sub-step B before continuing. Do not proceed to sub-step C with open blockers.
-5. **Sub-step C — Test handoff via embedded `/bte`** — for each touched domain in `auth`/`user`/`group`/`pet`/`food`/`meal`/`weight`:
-   - Read `.claude/skills/bte/SKILL.md` and follow its `unit <domain>` flow.
-   - **If `backend/tests/unit/services/test_<domain>_service.py` does not exist** → bootstrap mode: produce a coverage plan, then write a fresh test file for the service (creating `backend/tests/unit/conftest.py` with the bcrypt stub if needed). Run `python -m pytest backend/tests/unit/services/test_<domain>_service.py -n auto` and capture the result.
-   - **If the file already exists** → review-only mode: produce a coverage map and a P0/P1/P2 list. For gaps caused by this issue's changes (P0 only), write the new test cases. **Do not** fix pre-existing gaps unrelated to this issue — list them in the PR body's `Pre-existing coverage gaps` section instead.
-6. **Sub-step D — Pre-commit gate** — run `cd backend && pre-commit run --all-files`. If it fails: read the failure, fix the underlying issue, re-stage, re-run. **Never use `--no-verify`**. If it fails twice in a row, abort the Agent run and return a failure report instead of committing.
-7. **Sub-step E — Commit, push, open draft PR** — once sub-step D passes:
-   - Stage all changes.
-   - Make **two commits** if `/bte` wrote tests, **one commit** otherwise:
-     - First commit: `feat: <issue title>` (or `fix:` for bug issues), body lists files changed and references `Closes #N` for each issue.
-     - Second commit (if tests added): `test(<domain>): add unit tests for <service methods>`.
-   - `git push -u origin <branch>`.
-   - Open a **draft** PR via:
-     ```
-     gh pr create --draft --base master \
-       --title "[#N] <issue title>" \
-       --body "<body per template below>"
-     ```
-     For batch issues: `--title "[#N1 #N2] Combined: <short combined title>"`.
-   - PR body template:
-     ```
-     Closes #N1
-     Closes #N2
+Then create the branch in a single command:
 
-     ## Summary
-     - <bullet 1>
-     - <bullet 2>
+```bash
+git checkout -b claude/issue-<N>-<slug> origin/master
+```
 
-     ## Files changed by layer
-     - **Models**: ...
-     - **Services**: ...
-     - **Routers**: ...
-     - **Schema**: ...
-     - **Tests** (added by /bte): ...
+For batch issues: `claude/issues-<N1>-<N2>-<slug>`. Slug is a kebab-case 2–4 word summary of the issue title (e.g. `add-meal-tags`). The chosen branch name **must** appear in your reply to the user before any code is written, so they know what they're sitting on.
 
-     ## Manual test plan
-     ```bash
-     <curl commands from sub-step B>
-     ```
+### Step 5 — Implement
 
-     ## Manual SQL to run (if any)
-     ```sql
-     <SQL from sub-step B>
-     ```
+Write the code directly in main checkout. Rules:
 
-     ## Pre-existing coverage gaps (NOT fixed in this PR)
-     - <gap 1, with reason>
-     - <gap 2, with reason>
+- One logical change at a time, in canonical order: model → service → router → register in `main.py` → schema.
+- Reuse existing helpers (id generation, response envelope, auth deps, group-role checks). Do not invent parallel utilities.
+- Match the existing code style — copy the shape of the nearest sibling file rather than introducing new patterns.
+- Honour the verb convention: `@router.get` or `@router.post` only — never `put` / `delete` / `patch`.
+- Keep diffs minimal. No refactor of unrelated code, no added docstrings/comments/type hints to untouched code.
+- If `db_schema.sql` changes, also update `database/staging_data.json` only if the issue requires seed data.
+- **Do not write tests** — that is Step 7's job (`/bte`).
 
-     ## Notes
-     - <any non-obvious decisions>
+### Step 6 — Self-review
 
-     🤖 Generated with Claude Code
-     ```
-   - If a draft PR with the same `Closes #N` already exists on `origin`, **abort and report** — do not push or open a duplicate. Let the user decide whether to reuse or close it first.
-8. **Sub-step F — Return** — the Agent's final message must include: branch name, PR URL, sub-step B self-review verbatim, sub-step C test results (pytest output), and any non-obvious decisions made along the way.
+Produce a structured self-review in Traditional Chinese before the test step:
 
-### Step 5 — Final report (main checkout, after Agent returns)
+- **驗收條件對應表** — table of (criterion) × (where satisfied, with `file:line`). Unchecked = blocker.
+- **Authorization 檢查清單** — every new/changed service method × the group-role check applied. Missing = blocker.
+- **HTTP 動詞檢查** — every new/changed endpoint is `GET` or `POST` with the verb in the path. Any `PUT`/`DELETE`/`PATCH` = blocker.
+- **資料庫一致性** — `db_schema.sql` matches what services expect; no drift between code and schema. Drift = blocker.
+- **手動測試指令** — 2–3 `curl` / `httpie` commands the user can run locally.
+- **需要手動跑的 SQL**（若有）— exact statements for staging / prod, in a copy-pasteable block.
 
-When the dispatched Agent finishes (you will be notified via `run_in_background` completion), summarise to the user in Traditional Chinese:
+If any blocker is found, fix it and re-run Step 6. Do not proceed to Step 7 with open blockers.
 
-- **PR URL**（clickable）
+### Step 7 — Inline `/bte` for each touched domain
+
+For each touched domain in `auth`/`user`/`group`/`pet`/`food`/`meal`/`weight`, run the `/bte unit <domain>` flow inline (in the same main checkout, on the same branch — do not create a new branch). Read `.claude/skills/bte/SKILL.md` (at the repo root) for the canonical rules. Note that when invoked inline by `/be`, `/bte` does **not** run its own pre-flight or branch creation — it writes to the branch `/be` already created.
+
+- **If `backend/tests/unit/services/test_<domain>_service.py` does not exist** → bootstrap mode: produce a coverage plan, write a fresh test file for the service (creating `backend/tests/unit/conftest.py` with the bcrypt stub if needed), run `python -m pytest backend/tests/unit/services/test_<domain>_service.py -n auto`, capture the result.
+- **If the file already exists** → review-only mode: produce a coverage map and a P0/P1/P2 list. For gaps caused by **this issue's changes** (P0 only), write the new test cases. **Do not** fix pre-existing gaps unrelated to this issue — list them for the PR body's `## Pre-existing coverage gaps` section instead.
+
+### Step 8 — Pre-commit gate
+
+```bash
+cd backend && pre-commit run --all-files
+```
+
+If it fails: read the failure, fix the underlying issue, re-stage, re-run. **Never use `--no-verify`.** If it fails twice in a row, **stop the skill** and report the failure to the user — do not commit broken code.
+
+### Step 9 — `/summary` auto-chain
+
+Invoke `/summary` inline against `git diff HEAD..origin/master`. `/summary` will scan the diff for doc drift across CLAUDE.md, skill files, and memory, propose per-file diffs, and wait for user confirmation. If the user approves, the doc updates are staged for the doc commit in Step 10. If `/summary` reports "no doc drift", skip the doc commit.
+
+See `.claude/skills/summary/SKILL.md` (at the repo root) for `/summary`'s rules.
+
+### Step 10 — Commit, push, open draft PR
+
+Stage all changes. Cadence:
+
+- **Commit 1**: `feat: <issue title>` (or `fix:` for bug issues). Body lists files changed by layer and references `Closes #N` for each issue.
+- **Commit 2** (if `/bte` wrote tests): `test(<domain>): add unit tests for <service methods>`.
+- **Commit 3** (if `/summary` applied doc updates): `docs: sync after #N`.
+
+Commits use HEREDOC to preserve formatting. **Never use `--no-verify`.**
+
+Then push and open a **draft** PR:
+
+```bash
+git push -u origin <branch>
+gh pr create --draft --base master \
+  --title "[#N] <issue title>" \
+  --body "$(cat <<'EOF'
+<body per template below>
+EOF
+)"
+```
+
+For batch issues: `--title "[#N1 #N2] Combined: <short combined title>"`.
+
+PR body template:
+
+```
+Closes #N1
+Closes #N2
+
+## Summary
+- <bullet 1>
+- <bullet 2>
+
+## Files changed by layer
+- **Models**: ...
+- **Services**: ...
+- **Routers**: ...
+- **Schema**: ...
+- **Tests** (added by /bte): ...
+
+## Manual test plan
+```bash
+<curl commands from Step 6>
+```
+
+## Manual SQL to run (if any)
+```sql
+<SQL from Step 6>
+```
+
+## Pre-existing coverage gaps (NOT fixed in this PR)
+- <gap 1, with reason>
+- <gap 2, with reason>
+
+## Doc updates (added by /summary)
+- <file>: <one-line description>
+
+## Notes
+- <any non-obvious decisions>
+
+🤖 Generated with Claude Code
+```
+
+If a draft PR with the same `Closes #N` already exists on `origin`, **stop and report** — do not push or open a duplicate.
+
+### Step 11 — Final report
+
+Reply to the user in Traditional Chinese with:
+
+- **PR URL** (clickable)
 - **Branch name**
-- **Worktree path** (the Agent returns this)
-- **What changed** — one-paragraph summary lifted from the Agent's sub-step F report
-- **Test results** — pytest output from sub-step C (pass / fail)
+- **What changed** — one-paragraph summary
+- **Test results** — pytest output from Step 7 (pass / fail counts)
 - **Manual SQL the user must run** — if any (highlight prominently)
-- **Non-obvious decisions** — anything the Agent decided on its own that the user should know
-- **Blockers / failures** — if the Agent aborted, what failed and why
+- **Doc updates applied** — list of files `/summary` touched, if any
+- **Non-obvious decisions** — anything you decided on your own that the user should know
+- **Switch back hint**: `git switch <previous-branch>` (you can read the previous branch from `git reflog -1` before Step 4, or just remind the user generically)
 
 Never mark the PR ready-for-review on the user's behalf. Never auto-merge. Never force-push.
 

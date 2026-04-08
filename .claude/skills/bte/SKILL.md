@@ -20,6 +20,15 @@ If `$0` is missing, empty, or not one of the three valid values, reply with the 
 
 This skill embeds the test architecture decisions made for PetCare. Always operate inside these constraints. **Logistics for HOW code-mutating work is deployed are governed by `CLAUDE.md > Dev Flow`** — do not duplicate or override those rules here. This skill only owns *what* tests get written; Dev Flow owns *where and how*.
 
+### Invocation context
+
+`/bte` runs in two contexts. The flow differs slightly:
+
+- **Standalone** — user types `/bte unit <domain>` or `/bte integration <domain>` directly. In bootstrap / write modes, `/bte` runs the full Dev Flow itself: pre-flight (`git status` clean, `git fetch origin master`, branch-name collision check) → branch creation (`claude/bte-bootstrap-<domain>` or `claude/bte-integration-<domain>` from latest `origin/master`) → write tests → `pre-commit` → commit → `git push -u origin` → `gh pr create --draft` → final report.
+- **Inline from `/be`** — `/be` invokes `/bte` mid-flow on the branch `/be` already created. `/bte` does **not** run pre-flight and does **not** create a new branch — it writes tests directly into the existing branch and adds a `test(<domain>): ...` commit that lands in `/be`'s same PR. `/be` handles the push and PR creation, not `/bte`.
+
+You can detect inline invocation by the parent skill's instruction in your task prompt. When in doubt, ask.
+
 ### Two-tier test structure
 
 Tests live under `backend/tests/` and are split into two strict layers:
@@ -103,25 +112,34 @@ The domain already has a unit test file. Review it; do **not** write or modify a
 
 ### Step 3B — Bootstrap mode (no test file exists)
 
-The domain has no unit tests at all. Plan and write a fresh test file from scratch.
+The domain has no unit tests at all. Plan and write a fresh test file from scratch, synchronously in main checkout per `CLAUDE.md > Dev Flow`.
 
 1. **Build a coverage plan from the service file**: for each public method, list every important code path (happy path, validation failures, authz failures, not-found, conflict, edge cases). For group-scoped resources, every method that touches `pets` / `foods` / `meals` must include viewer / non-member / member / creator authorization cases.
 2. **Show the plan to the user in Traditional Chinese before writing.** Use the same structure as the review report (覆蓋摘要 + planned cases per method) but framed as "我準備新增以下測試". This gives the user visibility into what is about to be written, even though no confirmation is required to proceed.
-3. **Compile the implementation plan** as a self-contained task description containing:
-   - Target file: `backend/tests/unit/services/test_<domain>_service.py`
-   - Whether `backend/tests/unit/conftest.py` needs to be created (bcrypt stub + any shared fixtures)
-   - The full list of test cases from step 1, each with: method name, scenario, expected assertion, mock setup
-   - The unit test rules (no `backend.main`, mock `get_db()`, stub bcrypt, parallel-safe, AAA, stdlib `unittest.mock` only)
-   - Verification command: `python -m pytest backend/tests/unit/services/test_<domain>_service.py -n auto`
-   - Commit message format: `test(<domain>): bootstrap unit tests for <domain> service`
-4. **Deploy per `CLAUDE.md > Dev Flow`.** This skill does not implement Dev Flow itself — it follows it. When the deployment requires a background worktree agent, use the `Agent` tool with the parameters specified in Dev Flow, and pass the implementation plan from step 3 as the agent's prompt. Reference `## Backend > Tests > Unit tests` from CLAUDE.md inside the agent's prompt so the sub-agent knows the constraints.
-5. **Report back in Traditional Chinese** when the work completes:
-   - Worktree path + branch name (returned by the agent)
-   - Files created (test file + conftest.py if newly created)
-   - Tests added (count + brief list of methods covered)
-   - pytest result (pass / fail / count)
-   - Any decisions the sub-agent made on its own
-   - **Do not auto-merge or push** — present the worktree for the user's review.
+3. **Branch decision**:
+   - **If invoked inline by `/be`** → skip pre-flight and branch creation. Write directly to `/be`'s existing branch. `/be` will commit + push + PR.
+   - **If invoked standalone** → run pre-flight checks per `CLAUDE.md > Dev Flow`: `git status --porcelain` (must be empty), `git fetch origin master`, then `git checkout -b claude/bte-bootstrap-<domain> origin/master` (append `-2`, `-3`, ... on collision).
+4. **Write the test file**:
+   - Target: `backend/tests/unit/services/test_<domain>_service.py`
+   - If `backend/tests/unit/conftest.py` does not exist, create it with the bcrypt stub + any shared fixtures
+   - Write all the planned test cases following the unit test rules (no `backend.main` import, mock `get_db()`, stub bcrypt, parallel-safe, AAA, stdlib `unittest.mock` only)
+5. **Run pytest**:
+   ```bash
+   python -m pytest backend/tests/unit/services/test_<domain>_service.py -n auto
+   ```
+   If any test fails, fix the test file and re-run. Do not commit broken tests.
+6. **Pre-commit gate**:
+   ```bash
+   cd backend && pre-commit run --all-files
+   ```
+   Fix any failures. **Never use `--no-verify`.** Two failures in a row → stop and report.
+7. **Commit / push / PR** (standalone only — skip if invoked inline by `/be`):
+   - Commit message: `test(<domain>): bootstrap unit tests for <domain> service`
+   - `git push -u origin <branch>`
+   - `gh pr create --draft --base master` with title `[bte] bootstrap unit tests for <domain>` and a body listing files created + pytest result + any non-obvious decisions
+8. **Report back in Traditional Chinese**:
+   - **If standalone** → PR URL, branch name, files created, pytest result, switch-back hint (`git switch <previous>`)
+   - **If inline** → branch name (= `/be`'s branch), files created, pytest result, hand control back to `/be`
 
 ---
 
@@ -166,30 +184,40 @@ End the discussion document with an itemised list of the proposed cases, each nu
 
 > 「以上案例要我實作哪幾個？回 `1,3,5` 指定編號、回 `all` 全寫、或回 `no` 停止。整合測試會新增到 `backend/tests/integration/test_<domain>.py`，不會被加入 CI。」
 
-**If, in their next message, the user confirms with a non-empty selection**, proceed to write exactly the selected cases. Otherwise stop.
+**If, in their next message, the user confirms with a non-empty selection**, proceed to write exactly the selected cases synchronously in main checkout per `CLAUDE.md > Dev Flow`. Otherwise stop.
 
 When writing:
 
-1. **Compile the implementation plan** for the approved cases:
-   - Target file: `backend/tests/integration/test_<domain>.py` (or `test_schema_match.py` for `schema`)
-   - Required env vars to document inline: `APP_ENV=test`, `POSTGRES_TEST`, plus any others
-   - The list of approved test cases, each with: scenario, setup steps, what real third-party resource is used, assertions
+1. **Pre-flight + branch** (standalone only — skip if `/be` invoked you inline):
+   - `git status --porcelain` must be empty
+   - `git fetch origin master`
+   - `git checkout -b claude/bte-integration-<domain> origin/master` (append `-2`, `-3`, ... on collision)
+2. **Write the integration test file**:
+   - Target: `backend/tests/integration/test_<domain>.py` (or `test_schema_match.py` for `schema`)
+   - Document required env vars inline at the top: `APP_ENV=test`, `POSTGRES_TEST`, plus any others
+   - For each approved case: write the test with scenario, setup steps, real third-party resource usage, assertions
    - Hard rules:
      - Justify in a docstring why each case cannot be a unit test
      - Must clean up its own DB state (no reliance on global cleanup)
      - **Must NOT be added to `.github/workflows/ci.yml`** — integration tests are manual-only
      - Must be runnable individually with the documented env vars
      - For `schema`: no business-logic assertions; only structural diffs
-   - Verification command (manual): `APP_ENV=test POSTGRES_TEST=... python -m pytest backend/tests/integration/test_<domain>.py`
-   - Commit message format: `test(<domain>): add integration tests for <list of scenarios>`
-2. **Deploy per `CLAUDE.md > Dev Flow`.** Use the `Agent` tool per Dev Flow's rules, with the implementation plan as the prompt. Reference `## Backend > Tests > Integration tests` inside the agent prompt.
-3. **Report back in Traditional Chinese**:
-   - Worktree path + branch name
+3. **Pre-commit gate**:
+   ```bash
+   cd backend && pre-commit run --all-files
+   ```
+   Fix any failures. **Never use `--no-verify`.** Two failures in a row → stop and report.
+4. **Commit / push / PR** (standalone only):
+   - Commit message: `test(<domain>): add integration tests for <list of scenarios>`
+   - `git push -u origin <branch>`
+   - `gh pr create --draft --base master` with title `[bte] integration tests for <domain>` and a body listing files / cases / manual run command
+5. **Report back in Traditional Chinese**:
+   - PR URL + branch name (standalone) OR branch name (inline)
    - Files created / modified
    - Tests added (count + brief list of scenarios)
-   - Manual run command the user should use to verify
+   - **Manual run command** the user should use to verify (highlight prominently — these tests are manual-only)
    - Confirmation that CI workflow files were NOT touched
-   - Any decisions the sub-agent made on its own
+   - Switch-back hint: `git switch <previous-branch>`
 
 ---
 
@@ -218,7 +246,7 @@ This is open Q&A about backend testing. The topic can be anything: a specific me
 
   /bte unit <domain>          檢視某個 domain 的 unit test 覆蓋與重構機會。
                               若該 domain 完全沒有 unit test 檔，則直接 bootstrap
-                              寫一份完整的初始測試（依 CLAUDE.md > Dev Flow 部署）。
+                              寫一份完整的初始測試。
 
   /bte integration <domain>   討論某個 domain 的 integration test。永遠先討論，
                               在使用者明確選擇要實作的 case 之後才會寫。
@@ -233,6 +261,8 @@ This is open Q&A about backend testing. The topic can be anything: a specific me
   /bte integration meal
   /bte discuss "AsyncMock vs 自己寫 fake，哪個比較適合 group_service？"
 
-note：bootstrap 寫測試時的部署細節（worktree、branch、background）一律遵循
-      CLAUDE.md > Dev Flow，這個 skill 不會在主 checkout 直接寫測試。
+note：bootstrap / integration 寫測試時，依 CLAUDE.md > Dev Flow 同步在主
+      checkout 跑 — pre-flight → branch → 寫檔 → pre-commit → commit →
+      push → draft PR。當 /be 內聯呼叫 /bte 時，/bte 不會自己開 branch
+      或開 PR，而是寫到 /be 已建好的 branch 上，由 /be 負責 commit / push / PR。
 ```

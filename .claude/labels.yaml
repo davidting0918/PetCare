@@ -1,0 +1,127 @@
+# PetCare GitHub label system — source of truth.
+#
+# This file is the canonical definition of every label used on
+# https://github.com/davidting0918/PetCare. The live GitHub state should
+# always match this file. To re-apply this file, run the commands listed
+# at the bottom under `# How to apply`.
+#
+# Conventions
+# -----------
+# - Prefix `category:value` is used to visually group labels in the GitHub UI.
+# - Every issue/PR SHOULD carry exactly one `type:*` and at least one `area:*`.
+# - `domain:*` only applies when the work is scoped to a backend service or
+#   the matching frontend module. The valid set is the same as `/bte`'s domain
+#   argument plus `medicine` (planned, not yet implemented).
+# - `test:*` only applies when `type:test` is set. `test:integration`
+#   covers schema-verification work as well — there is no `test:schema`.
+# - Skills (`/be`, `/fe`, `/bte`) auto-apply labels based on the commit
+#   prefix and touched paths. See CLAUDE.md > GitHub Labels.
+#
+# Color palette
+# -------------
+# - type:    full hue per kind (green/red/purple/teal/blue/grey)
+# - area:    one shared blue (#1d76db) so the area row groups visually
+# - domain:  one shared yellow (#fbca04)
+# - test:    matches the underlying tier (unit=teal, integration=blue)
+#
+# Removed labels (do not re-create)
+# ---------------------------------
+# All 9 GitHub default labels were deleted on 2026-04-08:
+#   bug, documentation, duplicate, enhancement, good first issue,
+#   help wanted, invalid, question, wontfix
+# `bug` / `documentation` / `enhancement` are replaced by `type:fix` /
+# `type:docs` / `type:feat`. The rest were unused on this single-developer repo.
+
+labels:
+  # ===== type: what kind of work this is (every PR/issue gets exactly one) =====
+  - name: "type:feat"
+    color: "0e8a16"
+    description: "New feature or capability"
+  - name: "type:fix"
+    color: "b60205"
+    description: "Bug fix; restores intended behaviour"
+  - name: "type:refactor"
+    color: "5319e7"
+    description: "Code change that neither fixes a bug nor adds a feature"
+  - name: "type:test"
+    color: "006b75"
+    description: "Adding or refactoring tests only"
+  - name: "type:docs"
+    color: "0075ca"
+    description: "CLAUDE.md, README, skill files, memory, or inline doc changes"
+  - name: "type:chore"
+    color: "cccccc"
+    description: "Tooling, dependencies, CI plumbing, repo housekeeping"
+
+  # ===== area: which top-level part of the monorepo this touches =====
+  - name: "area:backend"
+    color: "1d76db"
+    description: "backend/ — FastAPI services, routers, models, core"
+  - name: "area:frontend"
+    color: "1d76db"
+    description: "frontend/ — React app, Redux store, components, hooks"
+  - name: "area:database"
+    color: "1d76db"
+    description: "database/db_schema.sql or schema-related migrations"
+  - name: "area:ci"
+    color: "1d76db"
+    description: ".github/workflows/ and pre-commit configuration"
+  - name: "area:claude"
+    color: "1d76db"
+    description: "CLAUDE.md, .claude/skills/, memory files"
+
+  # ===== domain: which feature domain (matches /bte's domain argument) =====
+  - name: "domain:auth"
+    color: "fbca04"
+    description: "Authentication, JWT, API keys, Google OAuth"
+  - name: "domain:user"
+    color: "fbca04"
+    description: "User profile and account management"
+  - name: "domain:group"
+    color: "fbca04"
+    description: "Groups, members, invitations, role-based access"
+  - name: "domain:pet"
+    color: "fbca04"
+    description: "Pet records and pet management"
+  - name: "domain:food"
+    color: "fbca04"
+    description: "Food database, nutrition entries, photos"
+  - name: "domain:meal"
+    color: "fbca04"
+    description: "Meal logging, daily intake, calorie tracking"
+  - name: "domain:weight"
+    color: "fbca04"
+    description: "Weight records and weight trend tracking"
+  - name: "domain:medicine"
+    color: "fbca04"
+    description: "Medication tracking (planned, not yet implemented)"
+
+  # ===== test: which test tier (only with type:test) =====
+  - name: "test:unit"
+    color: "006b75"
+    description: "backend/tests/unit/ — runs in CI, no third-party resources"
+  - name: "test:integration"
+    color: "1d76db"
+    description: "backend/tests/integration/ — manual, real DB, includes schema verification"
+
+# How to apply
+# ------------
+# Re-applying this file from scratch (one-time setup OR after manual drift):
+#
+#   # 1. Delete every label currently on the repo (CAUTION — destroys label
+#   #    history on existing issues; only do this on first setup or after
+#   #    confirming with the user).
+#   gh label list --limit 200 --json name -q '.[].name' \
+#     | xargs -I{} gh label delete {} --yes
+#
+#   # 2. Recreate every label from this file. Requires `yq`.
+#   yq -r '.labels[] | "gh label create \"\(.name)\" --color \"\(.color)\" --description \"\(.description)\""' \
+#     .claude/labels.yaml | sh
+#
+# Adding a single new label:
+#
+#   gh label create "type:perf" --color "fbca04" --description "Performance improvement"
+#
+# Then add the same entry to this file in the matching category, commit
+# under `chore(labels): add type:perf`, and update CLAUDE.md if the new
+# label changes the conventions.

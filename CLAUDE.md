@@ -8,46 +8,96 @@ When responding to the user in this repository, write all conversational text in
 
 ## Dev Flow
 
-**The single hard constraint: never interfere with the user's current working state in the main checkout.** The user is typically mid-task on some branch; switching branches, pulling, running migrations, or starting dev servers in their working directory would disrupt them. All implementation work happens in **isolated background worktrees** branched from the latest `origin/master`.
+All skill-driven development work (`/be`, `/fe`, `/bte`, `/summary`) follows a single **classic single-checkout flow** that runs synchronously in the user's main checkout. The user is present for every step. There is no background worktree, no parallel agent dispatch, no cross-checkout coordination.
 
-### When this flow applies
+This is a deliberate inversion of an earlier worktree-based design. The user explicitly chose linearity and visibility over parallelism, accepting that the main checkout is occupied while a skill runs.
 
-Apply the worktree flow to anything that **mutates code or state**: implementing a feature, fixing a bug, refactoring, adding tests for an existing service, running migrations, starting dev servers, or working through one or more GitHub issues.
+### The flow (every code-mutating skill follows this exact sequence)
 
-The flow does **not** apply to read-only or discussion work: reading files, searching code, planning, design Q&A, `/bte discuss`, updating CLAUDE.md / memory / docs that the user is actively reviewing, or any change explicitly scoped to the file the user is currently editing.
+```
+Pre-flight (the skill auto-checks BEFORE touching anything)
+  1. git status --porcelain        must be empty
+       └ Not empty → STOP. Tell the user exactly which files are dirty
+         and ask them to commit or stash first. Never stash on their behalf.
+  2. git fetch origin master       must succeed
+       └ Failure → report verbatim and stop. Do not retry silently.
+  3. Intended branch name has no collision on origin/local
+       └ Collision → append -2, -3, ... until unique.
 
-### Required steps for any code-changing work
+Branch
+  4. git checkout -b claude/issue-{N}-{slug} origin/master
+       (single command — branches off the latest origin/master and switches.
+        Replaces "checkout master → pull → checkout -b" as three steps.)
+       For batch issues: claude/issues-{N1}-{N2}-{slug}
 
-1. **Check master without touching the main checkout.** Read-only commands only:
-   ```bash
-   git fetch origin master
-   git log HEAD..origin/master --oneline   # what's new on master
-   ```
-   Do **NOT** run `git pull`, `git checkout master`, `git switch`, `git reset`, or any branch-switching command in the main checkout. Even if the user said "make sure master is up to date", that means *fetch and base the new worktree on it*, not check it out in their working directory.
+Implement (in the user's main checkout, fully visible)
+  5. Implement the feature / fix per the plan
+  6. Self-review against the skill's checklist
+  7. /bte handoff (only inside /be flow — runs inline in main checkout,
+                   per /bte's unit subcommand: bootstrap if no test file
+                   exists, review-only if it does)
+  8. Quality gate
+       - /be:  cd backend  && pre-commit run --all-files
+       - /fe:  cd frontend && npm run lint && npm run build
+       - Failure → fix the underlying issue and re-run.
+                   NEVER use --no-verify.
+                   Two failures in a row → STOP and report.
+  9. /summary auto-chain
+       - Scans git diff HEAD..origin/master + the conversation history
+       - Detects doc drift across CLAUDE.md / skill files / memory
+       - Proposes per-file diff → waits for user confirmation → applies
 
-2. **Spawn a background worktree agent for the implementation.** Use the `Agent` tool with all three of these set:
-   - `isolation: "worktree"` — gives the agent its own git worktree, completely isolated from the user's checkout. Auto-cleans if no changes are made.
-   - `run_in_background: true` — runs in parallel so the user can keep working in the foreground; you'll be notified when it finishes.
-   - A complete, self-contained prompt. Each `Agent` invocation starts fresh, so include: the full issue / feature description, relevant file paths, links to the right CLAUDE.md sections (especially `## Backend > Tests` for backend work), and an explicit instruction at the top of the prompt: *"Inside your worktree, run `git fetch origin && git checkout -b <branch-name> origin/master` before doing anything else, so your work starts from the latest master."*
+Commit / Push / PR
+  10. git commit
+       - /fe:        one commit (feat or fix)
+       - /be:        one commit (feat/fix), plus a second commit
+                     (test(<domain>): ...) if /bte wrote tests
+       - /summary:   adds a third commit (docs: sync after #N)
+                     if it applied doc updates
+  11. git push -u origin <branch>
+  12. gh pr create --draft --base master --title ... --body ...
+       (PR templates per ## Project Skills > PR mechanics)
+  13. Final report
+       - PR URL (clickable)
+       - Branch name
+       - One-line reminder: "To return to your previous branch:
+         git switch <previous>"
+```
 
-3. **Multiple issues at once → multiple parallel agents.** If the user hands over several independent issues in the same message, send a single response with one `Agent` tool call per issue. They run in parallel in separate worktrees without interfering with each other or the main checkout.
+### Pre-flight failure modes
 
-4. **Report on completion.** When a background agent finishes, summarize: what changed, the worktree path + branch the agent created (returned in the agent result if it made changes), tests added, and any non-obvious decisions the agent made on its own.
+- **Working tree not clean** — refuse to proceed. List the dirty files. Ask the user to commit or stash. **Never** run `git stash`, `git add`, `git checkout --`, or any mutating cleanup on the user's behalf.
+- **`git fetch` fails** — report the underlying error verbatim and stop. Do not retry, do not work offline against a stale local master.
+- **Branch-name collision** — append `-2`, `-3`, etc. until unique. The chosen name must appear in the user-facing report.
+- **User is on master with unpushed commits** — refuse and tell the user. Do not try to "fix" their checkout.
 
-   **PR policy depends on how the worktree was launched**:
+### Hard rules for any skill flow
 
-   - **Skill-driven (`/be` or `/fe`)** — the agent's prompt explicitly authorizes it to **commit, push, and open a draft PR against `master` as the final step of its run**, per the conventions in `## Project Skills > PR mechanics`. Never auto-merge, never force-push, never mark the PR ready-for-review on the user's behalf. Report the PR URL in the completion summary so the user can click straight through.
-   - **Ad-hoc background work** (everything else) — present the worktree for review. Do not auto-commit, auto-push, or open a PR without explicit user approval. The user will tell you what to do next.
+- **No background worktree, no `Agent` tool dispatch for code work.** Everything runs synchronously in main checkout. If you find yourself reaching for `Agent` to "isolate" code work, stop — that pattern is gone.
+- **No auto-merge, no force-push, no marking PRs ready-for-review.** PRs are always opened as `--draft`. The user marks them ready themselves after review.
+- **No `--no-verify` on commits.** If pre-commit or husky-style hooks fail, fix the underlying issue and re-stage.
+- **Multiple issues in one skill invocation → one combined branch + one combined PR**, not parallel branches. If issues are clearly unrelated, stop at the planning step and ask the user whether to handle them separately.
+- **No auto-commit on the user's existing branch.** Skill work always creates a fresh branch from `origin/master`. If the user wants to add changes to an existing branch, they do that themselves outside the skill.
 
-### Forbidden in the main checkout (no exceptions without user override)
+### When this flow does NOT apply
 
-- `git checkout <other-branch>` / `git switch <other-branch>`
-- `git pull` / `git merge` / `git rebase` / `git reset --hard`
-- Editing source files for an issue or feature (docs and memory updates the user is reviewing are fine)
-- Running migrations, seeders, or anything that mutates the local DB
-- Starting `npm run dev`, `uvicorn`, or any long-running dev server
+The flow only applies to **code-mutating** skill work. Read-only or discussion work is exempt:
 
-If you genuinely need to do one of these in the main checkout (e.g. the user explicitly asks), confirm with them first.
+- Reading files, searching code, planning, design Q&A
+- `/be discuss`, `/fe discuss`, `/bte discuss`
+- `/summary` invoked manually for doc-drift inspection (it modifies docs but is conversational and skipped pre-flight intentionally — see `## Project Skills > /summary` for its own rules)
+- Editing CLAUDE.md / memory / project docs the user is actively reviewing in the IDE
+- Any change explicitly scoped to the file the user is currently editing
+
+### Why the change from worktree
+
+The original Dev Flow (2026-04-07) used background worktrees + `Agent` dispatch so the user could keep working in the foreground while skills ran in parallel. After building it out across `/be`, `/fe`, `/bte`, the user found that:
+
+1. Cross-checkout coordination (especially for `/summary` doc updates) added complexity without proportional value.
+2. They preferred seeing every step in their IDE rather than trusting a background agent.
+3. A single linear flow is easier to reason about than multiple parallel agents.
+
+The trade-off — main checkout is occupied while a skill runs — is acceptable because skill runs are short-lived (minutes, not hours).
 
 ## Project Overview
 
@@ -213,39 +263,73 @@ The frontend mixes Tailwind, MUI, and emotion as packages, but the actual codeba
 
 ## Project Skills
 
+### Skill chain overview
+
+The five project skills form a single end-to-end pipeline. Each skill's responsibilities are scoped tightly so the boundaries don't blur:
+
+```
+/pm discuss  →  /pm plan  →  /be / /fe / /bte  →  /summary  →  draft PR
+   (Q&A,         (creates       (implements code         (syncs CLAUDE.md
+    converges    GitHub         in main checkout         + skill files
+    direction)   issues +       per Dev Flow)            + memory)
+                 milestone)
+```
+
+- **`/pm`** — entry point for new work. Discusses feature ideas, breaks them into GitHub issues + milestones along domain boundaries, dispatches downstream skills.
+- **`/be` / `/fe`** — execute one or more issues. Run synchronously in main checkout per `## Dev Flow`.
+- **`/bte`** — backend test work. Invoked inline by `/be`, or directly for review / bootstrap / integration test discussions.
+- **`/summary`** — doc drift sync. Auto-chained from `/be` / `/fe` at their quality-gate step, or invoked manually.
+
+You can enter the chain at any point. Bypassing `/pm` (typing `/be 12` directly when issue 12 was created by hand) is fully supported — `/pm` is only mandatory when you need to *create* issues from a feature description.
+
 ### PR mechanics (shared by `/be` and `/fe`)
 
-Both `/be` and `/fe` end their issue flow by dispatching a background worktree Agent that auto-commits, pushes, and opens a **draft** PR. The conventions are identical and live here so the two skills don't drift:
+Both `/be` and `/fe` end their issue flow by committing, pushing, and opening a **draft** PR from the user's main checkout (per `## Dev Flow`). The conventions are identical and live here so the two skills don't drift:
 
-- **Branch name**: `claude/issue-{N}-{slug}` for a single issue, `claude/issues-{N1}-{N2}-{slug}` for a batch. If a branch with the exact same name already exists on `origin`, append `-2`, `-3`, etc. until unique.
+- **Branch name**: `claude/issue-{N}-{slug}` for a single issue, `claude/issues-{N1}-{N2}-{slug}` for a batch. If a branch with the exact same name already exists on `origin` or locally, append `-2`, `-3`, etc. until unique.
 - **Target branch**: `master`. CI runs on push/PR to both `master` and `develop`, but the canonical PR base is `master`.
 - **Draft, never ready-for-review**: PRs are always opened with `gh pr create --draft`. The user marks them ready themselves after review. Never auto-merge, never force-push.
 - **PR title**: `[#N] <issue title>` for a single issue, `[#N1 #N2] Combined: <short combined title>` for a batch.
-- **PR body** must include: `Closes #N` lines (one per issue), a `## Summary` bullet list, `## Files changed by layer` grouping, the manual test plan or steps from self-review, any non-obvious decisions in `## Notes`, and a `🤖 Generated with Claude Code` footer. `/be` adds `## Manual SQL to run` and `## Pre-existing coverage gaps`. `/fe` adds `## Backend endpoints consumed` (with `file:line` refs) and `## Mobile viewport check`.
-- **Commit cadence**: `/fe` makes one commit. `/be` makes one commit for the implementation plus a second commit (`test(<domain>): ...`) if `/bte` wrote unit tests in the same run. Both go on the same branch in the same PR.
-- **Quality gate before commit**: `/be` runs `cd backend && pre-commit run --all-files`. `/fe` runs `cd frontend && npm run lint && npm run build`. If either fails, fix the underlying issue and re-stage. **Never use `--no-verify`.** If the gate fails twice in a row, abort the Agent run and return a failure report instead of committing.
-- **Existing PR collision**: if a draft PR with the same `Closes #N` already exists on `origin`, the Agent aborts and reports — it does not push or open a duplicate. The user decides whether to reuse or close it first.
-- **PR URL is reported back**: the parent skill's final message to the user always includes the clickable PR URL plus the worktree path.
+- **PR body** must include: `Closes #N` lines (one per issue), a `## Summary` bullet list, `## Files changed by layer` grouping, the manual test plan or steps from self-review, any non-obvious decisions in `## Notes`, and a `🤖 Generated with Claude Code` footer. `/be` adds `## Manual SQL to run` and `## Pre-existing coverage gaps`. `/fe` adds `## Backend endpoints consumed` (with `file:line` refs) and `## Mobile viewport check`. If `/summary` applied doc updates, both add `## Doc updates`.
+- **Commit cadence**: `/fe` makes one commit (feat / fix). `/be` makes one commit for the implementation plus a second commit (`test(<domain>): ...`) if `/bte` wrote unit tests in the same run. Both add a third commit (`docs: sync after #N`) if `/summary` applied doc drift fixes. All commits go on the same branch in the same PR.
+- **Quality gate before commit**: `/be` runs `cd backend && pre-commit run --all-files`. `/fe` runs `cd frontend && npm run lint && npm run build`. If either fails, fix the underlying issue and re-stage. **Never use `--no-verify`.** If the gate fails twice in a row, **stop the skill** and report the failure to the user — do not commit broken code.
+- **Existing PR collision**: if a draft PR with the same `Closes #N` already exists on `origin`, **stop and report** — do not push or open a duplicate. The user decides whether to reuse or close it first.
+- **PR URL is reported back**: the skill's final message to the user always includes the clickable PR URL plus the branch name plus a one-line reminder of how to switch back to the user's previous branch (`git switch <previous>`).
+
+### `/pm` — Project + Product Manager
+
+Defined at [.claude/skills/pm/SKILL.md](.claude/skills/pm/SKILL.md). Project-scoped skill that owns feature discovery, scoping, and breakdown into GitHub issues + milestones. **The only skill that touches the GitHub issue tracker** — every other skill consumes issues but never creates them. Has no opinion about backend vs frontend; routes work to `/be` / `/fe` after issues are created.
+
+Subcommands:
+- `/pm discuss <topic>` — two-stage product / project Q&A. **Stage 1** uses the same five-section structure as `/be discuss` / `/fe discuss` (problem → three proposals → concerns → user decisions → follow-ups) to converge direction quickly. **Stage 2** (only if the user picks a proposal in their reply) expands the chosen direction into a near-spec-level document: user stories, data model, full API surface, frontend surface, authorization model, user journey walk-through, technical risks, breakdown preview. Every reply ends with an explicit prompt block telling the user their next options. **Never creates issues during discuss** — the only path from discuss to issues is the user typing `plan 1` / `plan 2` / `plan 3` (or `plan` after stage 2) at a prompt block.
+- `/pm plan <feature description>` (or `/pm plan` continuing from a stage-2 spec) — proposes a GitHub issue breakdown along domain boundaries: one issue per backend domain, one issue per frontend resource, separate schema issue if `db_schema.sql` is touched. Each issue body uses a strict three-section format: `## Background` (Problem / Why now / Out of scope), `## Tech Implementation Plan` (Affected layers / Files / API contract OR Data flow / Dependencies), `## Manual Verification Before Merge` (checklist). Issues get `type:*` + `area:*` + `domain:*` labels per [.claude/labels.yaml](.claude/labels.yaml). Milestones are created **only when ≥ 3 issues** (override allowed) and **never carry due dates** (matches the project's no-time-estimates rule). Then proposes the full plan to the user, waits for explicit `apply`, creates the issues + milestone via `gh`, hands off to the user for GitHub-side review, and finally dispatches `/be` / `/fe` / `/bte` in dependency order on user confirmation — with a hard pause between issues so the user can review each PR before downstream work starts.
+
+**Project conventions enforced by `/pm`:**
+- **Issue bodies are English**, conversation is Traditional Chinese. English bodies stay searchable across sessions and tools.
+- **Domain-boundary breakdown**: backend issues mirror `/be`'s service boundary, frontend issues mirror `/fe`'s resource boundary. Schema changes get their own issue. No vertical-slice fullstack issues — the project's tooling is built around the backend / frontend split, and a single issue spanning both would force `/be` and `/fe` into the same PR.
+- **Always propose before applying**: `/pm` never creates issues, milestones, or dispatches downstream skills without an explicit `apply` / `dispatch` reply from the user. GitHub mutations are user-visible and hard to undo cleanly.
+- **No new labels**: `/pm` only applies labels that already exist in `.claude/labels.yaml`. If a feature would benefit from a new label, `/pm` proposes it in the discuss section but tells the user to `chore(labels): add <name>` separately.
+- **No code, schema, or PR work**: `/pm` lives entirely in the GitHub API surface plus the skill chain. It never runs Dev Flow steps itself.
 
 ### `/be` — Backend Engineer
 
 Defined at [.claude/skills/be/SKILL.md](.claude/skills/be/SKILL.md). Project-scoped skill that owns backend + database development end-to-end, including DBA work on [database/db_schema.sql](database/db_schema.sql). It embeds the layering, schema conventions, authorization model, and HTTP verb rule (see `## Backend`) so future sessions don't have to re-derive them. **Use this skill instead of ad-hoc backend implementation work.**
 
 Subcommands:
-- `/be <issue_number>[,<issue_number>...]` — full implementation flow for one or more GitHub issues. Steps 1-3 run in the user's main checkout (read-only): (1) `gh issue view` to read each issue including comments, (2) produce a structured implementation plan covering files / schema / API / authorization / errors / out-of-scope, (3) confirmation gate — pause if the plan touches `db_schema.sql`, dependencies, response envelope, auth, or if issues are unrelated / criteria unclear. Step 4 dispatches **one background worktree Agent** per `## Dev Flow` whose self-contained prompt runs the entire chain inside the worktree: implement → self-review → embedded `/bte` flow for each touched domain (bootstrap or review per `/bte` rules) → `pre-commit` gate → commit → push → open draft PR per `## Project Skills > PR mechanics`. Step 5 reports the PR URL + branch + non-obvious decisions back to the user when the Agent finishes.
+- `/be <issue_number>[,<issue_number>...]` — full implementation flow for one or more GitHub issues, run synchronously in the user's main checkout per `## Dev Flow`. Sequence: read issue → plan → confirmation gate (pause if the plan touches `db_schema.sql`, dependencies, response envelope, auth, or if issues are unrelated / criteria unclear) → pre-flight + branch creation (`claude/issue-{N}-{slug}` from latest `origin/master`) → implement (model → service → router → `main.py` → schema) → self-review → inline `/bte unit <domain>` flow for each touched domain (bootstrap mode if no test file, review-only if exists) → `pre-commit run --all-files` → inline `/summary` chain to detect doc drift → commit(s) → `git push -u origin` → `gh pr create --draft` → final report with PR URL.
 - `/be discuss <topic>` — open Q&A about backend / database design or development. Five-section structure: (1) restate the question and confirm scope, (2) **three** concrete proposals with pros/cons/impact/complexity ordered from smallest change to most ambitious, (3) concerns and an opinionated recommendation, (4) numbered yes/no decisions the user must make before implementation, (5) follow-up ideas to park for later. **Never implements during discuss mode.**
 
 **Project conventions enforced by `/be`:**
 - HTTP verbs: backend uses **only `GET` and `POST`**. Update / delete operations are `POST` with the verb in the URL path (e.g. `POST /pet/{pet_id}/update`, `POST /meal/{meal_id}/delete`). `PUT` / `DELETE` / `PATCH` are never used. Match the position of the verb (`/{id}/update` vs `/update/{id}`) to the nearest sibling endpoint in the same router.
 - Schema changes are made by editing `database/db_schema.sql` directly. There is no migration tool, so any schema change must be accompanied by the exact SQL to run manually against staging / prod (surfaced in the PR body's `## Manual SQL to run` section).
-- Backend tests are **not** written by `/be` directly — the worktree Agent reads `.claude/skills/bte/SKILL.md` and runs the `/bte unit <domain>` flow inline (bootstrap mode if no test file exists, review-only mode if it does). Test commits land in the same branch / PR as the implementation.
+- Backend tests are **not** written by `/be` directly — `/be` runs the `/bte unit <domain>` flow inline in main checkout (bootstrap mode if no test file exists, review-only mode if it does). Test commits land in the same branch / PR as the implementation.
 
 ### `/fe` — Frontend Engineer
 
 Defined at [.claude/skills/fe/SKILL.md](.claude/skills/fe/SKILL.md). Project-scoped skill that owns frontend development end-to-end. It embeds the layering, styling rules, state-management rules, mobile-first principles, and the canonical resource-add order (see `## Frontend`) so future sessions don't have to re-derive them. **Use this skill instead of ad-hoc frontend implementation work.**
 
 Subcommands:
-- `/fe <issue_number>[,<issue_number>...]` — full implementation flow for one or more GitHub issues. Steps 1-3 run in the user's main checkout (read-only): (1) `gh issue view` to read each issue, (2) produce a structured 8-field plan covering files / data flow / state / component tree / routing / UX states / mobile-first / out-of-scope, (3) confirmation gate — paused **only** for unrelated batches or unclear acceptance criteria (technical changes like `vite.config.ts`, `App.tsx`, `client.ts`, npm deps, or store root edits **do not** pause; the user catches issues during manual testing). Step 4 dispatches **one background worktree Agent** per `## Dev Flow` whose prompt runs inside the worktree: verify backend API contracts by reading `backend/routers/` + `backend/services/` → implement layer-by-layer (`types` → `services` → `slices` → `hooks` → `components` → `routing`) → self-review (criteria, contract consistency, styling rule check, component reuse check, state rules, lint, build, manual test steps, mobile viewport) → commit → push → open draft PR per `## Project Skills > PR mechanics`. Step 5 reports the PR URL back to the user.
+- `/fe <issue_number>[,<issue_number>...]` — full implementation flow for one or more GitHub issues, run synchronously in the user's main checkout per `## Dev Flow`. Sequence: read issue → 8-field plan (files / data flow / state / component tree / routing / UX states / mobile-first / out-of-scope) → confirmation gate (paused **only** for unrelated batches or unclear acceptance criteria; technical changes like `vite.config.ts`, `App.tsx`, `client.ts`, npm deps, or store root edits **do not** pause — the user catches issues during manual testing) → pre-flight + branch creation → verify backend API contracts by reading `backend/routers/` + `backend/services/` → implement layer-by-layer (`types` → `services` → `slices` → `hooks` → `components` → `routing`) → self-review (criteria, contract consistency, styling rule check, component reuse check, state rules, lint, build, manual test steps, mobile viewport) → `npm run lint && npm run build` → inline `/summary` chain → commit → `git push -u origin` → `gh pr create --draft` → final report with PR URL.
 - `/fe discuss <topic>` — open Q&A about frontend / UX / state / build design. Same five-section structure as `/be discuss`. **Never implements during discuss mode.**
 
 **Project conventions enforced by `/fe`:**
@@ -256,14 +340,74 @@ Subcommands:
 
 ### `/bte` — Backend Test Engineer
 
-Defined at [.claude/skills/bte/SKILL.md](.claude/skills/bte/SKILL.md). Project-scoped skill for all backend test work. It embeds the agreed two-tier test architecture and mock strategy (see `## Backend > Tests`), so future sessions don't have to re-derive them. **Use this skill instead of writing ad-hoc test reviews.** `/be` invokes this skill automatically at the end of its issue flow.
+Defined at [.claude/skills/bte/SKILL.md](.claude/skills/bte/SKILL.md). Project-scoped skill for all backend test work. It embeds the agreed two-tier test architecture and mock strategy (see `## Backend > Tests`), so future sessions don't have to re-derive them. **Use this skill instead of writing ad-hoc test reviews.** `/be` invokes this skill automatically as part of its issue flow (running inline in the same main checkout, on the same branch).
 
 Subcommands:
-- `/bte unit <domain>` — for `auth`, `user`, `group`, `pet`, `food`, `meal`, `weight`. Behaviour depends on whether a unit test file already exists for the domain:
+- `/bte unit <domain>` — for `auth`, `user`, `group`, `pet`, `food`, `meal`, `weight`. Runs synchronously in the user's main checkout per `## Dev Flow`. Behaviour depends on whether a unit test file already exists for the domain:
   - **If `backend/tests/unit/services/test_<domain>_service.py` exists** → review-only. Produces a coverage map, missing cases, refactor opportunities, violations of unit-test rules, and a P0/P1/P2 priority list. Stops there. Does not write code, does not offer to implement.
-  - **If no test file exists** → bootstrap mode. Builds a coverage plan from the service, shows it to the user, then auto-writes a fresh test file (creating `backend/tests/unit/conftest.py` with the bcrypt stub if needed) via a background worktree per `## Dev Flow`. Reports back with branch + files + pytest result.
-- `/bte integration <domain>` — discussion-first review of integration tests for the same domain list, plus the special `schema` domain (verifies the live DB matches `db_schema.sql`). Always produces a discussion document, asks the user to pick which proposed cases to implement, and only writes the selected cases (via a background worktree per `## Dev Flow`) after the user confirms in their next message. Never bootstraps automatically.
+  - **If no test file exists** → bootstrap mode. Builds a coverage plan from the service, shows it to the user, runs pre-flight + branch creation (`claude/bte-bootstrap-<domain>` from latest `origin/master`), then writes a fresh test file (creating `backend/tests/unit/conftest.py` with the bcrypt stub if needed) directly in main checkout, runs `pytest`, commits, pushes, and opens a draft PR.
+  - **When invoked inline by `/be`** → no separate branch / PR. `/bte` writes to the branch `/be` already created and adds a `test(<domain>): ...` commit that lands in `/be`'s same PR.
+- `/bte integration <domain>` — discussion-first review of integration tests for the same domain list, plus the special `schema` domain (verifies the live DB matches `db_schema.sql`). Always produces a discussion document, asks the user to pick which proposed cases to implement, and only after the user confirms in their next message does it run pre-flight + branch + write the selected cases in main checkout + commit + push + draft PR. Never bootstraps automatically.
 - `/bte discuss <topic>` — open Q&A about backend test strategy, patterns, or specific code. Ends with options + explicit decisions for the user. Never implements during discuss mode.
+
+### `/summary` — Doc Drift Sync
+
+Defined at [.claude/skills/summary/SKILL.md](.claude/skills/summary/SKILL.md). Project-scoped maintenance skill that detects and fixes drift between the project's actual state and its documentation: [CLAUDE.md](CLAUDE.md), the four skill files (`be`, `fe`, `bte`, `summary`), and the user's memory (`MEMORY.md` + `feedback_*.md` / `project_*.md` / `reference_*.md`). Not role-based — `/summary` has no opinion about backend or frontend, only about whether the docs reflect reality.
+
+`/summary` runs in two modes, both **synchronous in the user's main checkout** (no branch creation, no auto-commit by itself — see Dev Flow exemption):
+
+- **Auto mode (chained from `/be` / `/fe`)** — at the quality-gate step of `/be` or `/fe`, the parent skill auto-invokes `/summary` against the diff `git diff HEAD..origin/master` for the in-progress branch. `/summary` proposes per-file doc updates, the user confirms, and the updates are staged into the parent skill's commit / PR (added as a `docs: sync after #N` commit if non-empty).
+- **Manual mode (`/summary` typed directly)** — `/summary` scans both `git diff HEAD..origin/master` (relative to the user's current branch) **and** the current conversation history for decisions / rules / structural changes that haven't been written down. Proposes per-file doc updates. Does **not** auto-commit — the user decides what to do with the changes after they apply.
+
+Detection categories (the only things `/summary` looks for):
+1. New backend domain (new `backend/routers/<x>_router.py` + `services/<x>_service.py` + `models/<x>.py`)
+2. Database schema changes in `database/db_schema.sql`
+3. New frontend resource (new `src/types/<x>.ts` + `api/services/<X>Service.ts` + `store/slices/<x>Slice.ts`)
+4. New conventions / rules formalised in commit messages, PR bodies, or conversation
+5. New dependencies (`backend/requirements.txt` / `frontend/package.json`)
+6. New environment variables (`backend/.env.example` / `vite.config.ts` `VITE_*` references)
+7. CI / build / lint config changes (`.github/workflows/*.yml`, `pyproject.toml`, `.pre-commit-config.yaml`, `tsconfig*.json`, `eslint.config.js`, `tailwind.config.js`)
+8. Top-level directory structure changes
+9. Dead references in CLAUDE.md / skills / memory pointing at files or symbols that no longer exist
+
+`/summary` always proposes diffs and waits for explicit user confirmation before applying — it never silently rewrites docs, even in auto mode.
+
+## GitHub Labels
+
+The repo uses a `category:value` label system. **Source of truth is [.claude/labels.yaml](.claude/labels.yaml)** — every label, color, and description lives there. Live GitHub state must match this file. Re-apply commands and the rationale for each category are documented inline in the YAML.
+
+### Categories
+
+- **`type:*`** (6) — kind of work, mirrors conventional-commit prefixes. Every issue and PR gets exactly one. `type:feat`, `type:fix`, `type:refactor`, `type:test`, `type:docs`, `type:chore`.
+- **`area:*`** (5) — which top-level part of the monorepo is touched. At least one required, multiple allowed (e.g. a schema-touching backend change is `area:backend` + `area:database`). `area:backend`, `area:frontend`, `area:database`, `area:ci`, `area:claude`.
+- **`domain:*`** (8) — feature domain, one-to-one with `/bte`'s domain argument plus `medicine` (planned). Apply when the work is scoped to a specific service / module: `auth`, `user`, `group`, `pet`, `food`, `meal`, `weight`, `medicine`.
+- **`test:*`** (2) — test tier, only when `type:test` is set. `test:unit` for `backend/tests/unit/`, `test:integration` for `backend/tests/integration/` (covers schema verification too — there is no `test:schema`).
+
+Total: **21 custom labels**. All 9 GitHub default labels were deleted on 2026-04-08 (`bug` / `documentation` / `enhancement` were replaced by `type:fix` / `type:docs` / `type:feat`; the other 6 were unused on this single-developer repo).
+
+### How skills auto-apply labels
+
+`/be`, `/fe`, and `/bte` set labels at PR creation time based on the commit prefix and touched paths. The mapping:
+
+| Skill / Commit | Auto-applied labels |
+|---|---|
+| `/be` `feat(<domain>): ...` | `type:feat` + `area:backend` + `domain:<domain>` (+ `area:database` if `db_schema.sql` touched) |
+| `/be` `fix(<domain>): ...` | `type:fix` + `area:backend` + `domain:<domain>` |
+| `/be` `refactor(<domain>): ...` | `type:refactor` + `area:backend` + `domain:<domain>` |
+| `/fe` `feat(<resource>): ...` | `type:feat` + `area:frontend` + `domain:<resource>` (when the resource maps to a known domain) |
+| `/fe` `fix(<resource>): ...` | `type:fix` + `area:frontend` + `domain:<resource>` |
+| `/bte unit <domain>` (bootstrap) | `type:test` + `test:unit` + `area:backend` + `domain:<domain>` |
+| `/bte integration <domain>` (write) | `type:test` + `test:integration` + `area:backend` + `domain:<domain>` (or `area:database` if `<domain>` is `schema`) |
+| `/summary` (`docs: sync after #N`) | `type:docs` + `area:claude` |
+| `/be` / `/fe` touching `.github/workflows/` | also adds `area:ci` |
+
+`gh pr create` accepts repeated `--label "<name>"` flags. The skill should pass them at PR creation rather than `gh issue edit`-ing afterwards.
+
+### Manual conventions
+
+- Issues filed by hand: at minimum set one `type:*` and one `area:*`. Add `domain:*` if the work is domain-scoped. Skip `test:*` unless filing a test-only ticket.
+- Adding a new label: edit [.claude/labels.yaml](.claude/labels.yaml) first, then `gh label create` with the same name/color/description, then commit under `chore(labels): add <name>`. Do not add labels straight to GitHub without updating the YAML — `/summary` will flag the drift.
+- Removing a label: delete from YAML, run `gh label delete <name> --yes`, commit under `chore(labels): remove <name>`. Existing issues lose the label silently.
 
 ## CI
 
