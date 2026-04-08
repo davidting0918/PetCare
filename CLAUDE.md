@@ -421,7 +421,7 @@ If a PR is opened by hand (not via `/be` / `/fe`) and the user wants it to appea
 
 [.github/workflows/ci.yml](.github/workflows/ci.yml) runs on push/PR to `master` and `develop`.
 
-**Current jobs** (will change after the test restructure):
+**Backend jobs** (`.github/workflows/ci.yml`, will change after the test restructure):
 1. `pre-commit` job — runs `pre-commit run --all-files` from `backend/` (black + isort + flake8 + basic checks).
 2. `test-endpoints-function` job — runs each legacy `test_*_endpoints.py` separately under `pytest --cov`, then uploads coverage to Codecov. Requires the test DB and Google OAuth secrets.
 
@@ -431,4 +431,5 @@ If a PR is opened by hand (not via `/be` / `/fe`) and the user wants it to appea
 
 Integration tests are **not** run in CI under either layout — they are manual.
 
-There is currently **no frontend CI** — `npm run lint` and `npm run build` are not enforced by GitHub Actions, so run them locally before pushing frontend changes.
+**Frontend job** ([.github/workflows/frontend-ci.yml](.github/workflows/frontend-ci.yml)) — separate workflow file, triggered only on `frontend/**` changes via `paths` filter:
+1. `lint-and-build` job — runs `npm ci`, `npm run lint`, then `npm run build` (which includes `tsc -b` typecheck) on Node 20. Strict baseline: any ESLint error or warning fails the build. Established by #59 to prevent lint backlog regression.
