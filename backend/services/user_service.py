@@ -1,14 +1,11 @@
-import os
 import uuid
 from datetime import datetime as dt
 from datetime import timezone as tz
-from pathlib import Path
 
-import aiofiles
 from fastapi import HTTPException, UploadFile, status
 
+from backend.core.cloudinary_client import upload_image
 from backend.core.db_manager import get_db
-from backend.core.environment import build_static_url, get_photo_storage_path
 from backend.models.auth import access_token_table, pwd_context
 from backend.models.group import CreateGroupRequest
 from backend.models.user import (
@@ -26,7 +23,6 @@ class UserService:
     def __init__(self):
         # No need to initialize database here - it's handled globally
         self.group_service = GroupService()
-        self.photo_storage_path = get_photo_storage_path("user_photos")
 
     @property
     def db(self):
@@ -139,7 +135,7 @@ class UserService:
 
     async def upload_user_photo(self, user_id: str, file: UploadFile) -> dict:
         """
-        Upload a user profile photo
+        Upload a user profile photo to Cloudinary and persist the secure URL.
 
         Args:
             user_id: The ID of the user
@@ -175,37 +171,27 @@ class UserService:
                 detail=f"File too large. Maximum size: {max_size / 1024 / 1024}MB",
             )
 
-        # Generate filename using user_id (deterministic naming)
-        file_ext = Path(file.filename).suffix if file.filename else ".jpg"
-        file_name = f"{user_id}{file_ext}"
-        file_path = os.path.join(self.photo_storage_path, file_name)
-        # Build photo URL based on environment configuration
-        photo_url = build_static_url("user_photos", file_name)
-        try:
-            # Save file to storage
-            async with aiofiles.open(file_path, "wb") as f:
-                await f.write(content)
+        # Upload to Cloudinary (overwrites previous asset under the same public_id)
+        upload_result = await upload_image(
+            content=content,
+            folder="petcare/user_photos",
+            public_id=user_id,
+            content_type=file.content_type,
+        )
+        photo_url = upload_result["secure_url"]
 
-            # Update user record with photo URL
-            sql = f"""
-            UPDATE {user_table}
-            SET picture = '{photo_url}', updated_at = '{dt.now(tz.utc)}'
-            WHERE id = '{user_id}'
-            """
-            await self.db.execute(sql)
+        # Update user record with the Cloudinary secure URL
+        sql = f"""
+        UPDATE {user_table}
+        SET picture = '{photo_url}', updated_at = '{dt.now(tz.utc)}'
+        WHERE id = '{user_id}'
+        """
+        await self.db.execute(sql)
 
-            return {
-                "photo_url": photo_url,
-                "photo_name": file_name,
-                "photo_size": actual_size,
-                "photo_type": file.content_type,
-                "photo_uploaded_at": int(dt.now(tz.utc).timestamp()),
-            }
-
-        except Exception as e:
-            # Clean up file if database operation fails
-            if os.path.exists(file_path):
-                os.remove(file_path)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to upload photo: {str(e)}"
-            )
+        return {
+            "photo_url": photo_url,
+            "photo_name": upload_result["public_id"],
+            "photo_size": actual_size,
+            "photo_type": file.content_type,
+            "photo_uploaded_at": int(dt.now(tz.utc).timestamp()),
+        }

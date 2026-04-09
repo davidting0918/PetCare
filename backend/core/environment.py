@@ -95,7 +95,6 @@ class EnvironmentConfig:
                 "debug": True,
                 "log_level": "DEBUG",
                 "cors_origins": ["*"],  # Allow all origins in test
-                "base_url": "",  # Use relative paths in test
             },
             Environment.STAGING: {
                 "debug": True,
@@ -107,13 +106,11 @@ class EnvironmentConfig:
                     "http://localhost:5173",
                     "http://localhost:5174",
                 ],
-                "base_url": os.getenv("STAGING_BASE_URL", ""),  # Can be overridden by env var
             },
             Environment.PRODUCTION: {
                 "debug": False,
                 "log_level": "INFO",
                 "cors_origins": ["https://yourapp.com", "https://www.yourapp.com"],
-                "base_url": "",
             },
         }
 
@@ -205,89 +202,3 @@ def is_production() -> bool:
 def is_test() -> bool:
     """Check if running in test environment"""
     return env_config.is_test
-
-
-def get_storage_path() -> str:
-    """
-    Get base storage path from environment or use default.
-
-    Returns:
-        str: Absolute or relative path to storage directory
-
-    Notes:
-        - If STORAGE_BASE_PATH env var is set, uses that path (e.g., /var/data/storage on Render)
-        - Otherwise uses local development path: backend/storage/
-    """
-    # Check environment variable first
-    storage_path = os.getenv("STORAGE_BASE_PATH")
-
-    if storage_path:
-        # Use environment-specified path (for Render: /var/data/storage)
-        os.makedirs(storage_path, exist_ok=True)
-        return storage_path
-
-    # Default to local development path
-    current_dir = Path(__file__).parent
-    default_path = current_dir / ".." / "storage"
-    default_path.mkdir(exist_ok=True)
-    return str(default_path)
-
-
-def get_photo_storage_path(category: str) -> str:
-    """
-    Get category-specific photo storage path.
-
-    Args:
-        category: Folder name (e.g., 'pet_photos', 'user_photos', 'food_photos')
-
-    Returns:
-        str: Full path to category storage directory
-
-    Example:
-        >>> get_photo_storage_path("pet_photos")
-        '/path/to/backend/storage/pet_photos'
-    """
-    base_path = get_storage_path()
-    category_path = os.path.join(base_path, category)
-    os.makedirs(category_path, exist_ok=True)
-    return category_path
-
-
-def get_base_url() -> str:
-    """
-    Get base URL for generating public-facing URLs (e.g., photo URLs).
-
-    Returns:
-        str: Base URL (empty string for relative paths, full URL for absolute paths)
-
-    Examples:
-        - Local/Development: "" (returns relative paths like /static/pet_photos/abc.jpg)
-        - Production: "https://yourapp.com" (returns https://yourapp.com/static/pet_photos/abc.jpg)
-    """
-    return env_config.get("base_url", "")
-
-
-def build_static_url(category: str, filename: str) -> str:
-    """
-    Build a static file URL based on current environment configuration.
-
-    Args:
-        category: Category folder (e.g., 'pet_photos', 'user_photos', 'food_photos')
-        filename: File name
-
-    Returns:
-        str: Full URL to the static file
-
-    Examples:
-        - Local: /static/pet_photos/abc123.jpg
-        - Production: https://yourapp.com/static/pet_photos/abc123.jpg
-    """
-    base_url = get_base_url()
-    relative_path = f"/static/{category}/{filename}"
-
-    if base_url:
-        # Remove trailing slash from base_url if present
-        base_url = base_url.rstrip("/")
-        return f"{base_url}{relative_path}"
-
-    return relative_path

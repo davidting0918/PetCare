@@ -1,7 +1,6 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, UploadFile
-from fastapi.responses import FileResponse
 
 from backend.models.pet import AssignPetToGroupRequest, CreatePetRequest, UpdatePetRequest
 from backend.models.user import UserInfo
@@ -275,7 +274,7 @@ async def upload_pet_photo(
     file: UploadFile = File(..., description="Pet photo image file (JPEG, PNG, GIF, WebP)"),
 ) -> dict:
     """
-    Uploads or replaces a pet's photo for visual identification.
+    Uploads or replaces a pet's photo via Cloudinary for visual identification.
 
     Authorization: Pet ownership required
 
@@ -285,58 +284,17 @@ async def upload_pet_photo(
     - Single photo per pet (replaces existing if present)
 
     The system:
-    - Stores photos securely in local backend storage
-    - Generates unique photo identifiers
-    - Removes old photos when uploading new ones
-    - Validates file format and size
-    - Updates pet record with photo reference
-
-    Storage:
-    - Files saved with unique names to prevent conflicts
-    - Original filename preserved for user reference
-    - Metadata stored for access control and cleanup
+    - Stores photos in Cloudinary under petcare/pet_photos/<pet_id>
+    - Overwrites the existing asset on re-upload (CDN cache invalidated)
+    - Validates file size before upload
+    - Updates the pets.photo_url column with the Cloudinary secure URL
 
     Returns:
-    - Photo information including ID for future reference
+    - Photo information including the Cloudinary secure URL
     - File metadata (size, type, upload timestamp)
-    - Uploader information
-
     """
     try:
         upload_info = await pet_service.upload_pet_photo(pet_id, file, current_user.id)
         return {"status": 1, "data": upload_info, "message": "Photo uploaded successfully for pet"}
-    except Exception as e:
-        raise e
-
-
-@router.get("/photos/{pet_id}", response_class=FileResponse)
-async def get_pet_photo(pet_id: str, current_user: Annotated[UserInfo, Depends(get_current_user)]):
-    """
-    Serves pet photos with permission-controlled access.
-
-    Authorization: Pet access required (owner, or member of pet's group)
-
-    Security:
-    - Validates user has permission to view the associated pet
-    - Prevents unauthorized access to pet photos
-    - Returns 404 for non-existent or inaccessible photos
-
-    Performance:
-    - Includes HTTP caching headers for browser optimization
-    - Serves files directly from local storage
-    - Proper MIME type detection for browser compatibility
-
-    Response:
-    - Direct image file response
-    - Proper content headers for browser display
-    - Cache-Control headers for performance (1 hour cache)
-
-    Error cases:
-    - 404: Photo not found or user lacks pet access
-    - 403: User doesn't have permission to view pet
-
-    """
-    try:
-        return await pet_service.get_pet_photo(pet_id, current_user.id)
     except Exception as e:
         raise e

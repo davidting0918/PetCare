@@ -69,7 +69,7 @@ async def upload_user_photo(
     current_user: Annotated[User, Depends(get_current_user)], file: UploadFile = File(...)
 ) -> dict:
     """
-    Upload or replace user's profile photo
+    Upload or replace user's profile photo via Cloudinary.
 
     Authorization: JWT token required
 
@@ -79,9 +79,8 @@ async def upload_user_photo(
     - Single photo per user (replaces existing if present)
 
     Returns:
-    - Photo information including URL for display (/static/user_photos/filename)
+    - Photo information including the Cloudinary secure URL
     - File metadata (size, type, upload timestamp)
-    - Photo URL can be accessed directly via the static files endpoint
     """
     try:
         upload_info = await user_service.upload_user_photo(current_user.id, file)
