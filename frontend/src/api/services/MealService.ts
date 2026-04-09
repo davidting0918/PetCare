@@ -38,7 +38,7 @@ class MealService {
         return response.data;
     }
 
-    async getTodayMeals(filters: Omit<MealQueryFilters, 'date_from' | 'date_to'>): Promise<ApiResponse<TodayMealSummary>> {
+    async getTodayMeals(filters: Omit<MealQueryFilters, 'date_from' | 'date_to'> & { local_date?: string }): Promise<ApiResponse<TodayMealSummary>> {
         const response = await apiClient.get(`${this.basePath}/today`, { params: filters });
         return response.data;
     }
