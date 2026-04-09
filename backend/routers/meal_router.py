@@ -273,6 +273,10 @@ async def get_today_meals(
     group_id: Optional[str] = Query(None, description="Show today's meals for all pets in a group"),
     fed_by: Optional[str] = Query(None, description="Filter today's meals by specific feeder"),
     meal_type: Optional[MealType] = Query(None, description="Filter today's meals by meal type"),
+    local_date: Optional[str] = Query(
+        None,
+        description="Client's local date in YYYY-MM-DD format, used to determine 'today'",
+    ),
 ) -> dict:
     """
     Provides quick access to current day's feeding records for daily monitoring and care coordination.
@@ -321,7 +325,7 @@ async def get_today_meals(
             meal_type=meal_type,
         )
 
-        today_summary = await meal_service.get_today_meals(filters, current_user.id)
+        today_summary = await meal_service.get_today_meals(filters, current_user.id, local_date=local_date)
         return {
             "status": 1,
             "data": today_summary.model_dump(),

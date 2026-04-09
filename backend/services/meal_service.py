@@ -508,18 +508,32 @@ class MealService:
 
     # ================== Specialized Query Operations ==================
 
-    async def get_today_meals(self, filters: MealQueryFilters, user_id: str) -> TodayMealSummary:
+    async def get_today_meals(
+        self, filters: MealQueryFilters, user_id: str, local_date: str = None
+    ) -> TodayMealSummary:
         """
         Get today's meals with summary statistics.
 
         Args:
             filters: Query filters (pet_id or group_id required)
             user_id: User requesting the information
+            local_date: Client's local date in YYYY-MM-DD format. If provided,
+                        this overrides the server's UTC date for determining "today".
 
         Returns:
             TodayMealSummary: Today's feeding summary
         """
-        today = dt.now(tz.utc).strftime("%Y-%m-%d")
+        if local_date:
+            try:
+                dt.strptime(local_date, "%Y-%m-%d")
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="local_date must be in YYYY-MM-DD format",
+                )
+            today = local_date
+        else:
+            today = dt.now(tz.utc).strftime("%Y-%m-%d")
 
         # Set date filters to today
         today_filters = MealQueryFilters(**filters.model_dump())
