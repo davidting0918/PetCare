@@ -26,23 +26,8 @@ export interface UpdateWeightRequest {
   notes?: string;
 }
 
-// Time Interval Types
-export type TimeIntervalType =
-  | 'last_7_days'
-  | 'last_30_days'
-  | 'last_90_days'
-  | 'this_week'
-  | 'this_month'
-  | 'custom';
-
-export interface TimeInterval {
-  type: TimeIntervalType;
-  label: string;
-  startDate?: Date;
-  endDate?: Date;
-}
-
-export interface CustomDateRange {
+// Date Range for chart filtering
+export interface DateRange {
   startDate: Date;
   endDate: Date;
 }

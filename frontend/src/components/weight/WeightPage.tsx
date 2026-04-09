@@ -5,53 +5,8 @@ import { LineChart } from '@mui/x-charts/LineChart';
 import { usePet, useWeight } from '../../hooks';
 import { CreateWeightForm, UpdateWeightForm } from '../forms';
 import { formatLocalDate, utcToLocal, formatDateShort } from '../../utils/dateUtils';
-import type { WeightRecord, TimeIntervalType, CustomDateRange } from '../../types';
+import type { WeightRecord, DateRange } from '../../types';
 import { getChartPalette } from '../../constants/colors';
-
-// Calculate date range based on interval type
-const getDateRange = (
-  intervalType: TimeIntervalType,
-  customRange?: CustomDateRange
-): { start: Date; end: Date } => {
-  const end = new Date();
-  end.setHours(23, 59, 59, 999);
-  const start = new Date();
-
-  switch (intervalType) {
-    case 'last_7_days':
-      start.setDate(start.getDate() - 7);
-      break;
-    case 'last_30_days':
-      start.setDate(start.getDate() - 30);
-      break;
-    case 'last_90_days':
-      start.setDate(start.getDate() - 90);
-      break;
-    case 'this_week':
-      start.setDate(start.getDate() - start.getDay());
-      start.setHours(0, 0, 0, 0);
-      break;
-    case 'this_month':
-      start.setDate(1);
-      start.setHours(0, 0, 0, 0);
-      break;
-    case 'custom':
-      if (customRange) {
-        start.setTime(customRange.startDate.getTime());
-        end.setTime(customRange.endDate.getTime());
-        end.setHours(23, 59, 59, 999);
-      } else {
-        // Default to last 30 days if custom range not set
-        start.setDate(start.getDate() - 30);
-      }
-      break;
-    default:
-      start.setDate(start.getDate() - 30);
-  }
-
-  start.setHours(0, 0, 0, 0);
-  return { start, end };
-};
 
 export const WeightPage: React.FC = () => {
   const { selectedPet } = usePet();
@@ -62,7 +17,6 @@ export const WeightPage: React.FC = () => {
     getWeightRecords,
     refreshWeightRecords,
   } = useWeight();
-  const [selectedInterval, setSelectedInterval] = useState<TimeIntervalType>('last_30_days');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isUpdateFormOpen, setIsUpdateFormOpen] = useState(false);
   const [selectedWeightRecord, setSelectedWeightRecord] = useState<WeightRecord | null>(null);
@@ -71,14 +25,14 @@ export const WeightPage: React.FC = () => {
   // colors stay aligned with the design tokens.
   const chartPalette = useMemo(() => getChartPalette(), []);
 
-  // Custom date range state
-  const [customDateRange, setCustomDateRange] = useState<CustomDateRange>(() => {
+  // Date range state — default to last 7 days
+  const [dateRange, setDateRange] = useState<DateRange>(() => {
     const end = new Date();
     const start = new Date();
-    start.setDate(start.getDate() - 30);
+    start.setDate(start.getDate() - 7);
     return { startDate: start, endDate: end };
   });
-  const [customDateError, setCustomDateError] = useState<string>('');
+  const [dateError, setDateError] = useState<string>('');
 
   // Get weight records from cache. Memoize so referential identity is stable
   // across renders — required because it feeds the dependency array of
@@ -105,28 +59,25 @@ export const WeightPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPet?.id]);
 
-  // Filter records based on selected interval
+  // Filter records based on date range
   const filteredRecords = useMemo(() => {
-    // Only use custom date range if it's valid
-    const customRange = selectedInterval === 'custom' && !customDateError
-      ? customDateRange
-      : undefined;
-
-    const { start, end } = getDateRange(selectedInterval, customRange);
+    if (dateError) return weightRecords;
+    const start = new Date(dateRange.startDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(dateRange.endDate);
+    end.setHours(23, 59, 59, 999);
     return weightRecords.filter(record => {
       const recordDate = utcToLocal(record.timestamp);
       return recordDate >= start && recordDate <= end;
     });
-  }, [selectedInterval, customDateRange, customDateError, weightRecords]);
+  }, [dateRange, dateError, weightRecords]);
 
   // Calculate chart data points
   const chartData = useMemo(() => {
-    // Only use custom date range if it's valid
-    const customRange = selectedInterval === 'custom' && !customDateError
-      ? customDateRange
-      : undefined;
-
-    const { start, end } = getDateRange(selectedInterval, customRange);
+    const start = new Date(dateRange.startDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(dateRange.endDate);
+    end.setHours(23, 59, 59, 999);
     const daysDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
 
     // Group records by day
@@ -154,7 +105,7 @@ export const WeightPage: React.FC = () => {
     }
 
     return points;
-  }, [filteredRecords, selectedInterval, customDateError, customDateRange]);
+  }, [filteredRecords, dateRange]);
 
   // Calculate min/max weight for chart scaling
   const weightRange = useMemo(() => {
@@ -215,31 +166,22 @@ export const WeightPage: React.FC = () => {
     }
   };
 
-  // Handle custom date range changes
-  const handleCustomDateChange = (field: 'startDate' | 'endDate', value: string) => {
-    if (!value) return; // Don't process empty values
+  // Handle date range changes
+  const handleDateChange = (field: 'startDate' | 'endDate', value: string) => {
+    if (!value) return;
 
     const date = new Date(value);
     date.setHours(0, 0, 0, 0);
 
-    // Update the date range first
-    const newRange = { ...customDateRange, [field]: date };
-    setCustomDateRange(newRange);
+    const newRange = { ...dateRange, [field]: date };
+    setDateRange(newRange);
 
-    // Then validate
     if (newRange.endDate < newRange.startDate) {
-      setCustomDateError('End date must be after start date');
+      setDateError('End date must be after start date');
     } else {
-      setCustomDateError('');
+      setDateError('');
     }
   };
-
-  // Reset custom date range when switching away from custom
-  useEffect(() => {
-    if (selectedInterval !== 'custom') {
-      setCustomDateError('');
-    }
-  }, [selectedInterval]);
 
   // Format date for input (YYYY-MM-DD)
   const formatDateForInput = (date: Date): string => {
@@ -277,72 +219,38 @@ export const WeightPage: React.FC = () => {
           </button>
         </div>
 
-        {/* Time Interval Selector */}
+        {/* Date Range Selector */}
         <div className="mb-4">
-          <label className="block text-sm font-medium text-text-secondary mb-2">
-            Time Interval
-          </label>
-          <select
-            value={selectedInterval}
-            onChange={(e) => setSelectedInterval(e.target.value as TimeIntervalType)}
-            className="input-field"
-          >
-            <option value="last_7_days">Last 7 Days</option>
-            <option value="last_30_days">Last 30 Days</option>
-            <option value="last_90_days">Last 90 Days</option>
-            <option value="this_week">This Week</option>
-            <option value="this_month">This Month</option>
-            <option value="custom">Custom Date Range</option>
-          </select>
-          {selectedInterval === 'custom' && (
-            <div className="mt-3 space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                {/* Start Date */}
-                <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-1">
-                    Start Date
-                  </label>
-                  <input
-                    type="date"
-                    value={formatDateForInput(customDateRange.startDate)}
-                    onChange={(e) => handleCustomDateChange('startDate', e.target.value)}
-                    max={formatDateForInput(customDateRange.endDate)}
-                    className={`input-field ${customDateError ? 'border-danger' : ''}`}
-                  />
-                </div>
-
-                {/* End Date */}
-                <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-1">
-                    End Date
-                  </label>
-                  <input
-                    type="date"
-                    value={formatDateForInput(customDateRange.endDate)}
-                    onChange={(e) => handleCustomDateChange('endDate', e.target.value)}
-                    min={formatDateForInput(customDateRange.startDate)}
-                    max={formatDateForInput(new Date())}
-                    className={`input-field ${customDateError ? 'border-danger' : ''}`}
-                  />
-                </div>
-              </div>
-
-              {/* Error Message */}
-              {customDateError && (
-                <div className="bg-danger/10 border border-danger/30 rounded-xl p-2">
-                  <p className="text-danger text-sm">{customDateError}</p>
-                </div>
-              )}
-
-              {/* Date Range Display */}
-              {!customDateError && (
-                <div className="bg-accent-teal/10 rounded-xl p-2 border border-accent-teal/30">
-                  <p className="text-sm text-text-primary text-center">
-                    <Calendar className="w-4 h-4 inline mr-1 text-accent-teal" />
-                    {format(customDateRange.startDate, 'MMM d, yyyy')} - {format(customDateRange.endDate, 'MMM d, yyyy')}
-                  </p>
-                </div>
-              )}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-text-secondary mb-1">
+                Start Date
+              </label>
+              <input
+                type="date"
+                value={formatDateForInput(dateRange.startDate)}
+                onChange={(e) => handleDateChange('startDate', e.target.value)}
+                max={formatDateForInput(dateRange.endDate)}
+                className={`input-field ${dateError ? 'border-danger' : ''}`}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-text-secondary mb-1">
+                End Date
+              </label>
+              <input
+                type="date"
+                value={formatDateForInput(dateRange.endDate)}
+                onChange={(e) => handleDateChange('endDate', e.target.value)}
+                min={formatDateForInput(dateRange.startDate)}
+                max={formatDateForInput(new Date())}
+                className={`input-field ${dateError ? 'border-danger' : ''}`}
+              />
+            </div>
+          </div>
+          {dateError && (
+            <div className="bg-danger/10 border border-danger/30 rounded-xl p-2 mt-2">
+              <p className="text-danger text-sm">{dateError}</p>
             </div>
           )}
         </div>

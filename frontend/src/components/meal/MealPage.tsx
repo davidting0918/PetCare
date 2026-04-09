@@ -10,8 +10,7 @@ import { formatLocalDate, utcToLocal } from '../../utils/dateUtils';
 import type { MealInfo, MealDetails } from '../../types';
 import { getChartPalette } from '../../constants/colors';
 import { MEAL_TYPES, getMealTypeChartColor } from '../../constants/mealTypes';
-
-type TimeRange = 'last_3_days' | 'last_7_days' | 'last_14_days';
+import type { DateRange } from '../../types';
 
 export const MealPage: React.FC = () => {
   const { selectedPet } = usePet();
@@ -32,7 +31,13 @@ export const MealPage: React.FC = () => {
     deleteFood: deleteFoodAction
   } = useFood();
 
-  const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>('last_7_days');
+  const [dateRange, setDateRange] = useState<DateRange>(() => {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(start.getDate() - 7);
+    return { startDate: start, endDate: end };
+  });
+  const [dateError, setDateError] = useState<string>('');
   const [isCreateMealOpen, setIsCreateMealOpen] = useState(false);
   const [isUpdateMealOpen, setIsUpdateMealOpen] = useState(false);
   const [selectedMealForEdit, setSelectedMealForEdit] = useState<MealDetails | null>(null);
@@ -95,8 +100,12 @@ export const MealPage: React.FC = () => {
 
   // Prepare chart data
   const chartData = useMemo(() => {
-    const days = selectedTimeRange === 'last_3_days' ? 3 : selectedTimeRange === 'last_7_days' ? 7 : 14;
-    const today = new Date();
+    const start = new Date(dateRange.startDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(dateRange.endDate);
+    end.setHours(23, 59, 59, 999);
+    const days = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+
     type ChartPoint = {
       date: string;
       breakfast: number;
@@ -107,12 +116,11 @@ export const MealPage: React.FC = () => {
     };
     const dataPoints: ChartPoint[] = [];
 
-    for (let i = days - 1; i >= 0; i--) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - i);
+    for (let i = 0; i < days; i++) {
+      const date = new Date(start);
+      date.setDate(date.getDate() + i);
       const dateStr = date.toISOString().split('T')[0];
 
-      // Filter meals by local date (convert UTC timestamp to local date)
       const dayMeals = meals.filter(m => {
         const localDate = utcToLocal(m.timestamp);
         const localDateStr = localDate.toISOString().split('T')[0];
@@ -136,7 +144,7 @@ export const MealPage: React.FC = () => {
     }
 
     return dataPoints;
-  }, [meals, selectedTimeRange]);
+  }, [meals, dateRange]);
 
   // Responsive chart height — tracks container width via ResizeObserver
   const chartContainerRef = useRef<HTMLDivElement>(null);
@@ -170,17 +178,28 @@ export const MealPage: React.FC = () => {
   const handleMealSuccess = async (message: string) => {
     console.log('✅', message);
     if (petId) {
-      const days = selectedTimeRange === 'last_3_days' ? 3 : selectedTimeRange === 'last_7_days' ? 7 : 14;
-      const dateFrom = new Date();
-      dateFrom.setDate(dateFrom.getDate() - days);
-
       await refreshMealRecords(petId, {
-        date_from: dateFrom.toISOString().split('T')[0],
+        date_from: dateRange.startDate.toISOString().split('T')[0],
         limit: 100
       });
       await getTodayMeals(petId);
     }
   };
+
+  const handleDateChange = (field: 'startDate' | 'endDate', value: string) => {
+    if (!value) return;
+    const date = new Date(value);
+    date.setHours(0, 0, 0, 0);
+    const newRange = { ...dateRange, [field]: date };
+    setDateRange(newRange);
+    if (newRange.endDate < newRange.startDate) {
+      setDateError('End date must be after start date');
+    } else {
+      setDateError('');
+    }
+  };
+
+  const formatDateForInput = (date: Date): string => format(date, 'yyyy-MM-dd');
 
   const handleFoodSuccess = async (message: string) => {
     console.log('✅', message);
@@ -328,17 +347,38 @@ export const MealPage: React.FC = () => {
 
       {/* Calorie Chart */}
       <div className="surface-card p-5">
-        <div className="flex items-center justify-between mb-1">
-          <h3 className="text-lg font-semibold text-text-primary">Daily Calories</h3>
-          <select
-            value={selectedTimeRange}
-            onChange={(e) => setSelectedTimeRange(e.target.value as TimeRange)}
-            className="input-field w-auto py-1 text-sm"
-          >
-            <option value="last_3_days">Last 3 Days</option>
-            <option value="last_7_days">Last 7 Days</option>
-            <option value="last_14_days">Last 14 Days</option>
-          </select>
+        <h3 className="text-lg font-semibold text-text-primary mb-3">Daily Calories</h3>
+
+        {/* Date Range Selector */}
+        <div className="mb-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-text-secondary mb-1">Start Date</label>
+              <input
+                type="date"
+                value={formatDateForInput(dateRange.startDate)}
+                onChange={(e) => handleDateChange('startDate', e.target.value)}
+                max={formatDateForInput(dateRange.endDate)}
+                className={`input-field text-sm ${dateError ? 'border-danger' : ''}`}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-text-secondary mb-1">End Date</label>
+              <input
+                type="date"
+                value={formatDateForInput(dateRange.endDate)}
+                onChange={(e) => handleDateChange('endDate', e.target.value)}
+                min={formatDateForInput(dateRange.startDate)}
+                max={formatDateForInput(new Date())}
+                className={`input-field text-sm ${dateError ? 'border-danger' : ''}`}
+              />
+            </div>
+          </div>
+          {dateError && (
+            <div className="bg-danger/10 border border-danger/30 rounded-xl p-2 mt-2">
+              <p className="text-danger text-sm">{dateError}</p>
+            </div>
+          )}
         </div>
 
         {/* Summary subtitle */}
