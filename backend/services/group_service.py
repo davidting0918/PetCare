@@ -114,8 +114,8 @@ class GroupService:
             group_id=group_id,
             user_id=user_id,
             role=role,
-            created_at=dt.now(),
-            updated_at=dt.now(),
+            created_at=dt.now(tz.utc),
+            updated_at=dt.now(tz.utc),
             invited_by=invited_by,
             is_active=True,
         )
@@ -226,7 +226,7 @@ class GroupService:
             "removed_group_id": group_id,
             "removed_user_id": request.user_id,
             "removed_by": actor_user_id,
-            "updated_at": dt.now(),
+            "updated_at": dt.now(tz.utc),
         }
 
     async def delete_group(self, group_id: str, actor_user_id: str) -> Dict[str, Any]:
@@ -303,7 +303,7 @@ class GroupService:
             )
         # Generate unique group ID using secure random alphanumeric characters
         group_id = self._generate_group_id()
-        current_time = dt.now()
+        current_time = dt.now(tz.utc)
 
         group = Group(
             id=group_id,
@@ -366,8 +366,8 @@ class GroupService:
         # Generate invitation ID
         invitation_id = self._generate_invitation_id()  # Reuse the same secure ID generator
         invite_code = "".join(secrets.choice(string.ascii_uppercase) for _ in range(6))  # 6 uppercase letters
-        current_time = dt.now()
-        expires_at = dt.now() + td(days=7)  # 7 days expiry
+        current_time = dt.now(tz.utc)
+        expires_at = dt.now(tz.utc) + td(days=7)  # 7 days expiry
 
         invitation = GroupInvitation(
             id=invitation_id,
@@ -417,7 +417,7 @@ class GroupService:
         Raises:
             HTTPException: If invitation not found, expired, or user already member
         """
-        current_time = dt.now()
+        current_time = dt.now(tz.utc)
 
         # Find valid invitation
         sql = f"""
@@ -476,7 +476,7 @@ class GroupService:
         Returns:
             GroupInfo: Information about the joined group
         """
-        current_time = dt.now()
+        current_time = dt.now(tz.utc)
 
         # Find valid invitation
         sql = f"""
