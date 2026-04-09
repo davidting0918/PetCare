@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Plus, Calendar, User, Edit2, Apple, UtensilsCrossed, MoreVertical } from 'lucide-react';
 import { BarChart } from '@mui/x-charts/BarChart';
+import { ChartsReferenceLine } from '@mui/x-charts/ChartsReferenceLine';
 import { format } from 'date-fns';
 import { usePet, useMeal, useFood } from '../../hooks';
 import { CreateMealForm, UpdateMealForm, CreateFoodForm, FoodDetailsModal } from '../forms';
@@ -136,6 +137,35 @@ export const MealPage: React.FC = () => {
 
     return dataPoints;
   }, [meals, selectedTimeRange]);
+
+  // Responsive chart height — tracks container width via ResizeObserver
+  const chartContainerRef = useRef<HTMLDivElement>(null);
+  const [chartHeight, setChartHeight] = useState(250);
+
+  useEffect(() => {
+    const el = chartContainerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0].contentRect.width;
+      setChartHeight(Math.max(200, Math.min(380, Math.round(width * 0.5))));
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // Chart summary stats (period average + highest day)
+  const chartSummary = useMemo(() => {
+    if (chartData.length === 0) return null;
+    const dailyTotals = chartData.map(d => d.breakfast + d.lunch + d.dinner + d.snack + d.unclassified);
+    const daysWithData = dailyTotals.filter(v => v > 0).length;
+    const total = dailyTotals.reduce((sum, v) => sum + v, 0);
+    return {
+      average: daysWithData > 0 ? Math.round(total / daysWithData) : 0,
+      highest: Math.round(Math.max(...dailyTotals)),
+    };
+  }, [chartData]);
+
+  const dailyCalorieTarget = selectedPet?.daily_calorie_target;
 
   const handleMealSuccess = async (message: string) => {
     console.log('✅', message);
@@ -298,7 +328,7 @@ export const MealPage: React.FC = () => {
 
       {/* Calorie Chart */}
       <div className="surface-card p-5">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-1">
           <h3 className="text-lg font-semibold text-text-primary">Daily Calories</h3>
           <select
             value={selectedTimeRange}
@@ -311,18 +341,24 @@ export const MealPage: React.FC = () => {
           </select>
         </div>
 
+        {/* Summary subtitle */}
+        {chartSummary && (
+          <p className="text-xs text-text-tertiary mb-4">
+            Avg {chartSummary.average} kcal/day · Peak {chartSummary.highest} kcal
+            {dailyCalorieTarget ? ` · Target ${dailyCalorieTarget} kcal` : ''}
+          </p>
+        )}
+
         {chartData.length > 0 ? (
-          <div className="w-full" style={{ height: '300px' }}>
+          <div ref={chartContainerRef} className="w-full">
             <BarChart
               xAxis={[{
                 data: chartData.map(d => d.date),
                 scaleType: 'band',
-                categoryGapRatio: 0.3,
+                categoryGapRatio: 0.35,
                 tickLabelStyle: { fill: chartPalette.textSecondary, fontSize: 11 },
               }]}
               yAxis={[{
-                label: 'Calories (kcal)',
-                labelStyle: { fill: chartPalette.textSecondary, fontSize: 12 },
                 tickLabelStyle: { fill: chartPalette.textSecondary, fontSize: 11 },
               }]}
               series={[
@@ -357,25 +393,53 @@ export const MealPage: React.FC = () => {
                   color: getMealTypeChartColor('unclassified', chartPalette),
                 },
               ]}
-              height={300}
+              height={chartHeight}
+              borderRadius={4}
+              grid={{ horizontal: true }}
+              margin={{ top: 20, right: 16, bottom: 24, left: 40 }}
               sx={{
                 '& .MuiChartsGrid-root line': {
                   stroke: chartPalette.borderSubtle,
-                  strokeWidth: 1,
+                  strokeWidth: 0.5,
+                  strokeOpacity: 0.6,
                 },
-                '& .MuiChartsAxis-root line': {
-                  stroke: chartPalette.borderDefault,
+                '& .MuiChartsAxis-root .MuiChartsAxis-line': {
+                  stroke: 'transparent',
+                },
+                '& .MuiChartsAxis-root .MuiChartsAxis-tick': {
+                  stroke: 'transparent',
                 },
                 '& .MuiChartsLegend-series text': {
                   fill: chartPalette.textSecondary,
+                  fontSize: '11px !important',
                 },
               }}
-            />
+            >
+              {dailyCalorieTarget != null && (
+                <ChartsReferenceLine
+                  y={dailyCalorieTarget}
+                  lineStyle={{
+                    stroke: chartPalette.warning,
+                    strokeDasharray: '6 4',
+                    strokeWidth: 1.5,
+                    strokeOpacity: 0.7,
+                  }}
+                  labelStyle={{
+                    fill: chartPalette.textTertiary,
+                    fontSize: 10,
+                  }}
+                  label="Target"
+                />
+              )}
+            </BarChart>
           </div>
         ) : (
-          <div className="text-center py-12 text-text-tertiary">
-            <UtensilsCrossed className="w-12 h-12 mx-auto mb-2 opacity-50" />
-            <p className="text-sm">No meal data for selected period</p>
+          <div className="text-center py-12">
+            <div className="w-16 h-16 mx-auto mb-3 bg-surface-2 rounded-2xl flex items-center justify-center">
+              <UtensilsCrossed className="w-8 h-8 text-text-disabled" />
+            </div>
+            <p className="text-sm text-text-tertiary">No meal data for selected period</p>
+            <p className="text-xs text-text-disabled mt-1">Log a meal to see your daily calorie chart</p>
           </div>
         )}
       </div>

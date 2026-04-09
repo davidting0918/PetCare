@@ -61,6 +61,13 @@ export const getChartPalette = () => ({
   accentPurple: tripletVar('--accent-purple'),
   accentBlue: tripletVar('--accent-blue'),
 
+  // Chart series — muted palette for bar/area fills (see tokens.css)
+  seriesPink: tripletVar('--chart-series-pink'),
+  seriesTeal: tripletVar('--chart-series-teal'),
+  seriesPurple: tripletVar('--chart-series-purple'),
+  seriesBlue: tripletVar('--chart-series-blue'),
+  seriesGray: tripletVar('--chart-series-gray'),
+
   // Semantic
   success: tripletVar('--success'),
   warning: tripletVar('--warning'),
