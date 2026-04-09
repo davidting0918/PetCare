@@ -380,3 +380,49 @@ class TestUpdateMeal:
             await meal_service.update_meal("ml_test01", UpdateMealRequest(notes="hi"), "u_member")
         assert exc.value.status_code == 403
         assert mock_db.execute.await_count == 0
+
+
+# ================================================================
+# get_today_meals — local_date validation
+# ================================================================
+
+
+class TestGetTodayMealsLocalDate:
+    @pytest.mark.asyncio
+    async def test_invalid_local_date_raises_400(self, meal_service, mock_db):
+        filters = MealQueryFilters(pet_id="p_test01")
+        with pytest.raises(HTTPException) as exc:
+            await meal_service.get_today_meals(filters, "u_test01", local_date="invalid")
+        assert exc.value.status_code == 400
+        assert "YYYY-MM-DD" in exc.value.detail
+
+    @pytest.mark.asyncio
+    async def test_valid_local_date_used_as_today(self, meal_service, mock_db):
+        # get_meals path: _get_pet_group_context + _can_view_meals
+        # then get_today_meals: _get_pet_group_context again + pet calorie target
+        mock_db.read_one.side_effect = [
+            _make_pet_context(),  # get_meals → _get_pet_group_context
+            {"role": "member"},  # get_meals → _can_view_meals
+            _make_pet_context(),  # get_today_meals → _get_pet_group_context
+            {"daily_calorie_target": 300},  # get_today_meals → pet calorie query
+        ]
+        mock_db.read.return_value = []
+
+        result = await meal_service.get_today_meals(
+            MealQueryFilters(pet_id="p_test01"), "u_test01", local_date="2026-04-09"
+        )
+        assert result.date == "2026-04-09"
+
+    @pytest.mark.asyncio
+    async def test_no_local_date_falls_back_to_utc(self, meal_service, mock_db):
+        mock_db.read_one.side_effect = [
+            _make_pet_context(),
+            {"role": "member"},
+            _make_pet_context(),
+            {"daily_calorie_target": None},
+        ]
+        mock_db.read.return_value = []
+
+        result = await meal_service.get_today_meals(MealQueryFilters(pet_id="p_test01"), "u_test01")
+        expected = dt.now(tz.utc).strftime("%Y-%m-%d")
+        assert result.date == expected
