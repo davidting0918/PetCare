@@ -33,7 +33,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
   onTabChange
 }) => {
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-3d z-50">
+    <div className="fixed bottom-0 left-0 right-0 bg-surface-1 border-t border-border-subtle shadow-elevated z-50">
       <div className="max-w-md lg:max-w-7xl mx-auto">
         <div className="flex items-center justify-around py-2">
           {navigationItems.map((item) => {
@@ -44,19 +44,19 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
               <button
                 key={item.id}
                 onClick={() => onTabChange(item.id)}
-                className={`flex flex-col items-center justify-center py-2 px-3 rounded-lg transition-all duration-200 ${
+                className={`flex flex-col items-center justify-center py-2 px-3 rounded-xl transition-colors duration-200 ${
                   isActive
-                    ? 'text-orange shadow-3d bg-orange/10'
-                    : 'text-gray-500 hover:text-gray-700'
+                    ? 'text-accent-pink'
+                    : 'text-text-tertiary hover:text-text-secondary'
                 }`}
               >
                 <Icon
-                  className={`w-5 h-5 mb-1 transition-all duration-200 ${
+                  className={`w-5 h-5 mb-1 transition-transform duration-200 ${
                     isActive ? 'scale-110' : 'scale-100'
                   }`}
                 />
-                <span className={`text-xs font-medium transition-all duration-200 ${
-                  isActive ? 'text-orange' : 'text-gray-500'
+                <span className={`text-xs font-medium transition-colors duration-200 ${
+                  isActive ? 'text-accent-pink' : 'text-text-tertiary'
                 }`}>
                   {item.label}
                 </span>

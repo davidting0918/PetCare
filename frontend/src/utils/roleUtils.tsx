@@ -44,6 +44,12 @@ const getIconSizeClass = (size?: string): string => {
 
 /**
  * Get the icon component for a role
+ *
+ * Token mapping:
+ *   creator / owner → accent-pink (primary)
+ *   member          → accent-teal (success)
+ *   viewer          → text-tertiary (muted)
+ *
  * @param role - The role to get the icon for
  * @param config - Optional configuration for icon size
  * @returns React element representing the role icon
@@ -58,11 +64,11 @@ export const getRoleIcon = (
   switch (normalizedRole) {
     case 'creator':
     case 'owner':
-      return <Crown className={`${sizeClass} text-orange`} />;
+      return <Crown className={`${sizeClass} text-accent-pink`} />;
     case 'member':
-      return <Users className={`${sizeClass} text-mint`} />;
+      return <Users className={`${sizeClass} text-accent-teal`} />;
     case 'viewer':
-      return <Eye className={`${sizeClass} text-gray-500`} />;
+      return <Eye className={`${sizeClass} text-text-tertiary`} />;
     default:
       return null;
   }
@@ -70,6 +76,10 @@ export const getRoleIcon = (
 
 /**
  * Get the color classes for a role badge
+ *
+ * Returns dark-token utility classes (accent-pink/teal/surface-2) so the
+ * badge reads correctly on `surface-card` backgrounds.
+ *
  * @param role - The role to get colors for
  * @returns Tailwind CSS classes for background, text, and border colors
  */
@@ -79,13 +89,13 @@ export const getRoleColor = (role: RoleType): string => {
   switch (normalizedRole) {
     case 'creator':
     case 'owner':
-      return 'bg-orange/20 text-orange border-orange/30';
+      return 'bg-accent-pink/15 text-accent-pink border-accent-pink/30';
     case 'member':
-      return 'bg-mint/20 text-mint border-mint/30';
+      return 'bg-accent-teal/15 text-accent-teal border-accent-teal/30';
     case 'viewer':
-      return 'bg-gray-100 text-gray-600 border-gray-300';
+      return 'bg-surface-2 text-text-tertiary border-border-default';
     default:
-      return 'bg-gray-100 text-gray-600 border-gray-300';
+      return 'bg-surface-2 text-text-tertiary border-border-default';
   }
 };
 
@@ -134,7 +144,11 @@ export const getPermissionLabel = (permission: string): string => {
 };
 
 /**
- * Get color classes for permission badges (slightly different from role colors)
+ * Get color classes for permission badges
+ *
+ * Permission badges use the same accent assignment as role badges so the
+ * member-vs-creator distinction stays visually consistent across the app.
+ *
  * @param permission - The permission level
  * @returns Tailwind CSS classes for permission badge styling
  */
@@ -143,15 +157,15 @@ export const getPermissionColor = (permission: string): string => {
 
   switch (normalized) {
     case 'owner':
-      return 'bg-orange/20 text-orange border-orange/30';
+      return 'bg-accent-pink/15 text-accent-pink border-accent-pink/30';
     case 'creator':
-      return 'bg-mint/20 text-mint border-mint/30';
+      return 'bg-accent-teal/15 text-accent-teal border-accent-teal/30';
     case 'member':
-      return 'bg-mint/10 text-mint border-mint/20';
+      return 'bg-accent-teal/10 text-accent-teal border-accent-teal/20';
     case 'viewer':
-      return 'bg-gray-100 text-gray-600 border-gray-300';
+      return 'bg-surface-2 text-text-tertiary border-border-default';
     default:
-      return 'bg-gray-100 text-gray-600 border-gray-300';
+      return 'bg-surface-2 text-text-tertiary border-border-default';
   }
 };
 

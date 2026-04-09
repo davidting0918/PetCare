@@ -1,44 +1,71 @@
 /**
- * Unified color constants for the PetCare application
- * Use these constants instead of hardcoding color values
+ * Color helpers for the PetCare application.
+ *
+ * The canonical color palette lives in CSS variables (`src/styles/tokens.css`)
+ * and is exposed to Tailwind utility classes via `tailwind.config.js`. For
+ * components that style themselves with `className="..."` you should reach for
+ * those tokens directly (`bg-surface-1`, `text-accent-pink`, etc.) — there is
+ * no longer a `COLORS` object with hex literals.
+ *
+ * The one exception is third-party widgets that consume colors via JavaScript
+ * props rather than CSS classes. The most prominent case is `@mui/x-charts`,
+ * which needs hex / rgb strings for `series` colors, axis tick labels, grid
+ * stroke, and tooltip styling. To keep those widgets aligned with the design
+ * tokens, use {@link getChartPalette} below — it reads the live CSS variables
+ * via `getComputedStyle(document.documentElement)` and returns ready-to-use
+ * `rgb(...)` strings. Re-call it inside a `useMemo` (or after a theme change)
+ * if you ever introduce theme switching.
  */
 
-export const COLORS = {
-  // Primary brand colors
-  mint: '#B8D8D8',
-  orange: '#F4C2A1',
-  orangeBorder: '#e8b690',
-
-  // Semantic colors
-  danger: '#EF4444',
-  darkGray: '#4A5568',
-
-  // Meal type background colors - warm peach/coral tones with varying brightness
-  mealTypes: {
-    breakfast: '#FFF4E6',  // Lightest - 95% brightness (soft peach)
-    lunch: '#FFE0B2',      // Light - 80% brightness (light coral)
-    dinner: '#FFCC80',     // Medium - 65% brightness (warm apricot)
-    snack: '#FFB74D',      // Darker - 50% brightness (deep orange)
-    unclassified: '#f9fafb'
-  },
-
-  // Chart and visualization colors
-  chart: {
-    mint: '#B8E6D3',
-    gray: '#6b7280',
-    border: '#e5e7eb',
-    borderDark: '#d1d5db',
-
-    // Meal type chart colors - warm color family
-    mealBreakfast: '#FFE0B2',  // Light coral
-    mealLunch: '#FFCC80',      // Warm apricot
-    mealDinner: '#FFB74D',     // Deep orange
-    mealSnack: '#FFA726',      // Vibrant orange
-    mealUnclassified: '#B0BEC5'
+const tripletVar = (name: string): string => {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return '';
   }
-} as const;
+  const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  if (!raw) return '';
+  // Variables are stored as `r g b` triplets (e.g. "26 31 43"). Wrap in rgb().
+  return `rgb(${raw})`;
+};
 
-// Type-safe color access
-export type ColorKey = keyof typeof COLORS;
-export type MealTypeColorKey = keyof typeof COLORS.mealTypes;
-export type ChartColorKey = keyof typeof COLORS.chart;
+/**
+ * Snapshot of the design-token color palette as concrete `rgb(...)` strings.
+ *
+ * Use this when you need to feed colors into a third-party JS API (most often
+ * `@mui/x-charts` `series` props or `slotProps`). The values are read from the
+ * live CSS variables in `src/styles/tokens.css`, so changing a token in the
+ * stylesheet automatically propagates here on next call.
+ *
+ * Returns empty strings during SSR / unit tests where `window` is undefined —
+ * callers should treat that as "use chart defaults".
+ */
+export const getChartPalette = () => ({
+  // Surfaces — chart background, tooltip background
+  surface0: tripletVar('--surface-0'),
+  surface1: tripletVar('--surface-1'),
+  surface2: tripletVar('--surface-2'),
+  surface3: tripletVar('--surface-3'),
+
+  // Borders — grid lines, axis lines
+  borderSubtle: tripletVar('--border-subtle'),
+  borderDefault: tripletVar('--border-default'),
+  borderStrong: tripletVar('--border-strong'),
+
+  // Text — axis labels, tick labels
+  textPrimary: tripletVar('--text-primary'),
+  textSecondary: tripletVar('--text-secondary'),
+  textTertiary: tripletVar('--text-tertiary'),
+
+  // Categorical accents — meal types, weight series, etc.
+  accentPink: tripletVar('--accent-pink'),
+  accentTeal: tripletVar('--accent-teal'),
+  accentPurple: tripletVar('--accent-purple'),
+  accentBlue: tripletVar('--accent-blue'),
+
+  // Semantic
+  success: tripletVar('--success'),
+  warning: tripletVar('--warning'),
+  danger: tripletVar('--danger'),
+  info: tripletVar('--info'),
+});
+
+export type ChartPalette = ReturnType<typeof getChartPalette>;

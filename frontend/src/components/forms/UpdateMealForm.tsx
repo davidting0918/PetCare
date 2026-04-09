@@ -181,19 +181,19 @@ export const UpdateMealForm: React.FC<UpdateMealFormProps> = ({
   if (!isOpen || !mealDetails) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="card-3d bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-surface-2 rounded-2xl border border-border-default shadow-elevated max-w-md w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+        <div className="sticky top-0 bg-surface-2 border-b border-border-subtle px-6 py-4 flex items-center justify-between">
           <div className="flex items-center">
-            <div className="w-10 h-10 rounded-full bg-mint/20 flex items-center justify-center mr-3">
-              <UtensilsCrossed className="w-5 h-5 text-mint" />
+            <div className="w-10 h-10 rounded-full bg-accent-pink/15 flex items-center justify-center mr-3">
+              <UtensilsCrossed className="w-5 h-5 text-accent-pink" />
             </div>
-            <h3 className="text-lg font-semibold text-earth">Edit Meal</h3>
+            <h3 className="text-lg font-semibold text-text-primary">Edit Meal</h3>
           </div>
           <button
             onClick={handleClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-text-tertiary hover:text-text-primary transition-colors"
             disabled={isLoading}
           >
             <X className="w-6 h-6" />
@@ -203,14 +203,14 @@ export const UpdateMealForm: React.FC<UpdateMealFormProps> = ({
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {/* Pet Info */}
-          <div className="bg-mint/5 rounded-lg p-3 border border-mint/20">
-            <p className="text-sm text-gray-600 mb-1">Pet</p>
-            <p className="font-semibold text-earth">{mealDetails.pet_name}</p>
+          <div className="bg-surface-1 rounded-xl p-3 border border-border-subtle">
+            <p className="text-sm text-text-tertiary mb-1">Pet</p>
+            <p className="font-semibold text-text-primary">{mealDetails.pet_name}</p>
           </div>
 
           {/* Date & Time */}
           <div>
-            <label className="block text-sm font-medium text-earth mb-2">
+            <label className="block text-sm font-medium text-text-secondary mb-2">
               Date & Time
             </label>
             <input
@@ -218,31 +218,31 @@ export const UpdateMealForm: React.FC<UpdateMealFormProps> = ({
               value={formData.fed_at}
               onChange={(e) => handleInputChange('fed_at', e.target.value)}
               max={getCurrentLocalDateTime()}
-              className="w-full px-4 py-2 border-2 border-mint/30 rounded-lg focus:ring-2 focus:ring-mint focus:border-mint"
+              className="input-field"
               disabled={isLoading}
             />
           </div>
 
           {/* Food Selection */}
           <div>
-            <label className="block text-sm font-medium text-earth mb-2">
+            <label className="block text-sm font-medium text-text-secondary mb-2">
               Food
             </label>
             <div className="relative mb-2">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-text-tertiary z-10" />
               <input
                 type="text"
                 placeholder="Search food..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border-2 border-mint/30 rounded-lg focus:ring-2 focus:ring-mint focus:border-mint"
+                className="input-field pl-10"
                 disabled={isLoading}
               />
             </div>
             <select
               value={formData.food_id}
               onChange={(e) => handleInputChange('food_id', e.target.value)}
-              className="w-full px-4 py-2 border-2 border-mint/30 rounded-lg focus:ring-2 focus:ring-mint focus:border-mint"
+              className="input-field"
               disabled={isLoading}
             >
               {filteredFoods.map((food) => (
@@ -255,7 +255,7 @@ export const UpdateMealForm: React.FC<UpdateMealFormProps> = ({
 
           {/* Meal Type */}
           <div>
-            <label className="block text-sm font-medium text-earth mb-2">
+            <label className="block text-sm font-medium text-text-secondary mb-2">
               Meal Type
             </label>
             <div className="grid grid-cols-2 gap-2">
@@ -264,10 +264,10 @@ export const UpdateMealForm: React.FC<UpdateMealFormProps> = ({
                   key={type}
                   type="button"
                   onClick={() => handleInputChange('meal_type', type === formData.meal_type ? undefined : type)}
-                  className={`py-2 px-4 rounded-lg border-2 transition-colors ${
+                  className={`py-2 px-4 rounded-xl border transition-colors ${
                     formData.meal_type === type
-                      ? 'bg-mint/20 border-mint text-mint font-semibold'
-                      : 'border-gray-200 text-gray-600 hover:border-mint/50'
+                      ? 'bg-accent-pink/15 border-accent-pink text-accent-pink font-semibold'
+                      : 'border-border-default text-text-secondary hover:border-border-strong hover:text-text-primary'
                   }`}
                   disabled={isLoading}
                 >
@@ -279,7 +279,7 @@ export const UpdateMealForm: React.FC<UpdateMealFormProps> = ({
 
           {/* Serving Size */}
           <div>
-            <label className="block text-sm font-medium text-earth mb-2">
+            <label className="block text-sm font-medium text-text-secondary mb-2">
               Serving Size
             </label>
             <div className="flex gap-2">
@@ -290,13 +290,13 @@ export const UpdateMealForm: React.FC<UpdateMealFormProps> = ({
                 max="10000"
                 value={formData.serving_amount}
                 onChange={(e) => handleInputChange('serving_amount', parseFloat(e.target.value) || 0)}
-                className="flex-1 px-4 py-2 border-2 border-mint/30 rounded-lg focus:ring-2 focus:ring-mint focus:border-mint"
+                className="input-field flex-1"
                 disabled={isLoading}
               />
               <select
                 value={formData.serving_type}
                 onChange={(e) => handleInputChange('serving_type', e.target.value as ServingType)}
-                className="px-4 py-2 border-2 border-mint/30 rounded-lg focus:ring-2 focus:ring-mint focus:border-mint"
+                className="input-field w-auto"
                 disabled={isLoading}
               >
                 <option value="units">Units</option>
@@ -305,8 +305,8 @@ export const UpdateMealForm: React.FC<UpdateMealFormProps> = ({
             </div>
 
             {selectedFood && formData.serving_amount && formData.serving_amount > 0 && (
-              <div className="mt-2 p-3 bg-gray-50 rounded-lg">
-                <p className="text-sm text-gray-600">
+              <div className="mt-2 p-3 bg-surface-1 border border-border-subtle rounded-xl">
+                <p className="text-sm text-text-secondary">
                   ≈ {calculations.actualWeightG}g • ~{calculations.estimatedCalories} kcal
                 </p>
               </div>
@@ -315,7 +315,7 @@ export const UpdateMealForm: React.FC<UpdateMealFormProps> = ({
 
           {/* Notes */}
           <div>
-            <label className="block text-sm font-medium text-earth mb-2">
+            <label className="block text-sm font-medium text-text-secondary mb-2">
               Notes
             </label>
             <textarea
@@ -324,18 +324,18 @@ export const UpdateMealForm: React.FC<UpdateMealFormProps> = ({
               placeholder="Any additional notes..."
               rows={3}
               maxLength={500}
-              className="w-full px-4 py-2 border-2 border-mint/30 rounded-lg focus:ring-2 focus:ring-mint focus:border-mint resize-none"
+              className="input-field resize-none"
               disabled={isLoading}
             />
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-text-tertiary mt-1">
               {formData.notes?.length || 0}/500
             </p>
           </div>
 
           {/* Submit Error */}
           {errors.submit && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-              <p className="text-red-600 text-sm">{errors.submit}</p>
+            <div className="bg-danger/10 border border-danger/30 rounded-xl p-3">
+              <p className="text-danger text-sm">{errors.submit}</p>
             </div>
           )}
 
@@ -344,7 +344,7 @@ export const UpdateMealForm: React.FC<UpdateMealFormProps> = ({
             <button
               type="button"
               onClick={() => setShowDeleteConfirm(true)}
-              className="px-4 py-2 border-2 border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+              className="px-4 py-2.5 rounded-xl border border-danger/40 text-danger hover:bg-danger/10 transition-colors"
               disabled={isLoading}
             >
               <Trash2 className="w-4 h-4" />
@@ -352,14 +352,14 @@ export const UpdateMealForm: React.FC<UpdateMealFormProps> = ({
             <button
               type="button"
               onClick={handleClose}
-              className="flex-1 px-4 py-2 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              className="btn-secondary flex-1"
               disabled={isLoading}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex-1 btn-3d btn-3d-mint px-4 py-2 text-white rounded-lg disabled:opacity-50"
+              className="btn-primary flex-1 disabled:opacity-50"
               disabled={isLoading}
             >
               {isLoading ? 'Updating...' : 'Update'}
@@ -370,23 +370,23 @@ export const UpdateMealForm: React.FC<UpdateMealFormProps> = ({
 
       {/* Delete Confirmation Dialog */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
-          <div className="bg-white rounded-lg p-6 max-w-sm w-full">
-            <h4 className="text-lg font-semibold text-earth mb-2">Delete Meal?</h4>
-            <p className="text-gray-600 mb-4">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+          <div className="bg-surface-2 rounded-2xl border border-border-default shadow-elevated p-6 max-w-sm w-full">
+            <h4 className="text-lg font-semibold text-text-primary mb-2">Delete Meal?</h4>
+            <p className="text-text-secondary mb-4">
               Are you sure you want to delete this meal record? This action cannot be undone.
             </p>
             <div className="flex gap-3">
               <button
                 onClick={() => setShowDeleteConfirm(false)}
-                className="flex-1 px-4 py-2 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                className="btn-secondary flex-1"
                 disabled={isLoading}
               >
                 Cancel
               </button>
               <button
                 onClick={handleDelete}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                className="flex-1 inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold bg-danger text-text-primary hover:bg-danger/90 transition-colors disabled:opacity-50"
                 disabled={isLoading}
               >
                 {isLoading ? 'Deleting...' : 'Delete'}

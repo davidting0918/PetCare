@@ -13,11 +13,11 @@ import type { NavigationTab } from './types';
 
 // Loading component
 const LoadingScreen: React.FC = () => (
-  <div className="min-h-screen bg-primary flex items-center justify-center">
-    <div className="card-3d p-6">
+  <div className="min-h-screen bg-surface-0 flex items-center justify-center">
+    <div className="surface-card p-6">
       <div className="animate-pulse text-center">
-        <div className="w-12 h-12 bg-orange/20 rounded-full mx-auto mb-4"></div>
-        <p className="text-gray-600">Loading...</p>
+        <div className="w-12 h-12 bg-accent-pink/15 rounded-full mx-auto mb-4"></div>
+        <p className="text-text-secondary">Loading...</p>
       </div>
     </div>
   </div>
