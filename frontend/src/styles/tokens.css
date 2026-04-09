@@ -50,6 +50,17 @@
   --accent-blue-hover: 79 150 255;
   --accent-blue-glow: rgba(59, 130, 246, 0.4);
 
+  /* ─── Chart series (muted palette for data-viz fills) ────────────────
+   * Lower-saturation, gray-shifted variants of the accent hues. Use these
+   * for bar / area / pie fills so large colored areas look refined rather
+   * than garish. The raw accent-* tokens remain for small UI elements
+   * (buttons, badges, links). */
+  --chart-series-pink: 196 110 142;    /* dusty rose */
+  --chart-series-teal: 78 172 152;     /* sage teal */
+  --chart-series-purple: 148 118 198;  /* soft lavender */
+  --chart-series-blue: 96 138 196;     /* slate blue */
+  --chart-series-gray: 100 106 130;    /* warm gray — unclassified */
+
   /* ─── Semantic aliases ──────────────────────────────────────────────── *
    * Aliases reference accent tokens via nested var() so future re-mapping
    * touches one line. Use these CSS variables inside @layer components,

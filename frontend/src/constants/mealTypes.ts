@@ -10,9 +10,10 @@ import type { ChartPalette } from './colors';
  *   snack     → blue   (info, light)
  *
  * `bgClass` / `textClass` / `borderClass` are Tailwind utility strings ready
- * to drop into a `className`. `chartColorKey` is the matching field name in
- * the chart palette (see `getChartPalette` in `./colors`) so chart series
- * props stay aligned with the same token assignment.
+ * to drop into a `className`. `chartColorKey` points to the muted series
+ * colors in the chart palette (see `getChartPalette` in `./colors`). The
+ * muted palette is used for large filled areas (bar / area charts) so the
+ * saturated accent colors are reserved for small UI elements.
  */
 export const MEAL_TYPES = {
   breakfast: {
@@ -20,35 +21,35 @@ export const MEAL_TYPES = {
     bgClass: 'bg-accent-pink/15',
     textClass: 'text-accent-pink',
     borderClass: 'border-accent-pink/30',
-    chartColorKey: 'accentPink' as const,
+    chartColorKey: 'seriesPink' as const,
   },
   lunch: {
     label: 'Lunch',
     bgClass: 'bg-accent-teal/15',
     textClass: 'text-accent-teal',
     borderClass: 'border-accent-teal/30',
-    chartColorKey: 'accentTeal' as const,
+    chartColorKey: 'seriesTeal' as const,
   },
   dinner: {
     label: 'Dinner',
     bgClass: 'bg-accent-purple/15',
     textClass: 'text-accent-purple',
     borderClass: 'border-accent-purple/30',
-    chartColorKey: 'accentPurple' as const,
+    chartColorKey: 'seriesPurple' as const,
   },
   snack: {
     label: 'Snack',
     bgClass: 'bg-accent-blue/15',
     textClass: 'text-accent-blue',
     borderClass: 'border-accent-blue/30',
-    chartColorKey: 'accentBlue' as const,
+    chartColorKey: 'seriesBlue' as const,
   },
   unclassified: {
     label: 'Other',
     bgClass: 'bg-surface-2',
     textClass: 'text-text-tertiary',
     borderClass: 'border-border-subtle',
-    chartColorKey: 'textTertiary' as const,
+    chartColorKey: 'seriesGray' as const,
   },
 } as const;
 
