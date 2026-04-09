@@ -109,6 +109,30 @@ class WeightService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pet not found or not accessible")
         return context
 
+    # ================== Pet Weight Sync ==================
+
+    async def _sync_pet_current_weight(self, pet_id: str) -> None:
+        """
+        Update pets.current_weight_kg to match the latest active weight record.
+        Sets to NULL if no active records exist.
+        """
+        sql = f"""
+        SELECT weight
+        FROM {weight_table}
+        WHERE pet_id = '{pet_id}' AND is_active = TRUE
+        ORDER BY timestamp DESC
+        LIMIT 1
+        """
+        latest = await self.db.read_one(sql)
+        new_weight = f"{float(latest['weight'])}" if latest else "NULL"
+
+        update_sql = f"""
+        UPDATE pets
+        SET current_weight_kg = {new_weight}
+        WHERE id = '{pet_id}'
+        """
+        await self.db.execute(update_sql)
+
     # ================== ID Generation ==================
 
     def _generate_weight_id(self) -> str:
@@ -144,6 +168,7 @@ class WeightService:
         RETURNING *
         """
         created_record = await self.db.execute_returning(sql)
+        await self._sync_pet_current_weight(request.pet_id)
         return WeightRecordInfo(**created_record, user_name=user_name)
 
     async def get_weight_record(self, weight_id: str, user_id: str) -> WeightRecordDetails:
@@ -232,6 +257,9 @@ class WeightService:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update weight record"
             )
 
+        # Sync pet weight after update
+        await self._sync_pet_current_weight(pet_id)
+
         # Get full details for response
         return await self.get_weight_record(weight_id, user_id)
 
@@ -261,6 +289,8 @@ class WeightService:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to delete weight record"
             )
+
+        await self._sync_pet_current_weight(pet_id)
 
         return {"id": weight_id, "deleted": True}
 

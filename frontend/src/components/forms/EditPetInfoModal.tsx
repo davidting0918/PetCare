@@ -16,7 +16,6 @@ interface EditPetFormData {
   breed: string;
   gender: string;
   birth_date: string;
-  current_weight_kg: number | undefined;
   target_weight_kg: number | undefined;
   height_cm: number | undefined;
   is_spayed: boolean;
@@ -30,7 +29,6 @@ const detailsToFormData = (details: PetDetails): EditPetFormData => ({
   breed: details.breed || '',
   gender: details.gender,
   birth_date: details.birth_date ? details.birth_date.slice(0, 10) : '',
-  current_weight_kg: details.current_weight_kg ?? undefined,
   target_weight_kg: details.target_weight_kg ?? undefined,
   height_cm: details.height_cm ?? undefined,
   is_spayed: details.is_spayed ?? false,
@@ -59,9 +57,6 @@ const buildUpdateRequest = (formData: EditPetFormData, original: PetDetails): Up
       : undefined;
   }
 
-  if (formData.current_weight_kg !== (original.current_weight_kg ?? undefined)) {
-    request.current_weight_kg = formData.current_weight_kg;
-  }
   if (formData.target_weight_kg !== (original.target_weight_kg ?? undefined)) {
     request.target_weight_kg = formData.target_weight_kg;
   }
@@ -105,8 +100,8 @@ export const EditPetInfoModal: React.FC<EditPetInfoModalProps> = ({
 
   const [formData, setFormData] = useState<EditPetFormData>({
     name: '', breed: '', gender: 'unknown', birth_date: '',
-    current_weight_kg: undefined, target_weight_kg: undefined,
-    height_cm: undefined, is_spayed: false, microchip_id: '',
+    target_weight_kg: undefined, height_cm: undefined,
+    is_spayed: false, microchip_id: '',
     daily_calorie_target: undefined, notes: '',
   });
   const [originalDetails, setOriginalDetails] = useState<PetDetails | null>(null);
@@ -166,9 +161,6 @@ export const EditPetInfoModal: React.FC<EditPetInfoModalProps> = ({
       newErrors.name = 'Name must be 50 characters or less';
     }
 
-    if (formData.current_weight_kg !== undefined && (formData.current_weight_kg < 0.1 || formData.current_weight_kg > 200)) {
-      newErrors.current_weight_kg = 'Must be between 0.1 and 200 kg';
-    }
     if (formData.target_weight_kg !== undefined && (formData.target_weight_kg < 0.1 || formData.target_weight_kg > 200)) {
       newErrors.target_weight_kg = 'Must be between 0.1 and 200 kg';
     }
@@ -419,16 +411,10 @@ export const EditPetInfoModal: React.FC<EditPetInfoModalProps> = ({
                   <label className="block text-sm font-medium text-text-secondary mb-1">
                     Current Weight (kg)
                   </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={formData.current_weight_kg ?? ''}
-                    onChange={(e) => handleInputChange('current_weight_kg', e.target.value ? parseFloat(e.target.value) : undefined)}
-                    className={`input-field ${errors.current_weight_kg ? 'border-danger' : ''}`}
-                    placeholder="0.0"
-                    disabled={isLoading}
-                  />
-                  {errors.current_weight_kg && <p className="text-danger text-xs mt-1">{errors.current_weight_kg}</p>}
+                  <div className="input-field bg-surface-1 text-text-tertiary cursor-not-allowed">
+                    {originalDetails.current_weight_kg != null ? originalDetails.current_weight_kg : '—'}
+                  </div>
+                  <p className="text-xs text-text-tertiary mt-1">Auto-updated from weight records</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-text-secondary mb-1">

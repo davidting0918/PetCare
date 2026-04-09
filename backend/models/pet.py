@@ -106,7 +106,6 @@ class UpdatePetRequest(BaseModel):
     breed: Optional[str] = Field(None, max_length=100)
     gender: Optional[PetGender] = None
     birth_date: Optional[int] = None
-    current_weight_kg: Optional[float] = Field(None, ge=0.1, le=200)
     target_weight_kg: Optional[float] = Field(None, ge=0.1, le=200)
     height_cm: Optional[float] = Field(None, ge=1, le=200)
     is_spayed: Optional[bool] = None
