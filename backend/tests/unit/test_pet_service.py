@@ -5,7 +5,8 @@ These tests follow the unit-tier rules:
 
 * No FastAPI app import — only ``PetService`` is imported.
 * No real Postgres — ``get_db`` is patched to return an ``AsyncMock``.
-* No real filesystem — ``get_photo_storage_path`` is patched.
+* No real Cloudinary — ``upload_image`` is patched at the service module
+  to return a deterministic fake response (no network).
 * Each test gets its own fresh mocks via fixtures (parallel-safe).
 
 Authorization coverage is the priority — pet operations are gated by
@@ -85,36 +86,23 @@ def mock_db():
     return db
 
 
+async def _fake_upload_image(content, folder, public_id, content_type):
+    """Default Cloudinary stub used by ``pet_service`` fixture."""
+    return {
+        "secure_url": f"https://res.cloudinary.com/test-cloud/image/upload/v1/{folder}/{public_id}.jpg",
+        "public_id": public_id,
+        "bytes": len(content),
+        "format": "jpg",
+    }
+
+
 @pytest.fixture
 def pet_service(monkeypatch, mock_db):
     monkeypatch.setattr("backend.services.pet_service.get_db", lambda: mock_db)
-    monkeypatch.setattr(
-        "backend.services.pet_service.get_photo_storage_path",
-        lambda category: "/fake/storage/path",
-    )
+    monkeypatch.setattr("backend.services.pet_service.upload_image", _fake_upload_image)
     from backend.services.pet_service import PetService
 
     return PetService()
-
-
-# ================================================================
-# _extract_filename_from_url
-# ================================================================
-
-
-class TestExtractFilenameFromUrl:
-    @pytest.mark.parametrize(
-        "url,expected",
-        [
-            ("/static/pet_photos/abc.jpg", "abc.jpg"),
-            ("https://example.com/static/pet_photos/abc.jpg", "abc.jpg"),
-            ("", None),
-            (None, None),
-            ("/some/other/path/abc.jpg", None),
-        ],
-    )
-    def test_parses_filename_from_various_url_shapes(self, pet_service, url, expected):
-        assert pet_service._extract_filename_from_url(url) == expected
 
 
 # ================================================================

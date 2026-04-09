@@ -8,8 +8,8 @@ These tests follow the unit-tier rules:
 * No real bcrypt — the session-scoped ``_stub_bcrypt`` fixture in
   ``backend/tests/unit/conftest.py`` replaces ``pwd_context.hash`` /
   ``verify`` with deterministic fakes.
-* No real filesystem — ``get_photo_storage_path`` is patched and
-  ``aiofiles.open`` is replaced with an async-context-manager mock.
+* No real Cloudinary — ``upload_image`` is patched at the service module
+  to return a deterministic fake response (no network).
 * Each test gets its own fresh mocks via fixtures (parallel-safe).
 """
 
@@ -83,6 +83,21 @@ def mock_group_service():
     return gs
 
 
+async def _fake_upload_image(content, folder, public_id, content_type):
+    """Default Cloudinary stub used by ``user_service`` fixture.
+
+    Returns the same shape as ``backend.core.cloudinary_client.upload_image``
+    so the service code under test reads ``secure_url`` and ``public_id``
+    from a real-looking dict.
+    """
+    return {
+        "secure_url": f"https://res.cloudinary.com/test-cloud/image/upload/v1/{folder}/{public_id}.jpg",
+        "public_id": public_id,
+        "bytes": len(content),
+        "format": "jpg",
+    }
+
+
 @pytest.fixture
 def user_service(monkeypatch, mock_db, mock_group_service):
     """
@@ -90,14 +105,11 @@ def user_service(monkeypatch, mock_db, mock_group_service):
 
     * ``get_db`` → returns ``mock_db``
     * ``GroupService()`` → returns ``mock_group_service``
-    * ``get_photo_storage_path`` → returns a fake path (no real ``mkdir``)
+    * ``upload_image`` → returns a deterministic fake Cloudinary response
     """
     monkeypatch.setattr("backend.services.user_service.get_db", lambda: mock_db)
     monkeypatch.setattr("backend.services.user_service.GroupService", lambda: mock_group_service)
-    monkeypatch.setattr(
-        "backend.services.user_service.get_photo_storage_path",
-        lambda category: "/fake/storage/path",
-    )
+    monkeypatch.setattr("backend.services.user_service.upload_image", _fake_upload_image)
 
     from backend.services.user_service import UserService
 
@@ -176,15 +188,20 @@ class TestUpdateUserInfo:
                 ["picture = "],
             ),
             (
-                {"picture": "/static/user_photos/u_test01.jpg"},
-                ["picture = '/static/user_photos/u_test01.jpg'"],
+                {"picture": "https://res.cloudinary.com/test/image/upload/v1/petcare/user_photos/u_test01.jpg"},
+                [
+                    "picture = 'https://res.cloudinary.com/test/image/upload/v1/petcare/user_photos/u_test01.jpg'",
+                ],
                 ["name = "],
             ),
             (
-                {"name": "New Name", "picture": "/static/user_photos/u_test01.jpg"},
+                {
+                    "name": "New Name",
+                    "picture": "https://res.cloudinary.com/test/image/upload/v1/petcare/user_photos/u_test01.jpg",
+                },
                 [
                     "name = 'New Name'",
-                    "picture = '/static/user_photos/u_test01.jpg'",
+                    "picture = 'https://res.cloudinary.com/test/image/upload/v1/petcare/user_photos/u_test01.jpg'",
                 ],
                 [],
             ),
@@ -307,28 +324,27 @@ class TestResetPassword:
 # ================================================================
 
 
-class _AsyncFile:
-    """Minimal async-context-manager standing in for ``aiofiles.open``."""
-
-    def __init__(self):
-        self.write = AsyncMock()
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc, tb):
-        return None
-
-
 class TestUploadUserPhoto:
     @pytest.mark.asyncio
-    async def test_happy_path_writes_file_and_updates_picture_column(self, user_service, mock_db, monkeypatch):
+    async def test_happy_path_uploads_to_cloudinary_and_updates_picture_column(
+        self, user_service, mock_db, monkeypatch
+    ):
         # Arrange
         mock_db.read_one.return_value = _make_user_row(id="u_test01")
-        monkeypatch.setattr(
-            "backend.services.user_service.aiofiles.open",
-            lambda *args, **kwargs: _AsyncFile(),
-        )
+        captured_calls = []
+
+        async def _capturing_upload(content, folder, public_id, content_type):
+            captured_calls.append(
+                {"content": content, "folder": folder, "public_id": public_id, "content_type": content_type}
+            )
+            return {
+                "secure_url": "https://res.cloudinary.com/test-cloud/image/upload/v1/petcare/user_photos/u_test01.jpg",
+                "public_id": "petcare/user_photos/u_test01",
+                "bytes": len(content),
+                "format": "jpg",
+            }
+
+        monkeypatch.setattr("backend.services.user_service.upload_image", _capturing_upload)
         upload = _make_upload_file(
             content=b"\x89PNG\r\n\x1a\n_fake_jpeg_bytes",
             filename="snapshot.jpg",
@@ -338,16 +354,25 @@ class TestUploadUserPhoto:
         # Act
         result = await user_service.upload_user_photo("u_test01", upload)
 
-        # Assert: response shape and naming convention
-        assert result["photo_name"] == "u_test01.jpg"
+        # Assert: cloudinary client was called with the correct arguments
+        assert len(captured_calls) == 1
+        call = captured_calls[0]
+        assert call["folder"] == "petcare/user_photos"
+        assert call["public_id"] == "u_test01"
+        assert call["content_type"] == "image/jpeg"
+        assert call["content"] == b"\x89PNG\r\n\x1a\n_fake_jpeg_bytes"
+
+        # Assert: response shape echoes the Cloudinary fields
+        assert result["photo_url"].startswith("https://res.cloudinary.com/")
+        assert result["photo_url"].endswith("/petcare/user_photos/u_test01.jpg")
+        assert result["photo_name"] == "petcare/user_photos/u_test01"
         assert result["photo_type"] == "image/jpeg"
-        assert result["photo_url"].endswith("/static/user_photos/u_test01.jpg")
         assert result["photo_size"] == len(b"\x89PNG\r\n\x1a\n_fake_jpeg_bytes")
 
-        # Assert: the picture column was updated for this user
+        # Assert: the picture column was updated for this user with the Cloudinary URL
         assert mock_db.execute.await_count == 1
         sql = mock_db.execute.await_args.args[0]
-        assert "picture = " in sql
+        assert "picture = 'https://res.cloudinary.com/" in sql
         assert "u_test01" in sql
 
     @pytest.mark.asyncio
@@ -388,20 +413,14 @@ class TestUploadUserPhoto:
         assert "too large" in exc.value.detail.lower()
 
     @pytest.mark.asyncio
-    async def test_write_failure_cleans_up_orphan_file_and_raises_500(self, user_service, mock_db, monkeypatch):
-        # Arrange: user exists, aiofiles.open raises on enter
+    async def test_cloudinary_failure_raises_500_and_skips_db_write(self, user_service, mock_db, monkeypatch):
+        # Arrange: user exists, but the Cloudinary upload itself fails
         mock_db.read_one.return_value = _make_user_row()
 
-        def _raise(*args, **kwargs):
-            raise IOError("disk full")
+        async def _failing_upload(*args, **kwargs):
+            raise HTTPException(status_code=500, detail="Cloudinary upload failed: boom")
 
-        monkeypatch.setattr("backend.services.user_service.aiofiles.open", _raise)
-        monkeypatch.setattr("backend.services.user_service.os.path.exists", lambda path: True)
-        remove_calls = []
-        monkeypatch.setattr(
-            "backend.services.user_service.os.remove",
-            lambda path: remove_calls.append(path),
-        )
+        monkeypatch.setattr("backend.services.user_service.upload_image", _failing_upload)
 
         upload = _make_upload_file(b"data", "x.jpg", "image/jpeg")
 
@@ -409,8 +428,7 @@ class TestUploadUserPhoto:
         with pytest.raises(HTTPException) as exc:
             await user_service.upload_user_photo("u_test01", upload)
         assert exc.value.status_code == 500
-        assert "Failed to upload photo" in exc.value.detail
+        assert "Cloudinary" in exc.value.detail
 
-        # Assert: the orphan file path was removed exactly once
-        assert len(remove_calls) == 1
-        assert remove_calls[0].endswith(".jpg")
+        # Assert: no DB UPDATE happened — failure short-circuited before persistence
+        assert mock_db.execute.await_count == 0
