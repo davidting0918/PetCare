@@ -2,14 +2,12 @@ import base64
 import os
 from datetime import datetime as dt
 from datetime import timezone as tz
-from pathlib import Path
 from typing import List, Optional
 
-import aiofiles
 from fastapi import HTTPException, UploadFile, status
 
+from backend.core.cloudinary_client import upload_image
 from backend.core.db_manager import get_db
-from backend.core.environment import build_static_url, get_photo_storage_path
 from backend.models.food import (  # Tables; Models; Enums; Request Models; Response Models
     CreateFoodRequest,
     Food,
@@ -36,7 +34,7 @@ class FoodService:
     """
 
     def __init__(self):
-        self.photo_storage_path = get_photo_storage_path("food_photos")
+        pass
 
     @property
     def db(self):
@@ -468,7 +466,7 @@ class FoodService:
 
     async def upload_food_photo(self, food_id: str, file: UploadFile, user_id: str) -> dict:
         """
-        Upload or update a photo for a food item.
+        Upload or update a food photo via Cloudinary.
         Only creators and members can upload photos.
 
         Args:
@@ -477,7 +475,7 @@ class FoodService:
             user_id: User uploading the photo
 
         Returns:
-            dict: Photo information including URL and metadata
+            dict: Photo information including the Cloudinary secure URL
         """
         # Check permissions
         if not await self._can_manage_food(user_id=user_id, food_id=food_id):
@@ -512,55 +510,26 @@ class FoodService:
                 detail=f"File size ({actual_size / 1024 / 1024:.2f}MB) exceeds maximum allowed size of 5MB",
             )
 
-        # Generate filename using food_id (deterministic naming)
-        file_extension = Path(file.filename).suffix if file.filename else ".jpg"
-        file_name = f"{food_id}{file_extension}"
-        file_path = os.path.join(self.photo_storage_path, file_name)
-        # Build photo URL based on environment configuration
-        photo_url = build_static_url("food_photos", file_name)
+        # Upload to Cloudinary (overwrites previous asset under the same public_id)
+        upload_result = await upload_image(
+            content=content,
+            folder="petcare/food_photos",
+            public_id=food_id,
+            content_type=file.content_type,
+        )
+        photo_url = upload_result["secure_url"]
 
-        try:
-            # Save file to storage (content already read for validation)
-            async with aiofiles.open(file_path, "wb") as f:
-                await f.write(content)
-
-            # Update food record with photo URL
-            sql = f"""
-            UPDATE foods
-            SET photo_url = '{photo_url}'
-            WHERE id = '{food_id}'
-            """
-            await self.db.execute(sql)
-
-            return {
-                "photo_url": photo_url,
-                "photo_name": file_name,
-                "photo_size": actual_size,
-                "photo_type": file.content_type,
-                "photo_uploaded_at": int(dt.now(tz.utc).timestamp()),
-            }
-
-        except Exception as e:
-            # Clean up file if database operation fails
-            if os.path.exists(file_path):
-                os.remove(file_path)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to upload photo: {str(e)}"
-            )
-
-    def _extract_filename_from_url(self, photo_url: str) -> str | None:
+        sql = f"""
+        UPDATE foods
+        SET photo_url = '{photo_url}'
+        WHERE id = '{food_id}'
         """
-        Extract filename from photo URL.
+        await self.db.execute(sql)
 
-        Args:
-            photo_url: Photo URL (e.g., /static/food_photos/abc123.jpg)
-
-        Returns:
-            str | None: Filename or None if invalid
-        """
-        if not photo_url:
-            return None
-        # Extract filename from URL (handles both relative and absolute URLs)
-        if "/" in photo_url:
-            return photo_url.split("/")[-1]
-        return photo_url
+        return {
+            "photo_url": photo_url,
+            "photo_name": upload_result["public_id"],
+            "photo_size": actual_size,
+            "photo_type": file.content_type,
+            "photo_uploaded_at": int(dt.now(tz.utc).timestamp()),
+        }

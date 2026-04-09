@@ -1,16 +1,12 @@
-import os
 import uuid
 from datetime import datetime as dt
 from datetime import timezone as tz
-from pathlib import Path
 from typing import List
 
-import aiofiles
 from fastapi import HTTPException, UploadFile, status
-from fastapi.responses import FileResponse
 
+from backend.core.cloudinary_client import upload_image
 from backend.core.db_manager import get_db
-from backend.core.environment import build_static_url, get_photo_storage_path
 from backend.models.pet import (  # Tables; Models; Request Models; Response Models
     AssignPetToGroupRequest,
     CreatePetRequest,
@@ -38,38 +34,11 @@ class PetService:
 
     def __init__(self):
         self.group_service = GroupService()
-        self.photo_storage_path = get_photo_storage_path("pet_photos")
 
     @property
     def db(self):
         """Get database client from global manager"""
         return get_db()
-
-    def _extract_filename_from_url(self, photo_url: str) -> str | None:
-        """
-        Extract filename from photo URL (handles both relative and absolute URLs).
-
-        Args:
-            photo_url: Photo URL (e.g., '/static/pet_photos/abc.jpg' or 'https://domain.com/static/pet_photos/abc.jpg')
-
-        Returns:
-            str: Filename (e.g., 'abc.jpg') or None if URL doesn't match expected pattern
-
-        Examples:
-            >>> _extract_filename_from_url('/static/pet_photos/abc.jpg')
-            'abc.jpg'
-            >>> _extract_filename_from_url('https://domain.com/static/pet_photos/abc.jpg')
-            'abc.jpg'
-        """
-        if not photo_url:
-            return None
-
-        # Check if URL contains the pet_photos path
-        if "/static/pet_photos/" in photo_url:
-            # Extract filename after /static/pet_photos/
-            return photo_url.split("/static/pet_photos/")[-1]
-
-        return None
 
     # ================== Permission Helpers ==================
 
@@ -479,7 +448,7 @@ class PetService:
 
     async def upload_pet_photo(self, pet_id: str, file: UploadFile, user_id: str) -> dict:
         """
-        Upload or update a photo for a pet. Only owners can upload photos.
+        Upload or update a pet photo via Cloudinary. Only owners can upload.
 
         Args:
             pet_id: Pet to upload photo for
@@ -487,7 +456,7 @@ class PetService:
             user_id: User uploading the photo
 
         Returns:
-            bool: True if photo uploaded successfully
+            dict: Photo information including the Cloudinary secure URL
         """
         # Check permissions and get pet
         if not await self._is_owner(pet_id, user_id):
@@ -511,92 +480,26 @@ class PetService:
                 detail=f"File size ({actual_size / 1024 / 1024:.2f}MB) exceeds maximum allowed size of 10MB",
             )
 
-        # Generate filename using pet_id (deterministic naming)
-        file_extension = Path(file.filename).suffix if file.filename else ".jpg"
-        file_name = f"{pet_id}{file_extension}"
-        file_path = os.path.join(self.photo_storage_path, file_name)
-        # Build photo URL based on environment configuration
-        photo_url = build_static_url("pet_photos", file_name)
-
-        try:
-            # Save file to storage (content already read for validation)
-            async with aiofiles.open(file_path, "wb") as f:
-                await f.write(content)
-
-            sql = f"""
-            UPDATE pets
-            SET photo_url = '{photo_url}'
-            WHERE id = '{pet_id}'
-            """
-            await self.db.execute(sql)
-
-            return {
-                "photo_url": photo_url,
-                "photo_name": file_name,
-                "photo_size": actual_size,
-                "photo_type": file.content_type,
-                "photo_uploaded_at": int(dt.now(tz.utc).timestamp()),
-            }
-
-        except Exception as e:
-            # Clean up file if database operation fails
-            if os.path.exists(file_path):
-                os.remove(file_path)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to upload photo: {str(e)}"
-            )
-
-    async def get_pet_photo(self, pet_id: str, user_id: str) -> FileResponse:
-        """
-        Get pet photo file. User must have access to the pet to view its photo.
-
-        Args:
-            pet_id: Pet ID to retrieve
-            user_id: User requesting the photo
-
-        Returns:
-            FileResponse: Photo file response
-        """
-        if await self._can_view_pet(pet_id, user_id):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="You don't have permission to view this photo"
-            )
-
-        # Get photo URL from database
-        sql = f"""
-        select photo_url from pets where id = '{pet_id}' and is_active = true
-        """
-        result = await self.db.read_one(sql)
-        if not result or not result.get("photo_url"):
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo not found")
-
-        photo_url = result["photo_url"]
-
-        # Extract filename from URL and build filesystem path
-        file_name = self._extract_filename_from_url(photo_url)
-        if not file_name:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invalid photo URL")
-
-        file_path = os.path.join(self.photo_storage_path, file_name)
-
-        # Check if file exists on filesystem
-        if not os.path.exists(file_path):
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo file not found on server")
-
-        # Determine media type from file extension
-        file_extension = file_name.split(".")[-1].lower()
-        media_type_map = {
-            "jpg": "image/jpeg",
-            "jpeg": "image/jpeg",
-            "png": "image/png",
-            "gif": "image/gif",
-            "webp": "image/webp",
-        }
-        media_type = media_type_map.get(file_extension, "image/jpeg")
-
-        return FileResponse(
-            path=file_path,
-            media_type=media_type,
-            filename=file_name,
-            headers={"Cache-Control": "public, max-age=3600"},  # 1 hour cache
+        # Upload to Cloudinary (overwrites previous asset under the same public_id)
+        upload_result = await upload_image(
+            content=content,
+            folder="petcare/pet_photos",
+            public_id=pet_id,
+            content_type=file.content_type,
         )
+        photo_url = upload_result["secure_url"]
+
+        sql = f"""
+        UPDATE pets
+        SET photo_url = '{photo_url}'
+        WHERE id = '{pet_id}'
+        """
+        await self.db.execute(sql)
+
+        return {
+            "photo_url": photo_url,
+            "photo_name": upload_result["public_id"],
+            "photo_size": actual_size,
+            "photo_type": file.content_type,
+            "photo_uploaded_at": int(dt.now(tz.utc).timestamp()),
+        }

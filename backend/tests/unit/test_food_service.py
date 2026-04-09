@@ -5,7 +5,8 @@ These tests follow the unit-tier rules:
 
 * No FastAPI app import — only ``FoodService`` is imported.
 * No real Postgres — ``get_db`` is patched to return an ``AsyncMock``.
-* No real filesystem — ``get_photo_storage_path`` is patched.
+* No real Cloudinary — ``upload_image`` is patched at the service module
+  to return a deterministic fake response (no network).
 * Each test gets its own fresh mocks via fixtures (parallel-safe).
 
 Authorization coverage is the priority — every method gates on
@@ -91,13 +92,20 @@ def mock_db():
     return db
 
 
+async def _fake_upload_image(content, folder, public_id, content_type):
+    """Default Cloudinary stub used by ``food_service`` fixture."""
+    return {
+        "secure_url": f"https://res.cloudinary.com/test-cloud/image/upload/v1/{folder}/{public_id}.jpg",
+        "public_id": public_id,
+        "bytes": len(content),
+        "format": "jpg",
+    }
+
+
 @pytest.fixture
 def food_service(monkeypatch, mock_db):
     monkeypatch.setattr("backend.services.food_service.get_db", lambda: mock_db)
-    monkeypatch.setattr(
-        "backend.services.food_service.get_photo_storage_path",
-        lambda category: "/fake/storage/path",
-    )
+    monkeypatch.setattr("backend.services.food_service.upload_image", _fake_upload_image)
     from backend.services.food_service import FoodService
 
     return FoodService()

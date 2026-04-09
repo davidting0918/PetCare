@@ -160,7 +160,7 @@ isort --settings-path=pyproject.toml backend
 flake8 --config=.flake8 backend
 ```
 
-The current legacy test suite **requires a real Postgres database** (no mocking). It connects via `POSTGRES_TEST` and sets `PYTEST_RUNNING=1` + `APP_ENV=test`. Other required env vars: `JWT_SECRET_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`. These live in `backend/.env` locally and in GitHub Secrets in CI. **This is being restructured** — see `## Backend > Tests`.
+The current legacy test suite **requires a real Postgres database** (no mocking). It connects via `POSTGRES_TEST` and sets `PYTEST_RUNNING=1` + `APP_ENV=test`. Other required env vars: `JWT_SECRET_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`. These live in `backend/.env` locally (see `backend/.env.example` for the template) and in GitHub Secrets in CI. **This is being restructured** — see `## Backend > Tests`.
 
 ### Frontend (React + Vite)
 
@@ -181,11 +181,11 @@ Frontend env vars (consumed in [src/api/client.ts](frontend/src/api/client.ts)) 
 
 The backend uses a **router → service → db** layering enforced by directory:
 
-- [backend/main.py](backend/main.py) — FastAPI app factory. Registers CORS (env-driven), seven routers, mounts `/static` for uploaded photos, exposes `/scalar` for API docs, and runs `init_database` / `close_database` in the lifespan handler.
+- [backend/main.py](backend/main.py) — FastAPI app factory. Registers CORS (env-driven), seven routers, exposes `/scalar` for API docs, and runs `init_database` / `close_database` in the lifespan handler.
 - [backend/routers/](backend/routers/) — Thin HTTP layer. One router per resource (`auth`, `user`, `group`, `pet`, `food`, `meal`, `weight`). Handles validation, auth dependencies, and delegates to a service. The standard response envelope is `{"status": 1, "data": {...}, "message": "..."}` (status `1` = success). Always honor this contract in new endpoints.
 - [backend/services/](backend/services/) — All business logic. Each service depends on `get_db()` lazily via a `@property` (see `AuthService.db`) so the global asyncpg pool is initialized at app startup, not import time. **`get_db()` is the single seam where unit tests mock the database.**
 - [backend/models/](backend/models/) — Pydantic schemas + table-name constants (e.g. `user_table = "users"`). There is **no ORM**; SQL is hand-written in services using the asyncpg client wrapper.
-- [backend/core/](backend/core/) — Infrastructure: `db_manager.py` (singleton `DatabaseManager` exposing `get_db()`, `init_database()`, `close_database()`), `postgres_database.py` (asyncpg `Pool` wrapper, picks `POSTGRES_TEST` / `POSTGRES_STAGING` / `POSTGRES_PROD` based on env), `environment.py` (loads `backend/.env`, exposes `get_config`, `get_storage_path`, `build_static_url`).
+- [backend/core/](backend/core/) — Infrastructure: `db_manager.py` (singleton `DatabaseManager` exposing `get_db()`, `init_database()`, `close_database()`), `postgres_database.py` (asyncpg `Pool` wrapper, picks `POSTGRES_TEST` / `POSTGRES_STAGING` / `POSTGRES_PROD` based on env), `environment.py` (loads `backend/.env`, exposes `get_config` and `is_test/staging/production`), `cloudinary_client.py` (configures the Cloudinary SDK from `CLOUDINARY_*` env vars at import time and exposes an async `upload_image()` helper that user/pet/food services use to push photos to Cloudinary instead of local disk).
 
 When adding a new resource, follow this pattern: model file → service file (with `db` property using `get_db()`) → router file → register in `main.py` → tests under `backend/tests/unit/` (and integration tests if needed — see Tests below).
 
@@ -197,7 +197,7 @@ When adding a new resource, follow this pattern: model file → service file (wi
 3. `APP_ENV` env var (mapped: `dev`/`development`/`stage`/`staging` → STAGING; `prod`/`production` → PRODUCTION; `test`/`testing` → TEST)
 4. Default: PRODUCTION
 
-CORS origins, debug flags, and the storage path all branch off this. Storage path is `STORAGE_BASE_PATH` env var if set (used on Render: `/var/data/storage`), otherwise `backend/storage/`. Photo URLs are built via `build_static_url(category, filename)` which returns either a relative `/static/...` path or an absolute `{base_url}/static/...` URL depending on environment config.
+CORS origins and debug flags branch off this. Photo storage no longer lives on local disk — user / pet / food upload endpoints push bytes to Cloudinary via `backend/core/cloudinary_client.py` (folders `petcare/user_photos`, `petcare/pet_photos`, `petcare/food_photos`; `public_id` = entity id for overwrite-on-reupload). The DB columns `users.picture`, `pets.photo_url`, `foods.photo_url` store the full Cloudinary `secure_url`. There is no `/static` mount and no `STORAGE_BASE_PATH` handling anymore.
 
 ### Domain model (group-based access control)
 
