@@ -12,6 +12,7 @@ from backend.routers.auth_router import router as auth_router
 from backend.routers.food_router import router as food_router
 from backend.routers.group_router import router as group_router
 from backend.routers.meal_router import router as meal_router
+from backend.routers.medicine_router import router as medicine_router
 from backend.routers.pet_router import router as pet_router
 from backend.routers.user_router import router as user_router
 from backend.routers.weight_router import router as weight_router
@@ -75,6 +76,7 @@ app.include_router(pet_router)
 app.include_router(food_router)
 app.include_router(meal_router)
 app.include_router(weight_router)
+app.include_router(medicine_router)
 
 
 # Add Scalar API documentation

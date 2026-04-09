@@ -313,3 +313,109 @@ create trigger update_meals_updated_at before
 update
     on
     public.meals for each row execute function update_updated_at_column();
+
+
+-- ================== Medicine Domain ==================
+
+create type medication_type_enum as enum ('oral', 'topical', 'injection', 'eye_drops', 'ear_drops', 'other');
+create type dosage_unit_enum as enum ('tablet', 'ml', 'mg', 'drops', 'puff', 'unit', 'application');
+create type time_of_day_enum as enum ('all_day', 'morning', 'afternoon', 'evening');
+
+
+-- medications table (group-scoped medication catalog)
+CREATE TABLE medications (
+	id varchar(11) NOT NULL,
+	group_id varchar(8) NOT NULL,
+	"name" varchar(100) NOT NULL,
+	medication_type medication_type_enum NOT NULL,
+	default_dosage numeric(7, 2) NULL,
+	dosage_unit dosage_unit_enum NOT NULL,
+	notes text NULL,
+	creator_id varchar(8) NULL,
+	is_active bool DEFAULT true NOT NULL,
+	created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	updated_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	CONSTRAINT medications_pkey PRIMARY KEY (id),
+	CONSTRAINT medications_notes_check CHECK (length(notes) <= 500),
+	CONSTRAINT fk_medications_group FOREIGN KEY (group_id) REFERENCES public."groups"(id) ON DELETE CASCADE,
+	CONSTRAINT fk_medications_creator FOREIGN KEY (creator_id) REFERENCES public.users(id) ON DELETE SET NULL
+);
+CREATE INDEX idx_medications_group_id ON public.medications USING btree (group_id) WHERE (is_active = true);
+
+create trigger update_medications_updated_at before
+update
+    on
+    public.medications for each row execute function update_updated_at_column();
+
+
+-- treatment_courses table (open-ended recurring schedules)
+CREATE TABLE treatment_courses (
+	id varchar(11) NOT NULL,
+	pet_id varchar(8) NOT NULL,
+	medication_id varchar(11) NOT NULL,
+	group_id varchar(8) NOT NULL,
+	dosage numeric(7, 2) NOT NULL,
+	dosage_unit dosage_unit_enum NOT NULL,
+	frequency_days int NOT NULL DEFAULT 1,
+	times_per_day time_of_day_enum[] NOT NULL DEFAULT '{morning}',
+	start_date date NOT NULL,
+	end_date date NULL,
+	notes text NULL,
+	created_by varchar(8) NULL,
+	is_active bool DEFAULT true NOT NULL,
+	created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	updated_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	CONSTRAINT treatment_courses_pkey PRIMARY KEY (id),
+	CONSTRAINT treatment_courses_frequency_valid CHECK (frequency_days >= 1 AND frequency_days <= 365),
+	CONSTRAINT treatment_courses_dosage_valid CHECK (dosage > 0),
+	CONSTRAINT treatment_courses_notes_check CHECK (length(notes) <= 500),
+	CONSTRAINT fk_tc_pet FOREIGN KEY (pet_id) REFERENCES public.pets(id) ON DELETE CASCADE,
+	CONSTRAINT fk_tc_medication FOREIGN KEY (medication_id) REFERENCES public.medications(id) ON DELETE CASCADE,
+	CONSTRAINT fk_tc_group FOREIGN KEY (group_id) REFERENCES public."groups"(id) ON DELETE CASCADE,
+	CONSTRAINT fk_tc_creator FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL
+);
+CREATE INDEX idx_tc_pet_id ON public.treatment_courses USING btree (pet_id) WHERE (is_active = true);
+CREATE INDEX idx_tc_group_id ON public.treatment_courses USING btree (group_id) WHERE (is_active = true);
+CREATE INDEX idx_tc_medication_id ON public.treatment_courses USING btree (medication_id) WHERE (is_active = true);
+
+create trigger update_treatment_courses_updated_at before
+update
+    on
+    public.treatment_courses for each row execute function update_updated_at_column();
+
+
+-- medication_logs table (actual administration records)
+CREATE TABLE medication_logs (
+	id varchar(11) NOT NULL,
+	pet_id varchar(8) NOT NULL,
+	medication_id varchar(11) NOT NULL,
+	group_id varchar(8) NOT NULL,
+	course_id varchar(11) NULL,
+	dosage numeric(7, 2) NOT NULL,
+	dosage_unit dosage_unit_enum NOT NULL,
+	time_of_day time_of_day_enum NULL,
+	administered_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	administered_by varchar(8) NULL,
+	notes text NULL,
+	is_active bool DEFAULT true NOT NULL,
+	created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	updated_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	CONSTRAINT medication_logs_pkey PRIMARY KEY (id),
+	CONSTRAINT medication_logs_dosage_valid CHECK (dosage > 0),
+	CONSTRAINT medication_logs_notes_check CHECK (length(notes) <= 500),
+	CONSTRAINT fk_ml_pet FOREIGN KEY (pet_id) REFERENCES public.pets(id) ON DELETE CASCADE,
+	CONSTRAINT fk_ml_medication FOREIGN KEY (medication_id) REFERENCES public.medications(id) ON DELETE CASCADE,
+	CONSTRAINT fk_ml_group FOREIGN KEY (group_id) REFERENCES public."groups"(id) ON DELETE CASCADE,
+	CONSTRAINT fk_ml_course FOREIGN KEY (course_id) REFERENCES public.treatment_courses(id) ON DELETE SET NULL,
+	CONSTRAINT fk_ml_user FOREIGN KEY (administered_by) REFERENCES public.users(id) ON DELETE SET NULL
+);
+CREATE INDEX idx_ml_pet_id ON public.medication_logs USING btree (pet_id) WHERE (is_active = true);
+CREATE INDEX idx_ml_group_id ON public.medication_logs USING btree (group_id) WHERE (is_active = true);
+CREATE INDEX idx_ml_course_id ON public.medication_logs USING btree (course_id) WHERE (is_active = true);
+CREATE INDEX idx_ml_administered_at ON public.medication_logs USING btree (administered_at) WHERE (is_active = true);
+CREATE INDEX idx_ml_pet_administered ON public.medication_logs USING btree (pet_id, administered_at) WHERE (is_active = true);
+
+create trigger update_medication_logs_updated_at before
+update
+    on
+    public.medication_logs for each row execute function update_updated_at_column();
