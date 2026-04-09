@@ -77,6 +77,19 @@ If you are tempted to write `@router.put`, `@router.delete`, or `@router.patch`,
 
 All endpoints return `{"status": 1, "data": {...}, "message": "..."}`. Errors raise `HTTPException` with structured detail. Do not invent a new envelope.
 
+### Pydantic response model consistency (NON-NEGOTIABLE)
+
+Pydantic v2 defaults to `extra="ignore"` on `BaseModel`, which means **any kwarg passed to a model constructor that is not a declared field is silently dropped — no warning, no error**. This has already bitten the project: `PetDetails` was being constructed in `pet_service.create_pet` with `user_permission="owner"`, but `PetDetails` never declared `user_permission`, so the field disappeared and the `POST /pet` response was inconsistent with `GET /pet/{id}` (which returns `PetInfo`, where the field IS declared).
+
+Whenever you touch a response model or its constructor call:
+
+1. Every kwarg the service passes to a response model constructor MUST be a declared field on that model. Read the model file (`backend/models/<domain>.py`) and the call site (`backend/services/<domain>_service.py`) side-by-side to confirm.
+2. If you add a new computed / derived value to a service's return path (`user_permission`, `calories_per_unit`, `user_role_in_group`, etc.), declare the corresponding field on the response model first, then update the constructor call.
+3. Cross-check sibling response shapes for the same domain — e.g. `PetInfo` (list) vs `PetDetails` (detail) — and keep context fields aligned where it makes sense. Drift between the two shapes confuses the frontend, which often expects the same field name in both responses.
+4. If a field is genuinely optional in some responses, declare it as `Optional[T] = None` rather than relying on `extra="ignore"` to hide its absence.
+
+This is a self-review item in Step 6 below — do not skip it.
+
 ### Code quality gate
 
 Before declaring an issue "done":
@@ -197,6 +210,7 @@ Produce a structured self-review in Traditional Chinese before the test step:
 - **Authorization 檢查清單** — every new/changed service method × the group-role check applied. Missing = blocker.
 - **HTTP 動詞檢查** — every new/changed endpoint is `GET` or `POST` with the verb in the path. Any `PUT`/`DELETE`/`PATCH` = blocker.
 - **資料庫一致性** — `db_schema.sql` matches what services expect; no drift between code and schema. Drift = blocker.
+- **Pydantic 欄位一致性檢查** — for every response model constructor call you added or changed: open the model file and the service file side-by-side and confirm every kwarg is a declared field on the model. Pydantic v2 silently drops unknown kwargs (`extra="ignore"`), so a typo or a "phantom" field never raises — it just disappears from the API response. Any drift = blocker. See `Shared Context > Pydantic response model consistency` for the rationale and the historical bug that motivated this rule.
 - **手動測試指令** — 2–3 `curl` / `httpie` commands the user can run locally.
 - **需要手動跑的 SQL**（若有）— exact statements for staging / prod, in a copy-pasteable block.
 
