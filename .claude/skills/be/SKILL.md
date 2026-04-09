@@ -32,7 +32,7 @@ You DO NOT own:
 
 ### Backend layering (router → service → db)
 
-- `backend/main.py` — FastAPI app factory; registers routers, mounts `/static`, lifespan inits the asyncpg pool.
+- `backend/main.py` — FastAPI app factory; registers routers, lifespan inits the asyncpg pool.
 - `backend/routers/<domain>_router.py` — thin HTTP layer. Validation, auth deps, delegate to service.
 - `backend/services/<domain>_service.py` — all business logic. Each service exposes a `db` property that lazily calls `get_db()`.
 - `backend/models/<domain>.py` — Pydantic schemas + table-name constants (e.g. `user_table = "users"`).
