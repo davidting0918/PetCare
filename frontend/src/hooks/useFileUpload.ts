@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, type ChangeEvent } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, type ChangeEvent } from 'react';
 
 export interface FileValidationConfig {
   /**
@@ -81,7 +81,13 @@ export const useFileUpload = (config?: FileValidationConfig): UseFileUploadRetur
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const validationConfig = { ...DEFAULT_CONFIG, ...config };
+  // Memoize the resolved validation config so the ``handleFileSelect``
+  // useCallback below stays referentially stable across renders even when
+  // callers pass an inline ``{ maxSize: ... }`` object literal.
+  const validationConfig = useMemo(
+    () => ({ ...DEFAULT_CONFIG, ...config }),
+    [config?.maxSize, config?.allowedTypes]
+  );
 
   // Clean up preview URL on unmount or when preview URL changes
   useEffect(() => {
@@ -92,55 +98,58 @@ export const useFileUpload = (config?: FileValidationConfig): UseFileUploadRetur
     };
   }, [previewUrl]);
 
-  const handleFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleFileSelect = useCallback(
+    (e: ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
 
-    // Validate file type
-    if (!validationConfig.allowedTypes.includes(file.type)) {
-      const allowedTypesStr = validationConfig.allowedTypes
-        .map(type => type.split('/')[1].toUpperCase())
-        .join(', ');
-      setError(`Please upload a ${allowedTypesStr} image`);
-      return;
-    }
+      // Validate file type
+      if (!validationConfig.allowedTypes.includes(file.type)) {
+        const allowedTypesStr = validationConfig.allowedTypes
+          .map(type => type.split('/')[1].toUpperCase())
+          .join(', ');
+        setError(`Please upload a ${allowedTypesStr} image`);
+        return;
+      }
 
-    // Validate file size
-    if (file.size > validationConfig.maxSize) {
-      const maxSizeMB = (validationConfig.maxSize / (1024 * 1024)).toFixed(0);
-      setError(`File is too large. Maximum size is ${maxSizeMB}MB`);
-      return;
-    }
+      // Validate file size
+      if (file.size > validationConfig.maxSize) {
+        const maxSizeMB = (validationConfig.maxSize / (1024 * 1024)).toFixed(0);
+        setError(`File is too large. Maximum size is ${maxSizeMB}MB`);
+        return;
+      }
 
-    // Clear previous error
-    setError(null);
+      // Clear previous error
+      setError(null);
 
-    // Revoke old preview URL before creating a new one
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
-    }
+      // Set file and create preview. Use functional setPreviewUrl so this
+      // callback does not need to close over previewUrl — that keeps its
+      // dep array stable and avoids triggering re-renders in consumers
+      // that put handleFileSelect in their effect deps.
+      setSelectedFile(file);
+      setPreviewUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return URL.createObjectURL(file);
+      });
+    },
+    [validationConfig]
+  );
 
-    // Set file and create preview
-    setSelectedFile(file);
-    const url = URL.createObjectURL(file);
-    setPreviewUrl(url);
-  };
-
-  const handleRemoveFile = () => {
+  const handleRemoveFile = useCallback(() => {
     setSelectedFile(null);
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
-      setPreviewUrl(null);
-    }
+    setPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
     setError(null);
-  };
+  }, []);
 
-  const clearError = () => {
+  const clearError = useCallback(() => {
     setError(null);
-  };
+  }, []);
 
   return {
     selectedFile,
