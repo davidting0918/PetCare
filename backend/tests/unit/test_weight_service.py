@@ -71,6 +71,35 @@ def weight_service(monkeypatch, mock_db):
 
 
 # ================================================================
+# _sync_pet_current_weight
+# ================================================================
+
+
+class TestSyncPetCurrentWeight:
+    @pytest.mark.asyncio
+    async def test_syncs_to_latest_record_weight(self, weight_service, mock_db):
+        mock_db.read_one.return_value = {"weight": 5.2}
+
+        await weight_service._sync_pet_current_weight("p_test01")
+
+        assert mock_db.execute.await_count == 1
+        sql = mock_db.execute.await_args.args[0]
+        assert "UPDATE pets" in sql
+        assert "current_weight_kg = 5.2" in sql
+        assert "p_test01" in sql
+
+    @pytest.mark.asyncio
+    async def test_sets_null_when_no_active_records(self, weight_service, mock_db):
+        mock_db.read_one.return_value = None
+
+        await weight_service._sync_pet_current_weight("p_test01")
+
+        assert mock_db.execute.await_count == 1
+        sql = mock_db.execute.await_args.args[0]
+        assert "current_weight_kg = NULL" in sql
+
+
+# ================================================================
 # _generate_weight_id
 # ================================================================
 
@@ -132,7 +161,10 @@ class TestCreateWeightRecord:
             "created_at": dt(2026, 4, 8, 12, tzinfo=tz.utc),
             "updated_at": dt(2026, 4, 8, 12, tzinfo=tz.utc),
         }
-        mock_db.read_one.return_value = {"role": "member"}
+        mock_db.read_one.side_effect = [
+            {"role": "member"},  # _has_edit_permission
+            {"weight": 4.5},  # _sync_pet_current_weight → latest record
+        ]
         mock_db.execute_returning.return_value = insert_returned_row
         request = CreateWeightRecordRequest(
             pet_id="p_test01",
@@ -150,6 +182,11 @@ class TestCreateWeightRecord:
         assert "INSERT INTO weight_records" in sql
         assert result.pet_id == "p_test01"
         assert result.user_name == "Test User"
+        # Assert: pet weight was synced
+        assert mock_db.execute.await_count == 1
+        sync_sql = mock_db.execute.await_args.args[0]
+        assert "UPDATE pets" in sync_sql
+        assert "current_weight_kg" in sync_sql
 
     @pytest.mark.asyncio
     async def test_viewer_cannot_create_weight_record(self, weight_service, mock_db):
@@ -211,6 +248,7 @@ class TestUpdateWeightRecord:
         mock_db.read_one.side_effect = [
             {"pet_id": "p_test01"},  # _get_weight_record_pet_id
             {"role": "creator"},  # _has_edit_permission
+            {"weight": 5.0},  # _sync_pet_current_weight → latest record
             _make_weight_row(weight=5.0),  # get_weight_record → record fetch
             {"role": "creator"},  # get_weight_record → permission check
         ]
@@ -221,6 +259,8 @@ class TestUpdateWeightRecord:
 
         assert result.weight == 5.0
         assert mock_db.execute_returning.await_count == 1
+        # Assert: pet weight was synced
+        assert mock_db.execute.await_count == 1
 
     @pytest.mark.asyncio
     async def test_viewer_cannot_update_weight(self, weight_service, mock_db):
@@ -245,8 +285,9 @@ class TestDeleteWeightRecord:
     @pytest.mark.asyncio
     async def test_member_can_delete_weight_record(self, weight_service, mock_db):
         mock_db.read_one.side_effect = [
-            {"pet_id": "p_test01"},
-            {"role": "member"},
+            {"pet_id": "p_test01"},  # _get_weight_record_pet_id
+            {"role": "member"},  # _has_edit_permission
+            {"weight": 3.0},  # _sync_pet_current_weight → next latest record
         ]
         mock_db.execute_returning.return_value = {"id": "wt_test0001"}
 
@@ -254,6 +295,22 @@ class TestDeleteWeightRecord:
 
         assert result["deleted"] is True
         assert mock_db.execute_returning.await_count == 1
+        # Assert: pet weight was synced
+        assert mock_db.execute.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_delete_last_record_sets_pet_weight_to_null(self, weight_service, mock_db):
+        mock_db.read_one.side_effect = [
+            {"pet_id": "p_test01"},  # _get_weight_record_pet_id
+            {"role": "member"},  # _has_edit_permission
+            None,  # _sync_pet_current_weight → no active records remain
+        ]
+        mock_db.execute_returning.return_value = {"id": "wt_last"}
+
+        await weight_service.delete_weight_record("wt_last", "u_member")
+
+        sync_sql = mock_db.execute.await_args.args[0]
+        assert "current_weight_kg = NULL" in sync_sql
 
     @pytest.mark.asyncio
     async def test_viewer_cannot_delete_weight_record(self, weight_service, mock_db):
