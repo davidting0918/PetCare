@@ -467,9 +467,9 @@ export const MealPage: React.FC = () => {
                 },
               }}
               sx={{
-                // Catch-all: ensure every SVG text element uses theme colors
+                // Catch-all: every SVG text element uses theme color
                 '& text': {
-                  fill: chartPalette.textSecondary,
+                  fill: `${chartPalette.textSecondary} !important`,
                 },
                 '& .MuiChartsGrid-root line': {
                   stroke: chartPalette.borderSubtle,
@@ -482,14 +482,14 @@ export const MealPage: React.FC = () => {
                 '& .MuiChartsAxis-root .MuiChartsAxis-tick': {
                   stroke: 'transparent',
                 },
-                // Legend (rendered as HTML in v8)
-                '& .MuiChartsLegend-root': {
-                  color: chartPalette.textSecondary,
-                  fontSize: '11px',
-                },
-                '& .MuiChartsLegend-series text, & .MuiChartsLegend-label': {
-                  fill: `${chartPalette.textSecondary} !important`,
+                // Legend in v8 is HTML (li > span), not SVG — needs `color`
+                '& .MuiChartsLegend-root, & .MuiChartsLegend-root *': {
+                  color: `${chartPalette.textSecondary} !important`,
                   fontSize: '11px !important',
+                },
+                // ChartsLabel is the <span> inside each legend item
+                '& .MuiChartsLabel-root': {
+                  color: `${chartPalette.textSecondary} !important`,
                 },
               }}
             >
