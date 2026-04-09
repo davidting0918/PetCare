@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAppDispatch, useAppSelector } from "../redux";
 import { createPet, fetchAccessiblePets, selectPet as selectPetAction, deletePet } from "../../store";
-import type { CreatePetRequest, Pet, UpdatePetRequest } from "../../types";
+import type { CreatePetRequest, Pet, PetDetails, UpdatePetRequest } from "../../types";
 import { petService } from "../../api";
 
 export const usePet = () => {
@@ -27,6 +27,12 @@ export const usePet = () => {
             throw new Error(result.payload as string);
         }
     }, [dispatch, isAuthenticated]);
+
+    // 獲取寵物詳細資料
+    const getPetDetails = useCallback(async (petId: string): Promise<PetDetails> => {
+        const response = await petService.getPetDetails(petId);
+        return response.data;
+    }, []);
 
     // 更新寵物資訊
     const updatePetInfo = useCallback(async (petId: string, request: UpdatePetRequest) => {
@@ -72,6 +78,7 @@ export const usePet = () => {
         // 操作函數
         create,
         getAvailablePets,
+        getPetDetails,
         updatePetInfo,
         uploadPetPhoto,
         selectPet,

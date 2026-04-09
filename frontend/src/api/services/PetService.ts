@@ -1,5 +1,5 @@
 import { apiClient } from "../client";
-import type { CreatePetRequest, PetInfo, ApiResponse, UpdatePetRequest, PhotoUploadResponse } from "../../types";
+import type { CreatePetRequest, PetInfo, PetDetails, ApiResponse, UpdatePetRequest, PhotoUploadResponse } from "../../types";
 
 class PetService {
     private basePath = '/pets';
@@ -12,6 +12,11 @@ class PetService {
 
     async getAccessiblePets(): Promise<ApiResponse<PetInfo[]>> {
         const response = await apiClient.get(`${this.basePath}/accessible`);
+        return response.data;
+    }
+
+    async getPetDetails(petId: string): Promise<ApiResponse<PetDetails>> {
+        const response = await apiClient.get(`${this.basePath}/${petId}/details`);
         return response.data;
     }
 
