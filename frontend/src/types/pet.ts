@@ -96,7 +96,6 @@ export interface UpdatePetRequest {
   breed?: string;
   gender?: PetGender;
   birth_date?: number;
-  current_weight_kg?: number;
   target_weight_kg?: number;
   height_cm?: number;
   is_spayed?: boolean;

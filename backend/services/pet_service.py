@@ -278,8 +278,6 @@ class PetService:
             update_data["gender"] = request.gender.value
         if request.birth_date is not None:
             update_data["birth_date"] = request.birth_date
-        if request.current_weight_kg is not None:
-            update_data["current_weight_kg"] = request.current_weight_kg
         if request.target_weight_kg is not None:
             update_data["target_weight_kg"] = request.target_weight_kg
         if request.height_cm is not None:
