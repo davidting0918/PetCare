@@ -6,7 +6,7 @@ import { usePet, useWeight } from '../../hooks';
 import { CreateWeightForm, UpdateWeightForm } from '../forms';
 import { formatLocalDate, utcToLocal, formatDateShort } from '../../utils/dateUtils';
 import type { WeightRecord, TimeIntervalType, CustomDateRange } from '../../types';
-import { COLORS } from '../../constants/colors';
+import { getChartPalette } from '../../constants/colors';
 
 // Calculate date range based on interval type
 const getDateRange = (
@@ -66,6 +66,10 @@ export const WeightPage: React.FC = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isUpdateFormOpen, setIsUpdateFormOpen] = useState(false);
   const [selectedWeightRecord, setSelectedWeightRecord] = useState<WeightRecord | null>(null);
+
+  // Snapshot the chart palette once on mount; reads CSS variables so chart
+  // colors stay aligned with the design tokens.
+  const chartPalette = useMemo(() => getChartPalette(), []);
 
   // Custom date range state
   const [customDateRange, setCustomDateRange] = useState<CustomDateRange>(() => {
@@ -245,8 +249,8 @@ export const WeightPage: React.FC = () => {
   if (!selectedPet) {
     return (
       <div className="p-4">
-        <div className="card-3d p-6 text-center">
-          <p className="text-gray-600">Please select a pet to view weight records.</p>
+        <div className="surface-card p-6 text-center">
+          <p className="text-text-secondary">Please select a pet to view weight records.</p>
         </div>
       </div>
     );
@@ -255,18 +259,18 @@ export const WeightPage: React.FC = () => {
   return (
     <div className="p-4 space-y-4 lg:p-6">
       {/* Weight Trend Chart - Priority at top, full width */}
-      <div className="card-3d p-5">
+      <div className="surface-card p-5">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center">
-            <div className="w-10 h-10 rounded-full bg-mint/20 flex items-center justify-center mr-3">
-              <TrendingUp className="w-5 h-5 text-mint" />
+            <div className="w-10 h-10 rounded-full bg-accent-teal/15 flex items-center justify-center mr-3">
+              <TrendingUp className="w-5 h-5 text-accent-teal" />
             </div>
-            <h3 className="text-lg font-semibold text-earth">Weight Trend</h3>
+            <h3 className="text-lg font-semibold text-text-primary">Weight Trend</h3>
           </div>
           <button
             onClick={handleRefresh}
             disabled={isLoadingRecords}
-            className="p-2 text-gray-600 hover:text-mint hover:bg-mint/10 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="p-2 text-text-secondary hover:text-accent-teal hover:bg-surface-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             title="Refresh weight records"
           >
             <RefreshCw className={`w-5 h-5 ${isLoadingRecords ? 'animate-spin' : ''}`} />
@@ -275,13 +279,13 @@ export const WeightPage: React.FC = () => {
 
         {/* Time Interval Selector */}
         <div className="mb-4">
-          <label className="block text-sm font-medium text-earth mb-2">
+          <label className="block text-sm font-medium text-text-secondary mb-2">
             Time Interval
           </label>
           <select
             value={selectedInterval}
             onChange={(e) => setSelectedInterval(e.target.value as TimeIntervalType)}
-            className="w-full px-3 py-2 border-2 border-mint/30 bg-white rounded-lg focus:ring-2 focus:ring-mint focus:border-mint hover:border-mint/50 transition-colors text-earth font-medium"
+            className="input-field"
           >
             <option value="last_7_days">Last 7 Days</option>
             <option value="last_30_days">Last 30 Days</option>
@@ -295,7 +299,7 @@ export const WeightPage: React.FC = () => {
               <div className="grid grid-cols-2 gap-3">
                 {/* Start Date */}
                 <div>
-                  <label className="block text-sm font-medium text-earth mb-1">
+                  <label className="block text-sm font-medium text-text-secondary mb-1">
                     Start Date
                   </label>
                   <input
@@ -303,15 +307,13 @@ export const WeightPage: React.FC = () => {
                     value={formatDateForInput(customDateRange.startDate)}
                     onChange={(e) => handleCustomDateChange('startDate', e.target.value)}
                     max={formatDateForInput(customDateRange.endDate)}
-                    className={`w-full px-3 py-2 border-2 rounded-lg focus:ring-2 focus:ring-mint focus:border-mint hover:border-mint/50 transition-colors text-earth ${
-                      customDateError ? 'border-red-300' : 'border-mint/30'
-                    }`}
+                    className={`input-field ${customDateError ? 'border-danger' : ''}`}
                   />
                 </div>
 
                 {/* End Date */}
                 <div>
-                  <label className="block text-sm font-medium text-earth mb-1">
+                  <label className="block text-sm font-medium text-text-secondary mb-1">
                     End Date
                   </label>
                   <input
@@ -320,25 +322,23 @@ export const WeightPage: React.FC = () => {
                     onChange={(e) => handleCustomDateChange('endDate', e.target.value)}
                     min={formatDateForInput(customDateRange.startDate)}
                     max={formatDateForInput(new Date())}
-                    className={`w-full px-3 py-2 border-2 rounded-lg focus:ring-2 focus:ring-mint focus:border-mint hover:border-mint/50 transition-colors text-earth ${
-                      customDateError ? 'border-red-300' : 'border-mint/30'
-                    }`}
+                    className={`input-field ${customDateError ? 'border-danger' : ''}`}
                   />
                 </div>
               </div>
 
               {/* Error Message */}
               {customDateError && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-2">
-                  <p className="text-red-600 text-sm">{customDateError}</p>
+                <div className="bg-danger/10 border border-danger/30 rounded-xl p-2">
+                  <p className="text-danger text-sm">{customDateError}</p>
                 </div>
               )}
 
               {/* Date Range Display */}
               {!customDateError && (
-                <div className="bg-mint/5 rounded-lg p-2 border border-mint/20">
-                  <p className="text-sm text-earth text-center">
-                    <Calendar className="w-4 h-4 inline mr-1" />
+                <div className="bg-accent-teal/10 rounded-xl p-2 border border-accent-teal/30">
+                  <p className="text-sm text-text-primary text-center">
+                    <Calendar className="w-4 h-4 inline mr-1 text-accent-teal" />
                     {format(customDateRange.startDate, 'MMM d, yyyy')} - {format(customDateRange.endDate, 'MMM d, yyyy')}
                   </p>
                 </div>
@@ -349,7 +349,7 @@ export const WeightPage: React.FC = () => {
 
         {/* Chart Area */}
         {chartData.length > 0 ? (
-          <div className="bg-gray-50 rounded-lg p-4">
+          <div className="bg-surface-2 rounded-xl p-4 border border-border-subtle">
             <div className="w-full" style={{ height: '256px' }}>
               <LineChart
                 xAxis={[{
@@ -359,22 +359,22 @@ export const WeightPage: React.FC = () => {
                   label: 'Date',
                   labelStyle: {
                     fontSize: 12,
-                    fill: '#6b7280'
+                    fill: chartPalette.textSecondary,
                   },
                   tickLabelStyle: {
                     fontSize: 11,
-                    fill: '#6b7280'
+                    fill: chartPalette.textSecondary,
                   }
                 }]}
                 yAxis={[{
                   label: 'Weight (kg)',
                   labelStyle: {
                     fontSize: 12,
-                    fill: '#6b7280'
+                    fill: chartPalette.textSecondary,
                   },
                   tickLabelStyle: {
                     fontSize: 11,
-                    fill: '#6b7280'
+                    fill: chartPalette.textSecondary,
                   },
                   valueFormatter: (value: number) => `${value.toFixed(2)} kg`,
                   min: weightRange.min,
@@ -382,7 +382,7 @@ export const WeightPage: React.FC = () => {
                 }]}
                 series={[{
                   data: chartDataForMUI.map(d => d.weight),
-                  color: '#B8E6D3',
+                  color: chartPalette.accentTeal,
                   showMark: chartDataForMUI.length <= 20 ? true : ({ index }) => {
                     // Show marks for first, last, and evenly distributed points
                     const step = Math.max(1, Math.floor(chartDataForMUI.length / 10));
@@ -393,52 +393,42 @@ export const WeightPage: React.FC = () => {
                 }]}
                 height={256}
                 grid={{ vertical: true, horizontal: true }}
-                slotProps={{
-                  tooltip: {
-                    sx: {
-                      backgroundColor: 'white',
-                      border: `1px solid ${COLORS.chart.border}`,
-                      borderRadius: '8px',
-                      padding: '8px 12px'
-                    }
-                  }
-                }}
                 sx={{
                   '& .MuiLineElement-root': {
                     strokeWidth: 3,
-                    stroke: COLORS.chart.mint
+                    stroke: chartPalette.accentTeal,
                   },
                   '& .MuiMarkElement-root': {
-                    fill: COLORS.chart.mint,
-                    stroke: '#ffffff',
+                    fill: chartPalette.accentTeal,
+                    stroke: chartPalette.surface2,
                     strokeWidth: 2,
-                    r: 4
+                    r: 4,
                   },
                   '& .MuiChartsGrid-root line': {
-                    stroke: COLORS.chart.border,
-                    strokeWidth: 1
+                    stroke: chartPalette.borderSubtle,
+                    strokeWidth: 1,
                   },
                   '& .MuiChartsAxis-root line': {
-                    stroke: COLORS.chart.borderDark,
-                    strokeWidth: 1
+                    stroke: chartPalette.borderDefault,
+                    strokeWidth: 1,
                   },
                   '& .MuiChartsAxis-root text': {
-                    fill: COLORS.chart.gray,
-                    fontSize: 11
-                  }
+                    fill: chartPalette.textSecondary,
+                    fontSize: 11,
+                  },
                 }}
               />
             </div>
 
             {/* Chart Stats */}
-            <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-gray-200">
+            <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-border-subtle">
               <div className="text-center">
-                <p className="text-xs text-gray-500 mb-1">Records</p>
-                <p className="text-lg font-semibold text-earth">{filteredRecords.length}</p>
+                <p className="text-xs text-text-tertiary mb-1">Records</p>
+                <p className="text-lg font-semibold text-text-primary">{filteredRecords.length}</p>
               </div>
               <div className="text-center">
-                <p className="text-xs text-gray-500 mb-1">Avg Weight</p>
-                <p className="text-lg font-semibold text-earth">
+                <p className="text-xs text-text-tertiary mb-1">Avg Weight</p>
+                <p className="text-lg font-semibold text-text-primary">
                   {filteredRecords.length > 0
                     ? (filteredRecords.reduce((sum, r) => sum + r.weight, 0) / filteredRecords.length).toFixed(2)
                     : '-'}{' '}
@@ -446,8 +436,8 @@ export const WeightPage: React.FC = () => {
                 </p>
               </div>
               <div className="text-center">
-                <p className="text-xs text-gray-500 mb-1">Change</p>
-                <p className="text-lg font-semibold text-earth">
+                <p className="text-xs text-text-tertiary mb-1">Change</p>
+                <p className="text-lg font-semibold text-text-primary">
                   {chartData.length >= 2
                     ? `${(chartData[chartData.length - 1].weight - chartData[0].weight).toFixed(2)} kg`
                     : '-'}
@@ -456,8 +446,8 @@ export const WeightPage: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className="bg-gray-50 rounded-lg p-8 border-2 border-dashed border-gray-200">
-            <div className="text-center text-gray-400">
+          <div className="bg-surface-2 rounded-xl p-8 border-2 border-dashed border-border-subtle">
+            <div className="text-center text-text-tertiary">
               <TrendingUp className="w-12 h-12 mx-auto mb-2 opacity-50" />
               <p className="text-sm">No weight records for selected period</p>
             </div>
@@ -466,18 +456,18 @@ export const WeightPage: React.FC = () => {
       </div>
 
       {/* Weight Records Card - Add button at top, history below */}
-      <div className="card-3d p-5">
+      <div className="surface-card p-5">
         <div className="flex items-center mb-4">
-          <div className="w-10 h-10 rounded-full bg-mint/20 flex items-center justify-center mr-3">
-            <Scale className="w-5 h-5 text-mint" />
+          <div className="w-10 h-10 rounded-full bg-accent-teal/15 flex items-center justify-center mr-3">
+            <Scale className="w-5 h-5 text-accent-teal" />
           </div>
-          <h3 className="text-lg font-semibold text-earth">Weight Records</h3>
+          <h3 className="text-lg font-semibold text-text-primary">Weight Records</h3>
         </div>
 
         {/* Add New Weight Button */}
         <button
           onClick={() => setIsFormOpen(true)}
-          className="w-full btn-3d btn-3d-mint py-3 px-4 text-white flex items-center justify-center gap-2 mb-4"
+          className="btn-primary w-full py-3 flex items-center justify-center gap-2 mb-4"
         >
           <Plus className="w-5 h-5" />
           <span className="font-semibold">Add New Weight</span>
@@ -486,15 +476,15 @@ export const WeightPage: React.FC = () => {
         {/* Weight Records History */}
         {isLoadingRecords ? (
           <div className="flex items-center justify-center py-8">
-            <Loader2 className="w-8 h-8 text-mint animate-spin" />
-            <span className="ml-3 text-gray-600">Loading records...</span>
+            <Loader2 className="w-8 h-8 text-accent-teal animate-spin" />
+            <span className="ml-3 text-text-secondary">Loading records...</span>
           </div>
         ) : recordsError ? (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <p className="text-red-600 text-sm">{recordsError}</p>
+          <div className="bg-danger/10 border border-danger/30 rounded-xl p-4">
+            <p className="text-danger text-sm">{recordsError}</p>
             <button
               onClick={() => selectedPet && refreshWeightRecords(selectedPet.id, { number: 10 })}
-              className="mt-2 text-sm text-red-700 underline hover:no-underline"
+              className="mt-2 text-sm text-danger underline hover:no-underline"
             >
               Try again
             </button>
@@ -504,31 +494,31 @@ export const WeightPage: React.FC = () => {
             {weightRecords.map((record, index) => (
               <div
                 key={record.id}
-                className={`rounded-lg p-4 border transition-colors ${
+                className={`rounded-xl p-4 border transition-colors ${
                   index === 0
-                    ? 'bg-mint/5 border-mint/20'
-                    : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                    ? 'bg-accent-teal/10 border-accent-teal/30'
+                    : 'bg-surface-2 border-border-subtle hover:bg-surface-3'
                 }`}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
                     {index === 0 && (
-                      <span className="text-xs font-medium text-mint mr-2 px-2 py-0.5 bg-mint/20 rounded">
+                      <span className="text-xs font-medium text-accent-teal mr-2 px-2 py-0.5 bg-accent-teal/15 rounded">
                         Latest
                       </span>
                     )}
-                    <span className="text-2xl font-bold text-earth">
+                    <span className="scale-display text-2xl font-bold px-3 py-1 rounded-lg">
                       {record.weight.toFixed(1)} kg
                     </span>
                   </div>
                   <div className="flex items-center gap-3">
-                  <div className="flex items-center text-sm text-gray-600">
+                  <div className="flex items-center text-sm text-text-secondary">
                     <Calendar className="w-4 h-4 mr-1" />
                     <span>{formatLocalDate(record.timestamp)}</span>
                     </div>
                     <button
                       onClick={() => handleUpdateClick(record)}
-                      className="p-2 text-gray-600 hover:text-mint hover:bg-mint/10 rounded-lg transition-colors"
+                      className="p-2 text-text-tertiary hover:text-accent-teal hover:bg-surface-3 rounded-lg transition-colors"
                       title="Edit weight record"
                     >
                       <Edit2 className="w-4 h-4" />
@@ -536,22 +526,22 @@ export const WeightPage: React.FC = () => {
                   </div>
                 </div>
                 {record.user_name && (
-                  <div className="flex items-center text-sm text-gray-600 mt-2">
+                  <div className="flex items-center text-sm text-text-tertiary mt-2">
                     <User className="w-4 h-4 mr-1" />
                     <span>{record.user_name}</span>
                   </div>
                 )}
                 {record.notes && (
-                  <div className="mt-2 pt-2 border-t border-gray-200">
-                    <p className="text-sm text-gray-600">{record.notes}</p>
+                  <div className="mt-2 pt-2 border-t border-border-subtle">
+                    <p className="text-sm text-text-secondary">{record.notes}</p>
                   </div>
                 )}
               </div>
             ))}
           </div>
         ) : (
-          <div className="bg-gray-50 rounded-lg p-8 border-2 border-dashed border-gray-200">
-            <div className="text-center text-gray-400">
+          <div className="bg-surface-2 rounded-xl p-8 border-2 border-dashed border-border-subtle">
+            <div className="text-center text-text-tertiary">
               <Scale className="w-12 h-12 mx-auto mb-2 opacity-50" />
               <p className="text-sm">No weight records yet</p>
               <p className="text-xs mt-1">Click "Add New Weight" to start tracking</p>

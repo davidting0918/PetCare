@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { X, UserPlus } from 'lucide-react';
-import { COLORS } from '../../constants/colors';
 
 interface EnterInviteCodeModalProps {
   isOpen: boolean;
@@ -70,23 +69,23 @@ export const EnterInviteCodeModal: React.FC<EnterInviteCodeModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-mint to-mint/80 p-6 text-white relative">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-surface-2 rounded-2xl border border-border-default shadow-elevated max-w-md w-full overflow-hidden">
+        {/* Header — accent-pink banner replaces the legacy mint gradient */}
+        <div className="bg-accent-pink/15 border-b border-accent-pink/30 p-6 relative">
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 text-white hover:bg-white/20 rounded-full p-2 transition-colors"
+            className="absolute top-4 right-4 text-text-tertiary hover:text-text-primary hover:bg-surface-3 rounded-full p-2 transition-colors"
             disabled={isLoading}
           >
             <X className="w-5 h-5" />
           </button>
           <div className="flex items-center gap-3">
-            <div className="bg-white/20 p-3 rounded-full">
-              <UserPlus className="w-6 h-6" />
+            <div className="bg-accent-pink p-3 rounded-full">
+              <UserPlus className="w-6 h-6 text-text-primary" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold">Join a Group</h2>
+              <h2 className="text-2xl font-bold text-text-primary">Join a Group</h2>
             </div>
           </div>
         </div>
@@ -94,7 +93,7 @@ export const EnterInviteCodeModal: React.FC<EnterInviteCodeModalProps> = ({
         {/* Body */}
         <form onSubmit={handleSubmit} className="p-6">
           <div className="mb-6">
-            <label htmlFor="inviteCode" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="inviteCode" className="block text-sm font-medium text-text-secondary mb-2">
               Invitation Code
             </label>
             <input
@@ -104,8 +103,8 @@ export const EnterInviteCodeModal: React.FC<EnterInviteCodeModalProps> = ({
               onChange={handleInputChange}
               onKeyPress={handleKeyPress}
               placeholder="ABCDEF"
-              className={`w-full px-4 py-3 border-2 rounded-lg text-center text-2xl font-bold tracking-widest uppercase focus:ring-2 focus:ring-mint focus:border-mint transition-colors ${
-                error ? 'border-red-300 bg-red-50' : 'border-gray-200'
+              className={`input-field text-center text-2xl font-bold tracking-widest uppercase ${
+                error ? 'border-danger' : ''
               }`}
               disabled={isLoading}
               maxLength={6}
@@ -116,8 +115,8 @@ export const EnterInviteCodeModal: React.FC<EnterInviteCodeModalProps> = ({
 
           {/* Error Message */}
           {error && (
-            <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3">
-              <p className="text-red-600 text-sm">{error}</p>
+            <div className="mb-4 bg-danger/10 border border-danger/30 rounded-xl p-3">
+              <p className="text-danger text-sm">{error}</p>
             </div>
           )}
 
@@ -126,7 +125,7 @@ export const EnterInviteCodeModal: React.FC<EnterInviteCodeModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              className="btn-secondary flex-1 py-3"
               disabled={isLoading}
             >
               Cancel
@@ -134,10 +133,7 @@ export const EnterInviteCodeModal: React.FC<EnterInviteCodeModalProps> = ({
             <button
               type="submit"
               disabled={inviteCode.length !== 6 || isLoading}
-              className="flex-1 px-4 py-3 rounded-lg font-medium text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{
-                backgroundColor: inviteCode.length === 6 && !isLoading ? COLORS.mint : '#E5E7EB',
-              }}
+              className="btn-primary flex-1 py-3 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? 'Checking...' : 'Continue'}
             </button>

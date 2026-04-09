@@ -23,7 +23,6 @@ import { DeleteConfirmDialog } from '../common/DeleteConfirmDialog';
 import { GroupPetsList } from './GroupPetsList';
 import { groupService } from '../../api';
 import { normalizeRole, getRoleIcon, getRoleColor } from '../../utils/roleUtils';
-import { COLORS } from '../../constants/colors';
 
 export const SettingsPage: React.FC = () => {
   const { user, logout } = useAuth();
@@ -236,16 +235,16 @@ export const SettingsPage: React.FC = () => {
     <div className="p-4 space-y-6 pb-24 lg:p-6">
       {/* Success Message */}
       {successMessage && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-          <p className="text-green-600 text-sm">✓ {successMessage}</p>
+        <div className="bg-success/10 border border-success/30 rounded-xl p-3">
+          <p className="text-success text-sm">✓ {successMessage}</p>
         </div>
       )}
 
       {/* Section 1: User Info Card */}
-      <div className="card-3d p-6">
+      <div className="surface-card p-6">
         <div className="flex items-center relative">
           {/* User Avatar */}
-          <div className="w-20 h-20 rounded-full bg-gray-200 flex-shrink-0 overflow-hidden shadow-3d">
+          <div className="w-20 h-20 rounded-full bg-surface-2 flex-shrink-0 overflow-hidden shadow-card">
             {user.picture ? (
               <img
                 src={
@@ -255,7 +254,7 @@ export const SettingsPage: React.FC = () => {
                 className="w-full h-full object-cover"
               />
             ) : (
-              <div className="w-full h-full bg-orange/30 flex items-center justify-center text-earth font-semibold text-2xl">
+              <div className="w-full h-full bg-accent-pink/15 flex items-center justify-center text-accent-pink font-semibold text-2xl">
                 {user.name.charAt(0).toUpperCase()}
               </div>
             )}
@@ -264,11 +263,11 @@ export const SettingsPage: React.FC = () => {
           {/* User Info */}
           <div className="ml-4 flex-1">
             <div className="flex items-center mb-1">
-              <User className="w-4 h-4 text-gray-500 mr-2" />
-              <h2 className="text-xl font-bold text-earth">{user.name}</h2>
+              <User className="w-4 h-4 text-text-tertiary mr-2" />
+              <h2 className="text-xl font-bold text-text-primary">{user.name}</h2>
             </div>
-            <div className="flex items-center text-gray-600">
-              <Mail className="w-4 h-4 text-gray-400 mr-2" />
+            <div className="flex items-center text-text-secondary">
+              <Mail className="w-4 h-4 text-text-tertiary mr-2" />
               <p className="text-sm">{user.email}</p>
             </div>
           </div>
@@ -276,10 +275,10 @@ export const SettingsPage: React.FC = () => {
           {/* Three-dot Menu Button */}
           <button
             onClick={handleEditProfile}
-            className="absolute top-0 right-0 p-2 hover:bg-gray-100 rounded-full transition-colors"
+            className="absolute top-0 right-0 p-2 text-text-tertiary hover:text-text-primary hover:bg-surface-2 rounded-full transition-colors"
             title="Edit Profile"
           >
-            <MoreVertical className="w-5 h-5 text-gray-600" />
+            <MoreVertical className="w-5 h-5" />
           </button>
         </div>
       </div>
@@ -290,17 +289,17 @@ export const SettingsPage: React.FC = () => {
         <div className="space-y-6">
           {/* Section 3: My Pets */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-earth px-2">My Pets</h3>
+            <h3 className="text-lg font-semibold text-text-primary px-2">My Pets</h3>
 
-            <div className="card-3d p-4 flex flex-col" style={{ height: '434px' }}>
+            <div className="surface-card p-4 flex flex-col" style={{ height: '434px' }}>
               <div className="flex items-center mb-4">
-                <PawPrint className="w-5 h-5 text-orange mr-2" />
-                <h4 className="font-semibold text-earth">My Pets</h4>
+                <PawPrint className="w-5 h-5 text-accent-pink mr-2" />
+                <h4 className="font-semibold text-text-primary">My Pets</h4>
               </div>
 
               <div className="flex-1 overflow-y-auto pr-2">
                 {accessiblePets.length === 0 ? (
-                  <div className="text-center py-6 text-gray-500">
+                  <div className="text-center py-6 text-text-tertiary">
                     <PawPrint className="w-12 h-12 mx-auto mb-2 opacity-50" />
                     <p className="text-sm">You don't have access to any pets yet</p>
                   </div>
@@ -313,12 +312,12 @@ export const SettingsPage: React.FC = () => {
                       return (
                         <div
                           key={pet.id}
-                          className="border border-gray-200 rounded-lg p-3 bg-white hover:shadow-md transition-shadow relative"
+                          className="border border-border-subtle rounded-xl p-3 bg-surface-2 hover:bg-surface-3 hover:border-border-default transition-colors relative"
                         >
                           <div className="flex items-center">
                             {/* Pet Info */}
                             <div className="flex items-center flex-1">
-                              <div className="w-12 h-12 rounded-full bg-gray-200 flex-shrink-0 overflow-hidden">
+                              <div className="w-12 h-12 rounded-full bg-surface-1 ring-2 ring-accent-pink/40 flex-shrink-0 overflow-hidden">
                                 {pet.photo_url ? (
                                   <img
                                     src={pet.photo_url}
@@ -326,23 +325,23 @@ export const SettingsPage: React.FC = () => {
                                     className="w-full h-full object-cover"
                                   />
                                 ) : (
-                                  <div className="w-full h-full bg-orange/30 flex items-center justify-center text-earth font-semibold text-sm">
+                                  <div className="w-full h-full bg-accent-pink/15 flex items-center justify-center text-accent-pink font-semibold text-sm">
                                     {pet.name.charAt(0).toUpperCase()}
                                   </div>
                                 )}
                               </div>
                               <div className="ml-3 flex-1">
-                                <h5 className="font-semibold text-gray-800">{pet.name}</h5>
-                                <p className="text-xs text-gray-600">
+                                <h5 className="font-semibold text-text-primary">{pet.name}</h5>
+                                <p className="text-xs text-text-secondary">
                                   {pet.breed || pet.pet_type} • {pet.gender || 'Unknown'}
                                 </p>
                                 {pet.group_name ? (
-                                  <div className="inline-flex items-center px-2 py-0.5 rounded-full bg-mint/20 text-mint text-xs mt-1">
+                                  <div className="inline-flex items-center px-2 py-0.5 rounded-full bg-accent-teal/15 text-accent-teal text-xs mt-1">
                                     <Users className="w-3 h-3 mr-1" />
                                     {pet.group_name}
                                   </div>
                                 ) : (
-                                  <p className="text-xs text-gray-500 mt-1">Personal Pet</p>
+                                  <p className="text-xs text-text-tertiary mt-1">Personal Pet</p>
                                 )}
                               </div>
                             </div>
@@ -351,20 +350,20 @@ export const SettingsPage: React.FC = () => {
                             {!isViewer && (
                             <button
                               onClick={() => setOpenPetMenuId(isMenuOpen ? null : pet.id)}
-                              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                              className="p-2 text-text-tertiary hover:text-text-primary hover:bg-surface-3 rounded-full transition-colors"
                               title="More options"
                             >
-                              <MoreVertical className="w-5 h-5 text-gray-600" />
+                              <MoreVertical className="w-5 h-5" />
                             </button>
                             )}
                           </div>
 
                           {/* Dropdown Menu - Only show if not Viewer */}
                           {!isViewer && isMenuOpen && (
-                            <div className="absolute right-3 top-16 bg-white border border-gray-200 rounded-lg shadow-lg z-10 py-1 min-w-[160px]">
+                            <div className="absolute right-3 top-16 bg-surface-3 border border-border-default rounded-xl shadow-elevated z-10 py-1 min-w-[160px]">
                               <button
                                 onClick={() => handleEditPet(pet as PetInfo)}
-                                className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                                className="w-full px-4 py-2 text-left text-sm text-text-primary hover:bg-surface-2 flex items-center gap-2"
                               >
                                 <PawPrint className="w-4 h-4" />
                                 <span>Edit Info</span>
@@ -374,7 +373,7 @@ export const SettingsPage: React.FC = () => {
                                   handleAssignPetClick(pet as PetInfo);
                                   setOpenPetMenuId(null);
                                 }}
-                                className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                                className="w-full px-4 py-2 text-left text-sm text-text-primary hover:bg-surface-2 flex items-center gap-2"
                               >
                                 <Users className="w-4 h-4" />
                                 <span>Assign to Group</span>
@@ -395,55 +394,55 @@ export const SettingsPage: React.FC = () => {
         <div className="space-y-6">
           {/* Section 2: Group Management */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-earth px-2">Group Management</h3>
+            <h3 className="text-lg font-semibold text-text-primary px-2">Group Management</h3>
 
             {/* My Groups List */}
-            <div className="card-3d p-4 flex flex-col" style={{ height: '434px' }}>
+            <div className="surface-card p-4 flex flex-col" style={{ height: '434px' }}>
               <div className="flex items-center mb-4">
-                <Users className="w-5 h-5 text-earth mr-2" />
-                <h4 className="font-semibold text-earth">My Groups</h4>
+                <Users className="w-5 h-5 text-accent-teal mr-2" />
+                <h4 className="font-semibold text-text-primary">My Groups</h4>
               </div>
 
               <div className="flex-1 overflow-y-auto pr-2">
                 {isLoading ? (
-                  <div className="text-center py-6 text-gray-500">
+                  <div className="text-center py-6 text-text-tertiary">
                     <Users className="w-12 h-12 mx-auto mb-2 opacity-50 animate-pulse" />
                     <p className="text-sm">Loading groups...</p>
                   </div>
                 ) : error ? (
-                  <div className="text-center py-6 text-red-500">
+                  <div className="text-center py-6 text-danger">
                     <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
                     <p className="text-sm">{error}</p>
                   </div>
                 ) : groups.length === 0 ? (
-                  <div className="text-center py-6 text-gray-500">
+                  <div className="text-center py-6 text-text-tertiary">
                     <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
                     <p className="text-sm">You're not in any groups yet</p>
-                    <p className="text-xs mt-1 text-gray-400">Use the invite code above to join</p>
+                    <p className="text-xs mt-1 text-text-tertiary">Use the invite code above to join</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
                     {groups.map((group) => {
                       const normalizedRole = normalizeRole(group.role);
                       return (
-                        <div key={group.id} className="border border-gray-200 rounded-lg overflow-hidden">
+                        <div key={group.id} className="border border-border-subtle rounded-xl overflow-hidden">
                           {/* Group Header - Clickable */}
                           <div
-                            className="p-4 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors"
+                            className="p-4 bg-surface-2 cursor-pointer hover:bg-surface-3 transition-colors"
                             onClick={() => toggleGroup(group.id)}
                           >
                             <div className="flex items-center justify-between">
                               <div className="flex-1">
                                 <div className="flex items-center justify-between mb-2">
-                                  <h5 className="font-semibold text-gray-800">{group.name}</h5>
+                                  <h5 className="font-semibold text-text-primary">{group.name}</h5>
                                   {expandedGroups.has(group.id) ? (
-                                    <ChevronUp className="w-5 h-5 text-gray-500" />
+                                    <ChevronUp className="w-5 h-5 text-text-tertiary" />
                                   ) : (
-                                    <ChevronDown className="w-5 h-5 text-gray-500" />
+                                    <ChevronDown className="w-5 h-5 text-text-tertiary" />
                                   )}
                                 </div>
                                 <div className="flex items-center gap-3">
-                                  <span className="text-xs text-gray-600">
+                                  <span className="text-xs text-text-secondary">
                                     {group.memberCount} {group.memberCount === 1 ? 'member' : 'members'}
                                   </span>
                                   <div className={`inline-flex items-center px-2 py-1 rounded-full border text-xs font-medium ${getRoleColor(normalizedRole)}`}>
@@ -457,9 +456,9 @@ export const SettingsPage: React.FC = () => {
 
                           {/* Group Details - Expandable */}
                           {expandedGroups.has(group.id) && (
-                            <div className="p-4 bg-white border-t border-gray-200">
+                            <div className="p-4 bg-surface-1 border-t border-border-subtle">
                               {/* Tab Navigation */}
-                              <div className="flex border-b border-gray-200 mb-4">
+                              <div className="flex border-b border-border-subtle mb-4">
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -467,8 +466,8 @@ export const SettingsPage: React.FC = () => {
                                   }}
                                   className={`px-4 py-2 text-sm font-medium transition-colors ${
                                     getGroupTab(group.id) === 'members'
-                                      ? 'text-mint border-b-2 border-mint'
-                                      : 'text-gray-500 hover:text-gray-700'
+                                      ? 'text-accent-pink border-b-2 border-accent-pink'
+                                      : 'text-text-tertiary hover:text-text-secondary'
                                   }`}
                                 >
                                   <div className="flex items-center gap-2">
@@ -483,8 +482,8 @@ export const SettingsPage: React.FC = () => {
                                   }}
                                   className={`px-4 py-2 text-sm font-medium transition-colors ${
                                     getGroupTab(group.id) === 'pets'
-                                      ? 'text-mint border-b-2 border-mint'
-                                      : 'text-gray-500 hover:text-gray-700'
+                                      ? 'text-accent-pink border-b-2 border-accent-pink'
+                                      : 'text-text-tertiary hover:text-text-secondary'
                                   }`}
                                 >
                                   <div className="flex items-center gap-2">
@@ -505,7 +504,7 @@ export const SettingsPage: React.FC = () => {
                                         return (
                                           <div key={member.id} className="flex items-center justify-between py-2">
                                             <div className="flex items-center flex-1">
-                                              <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-semibold text-earth overflow-hidden">
+                                              <div className="w-8 h-8 rounded-full bg-surface-2 flex items-center justify-center text-xs font-semibold text-text-primary overflow-hidden">
                                                 {member.picture ? (
                                                   <img
                                                     src={member.picture}
@@ -517,8 +516,8 @@ export const SettingsPage: React.FC = () => {
                                                 )}
                                               </div>
                                               <div className="ml-3">
-                                                <p className="text-sm font-medium text-gray-800">{member.name}</p>
-                                                <p className="text-xs text-gray-500">{member.email}</p>
+                                                <p className="text-sm font-medium text-text-primary">{member.name}</p>
+                                                <p className="text-xs text-text-tertiary">{member.email}</p>
                                               </div>
                                             </div>
                                             <div className={`inline-flex items-center px-2 py-1 rounded-full border text-xs ${getRoleColor(memberNormalizedRole)}`}>
@@ -546,17 +545,14 @@ export const SettingsPage: React.FC = () => {
 
                               {/* Action Buttons - Based on Role */}
                               {(normalizedRole === 'Creator' || normalizedRole === 'Member') && (
-                                <div className="flex gap-2 pt-2 border-t border-gray-200">
+                                <div className="flex gap-2 pt-2 border-t border-border-subtle">
                                   {/* Invite Button - For Creator and Member */}
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       handleInviteToGroup(group.id, group.name);
                                     }}
-                                    className="btn-3d flex-1 py-2 text-sm text-white hover:bg-mint/90 transition-colors flex items-center justify-center gap-2"
-                                    style={{
-                                      backgroundColor: COLORS.mint,
-                                    }}
+                                    className="btn-primary flex-1 py-2 text-sm flex items-center justify-center gap-2"
                                   >
                                     <UserPlus className="w-4 h-4" />
                                     <span>Invite</span>
@@ -569,10 +565,7 @@ export const SettingsPage: React.FC = () => {
                                         e.stopPropagation();
                                         handleDeleteGroup(group.id, group.name);
                                       }}
-                                      className="btn-3d flex-1 py-2 text-sm text-white hover:bg-red-600 transition-colors flex items-center justify-center gap-2"
-                                      style={{
-                                        backgroundColor: COLORS.danger,
-                                      }}
+                                      className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-danger/40 text-danger hover:bg-danger/10 transition-colors text-sm font-semibold"
                                     >
                                       <Trash2 className="w-4 h-4" />
                                       <span>Delete</span>
@@ -595,17 +588,13 @@ export const SettingsPage: React.FC = () => {
 
       {/* Quick Actions - Full width at bottom */}
       {/* Section 4: Action Buttons */}
-      <div className="space-y-3 pt-4 border-t border-gray-200">
-      <h3 className="text-lg font-semibold text-earth px-2">Quick Actions</h3>
+      <div className="space-y-3 pt-4 border-t border-border-subtle">
+      <h3 className="text-lg font-semibold text-text-primary px-2">Quick Actions</h3>
 
       {/* Create New Pet Button */}
       <button
         onClick={handleCreatePet}
-        className="btn-3d w-full py-4 text-white bg-orange hover:bg-orange/90 transition-all duration-200 flex items-center justify-center gap-3"
-        style={{
-          backgroundColor: COLORS.orange,
-          border: `2px solid ${COLORS.orangeBorder}`
-        }}
+        className="btn-primary w-full py-4 flex items-center justify-center gap-3"
       >
         <Plus className="w-5 h-5" />
         <span className="font-semibold">Create New Pet</span>
@@ -614,10 +603,7 @@ export const SettingsPage: React.FC = () => {
       {/* Join a Group Button */}
       <button
         onClick={handleJoinGroupClick}
-        className="btn-3d w-full py-4 text-white hover:bg-mint/90 transition-all duration-200 flex items-center justify-center gap-3"
-        style={{
-          backgroundColor: COLORS.mint,
-        }}
+        className="btn-secondary w-full py-4 flex items-center justify-center gap-3"
       >
         <UserPlus className="w-5 h-5" />
         <span className="font-semibold">Join a Group</span>
@@ -626,10 +612,7 @@ export const SettingsPage: React.FC = () => {
       {/* Create New Group Button */}
       <button
         onClick={handleCreateGroup}
-        className="btn-3d w-full py-4 text-white hover:bg-mint/90 transition-all duration-200 flex items-center justify-center gap-3"
-        style={{
-          backgroundColor: COLORS.mint,
-        }}
+        className="btn-secondary w-full py-4 flex items-center justify-center gap-3"
       >
         <Users className="w-5 h-5" />
         <span className="font-semibold">Create New Group</span>
@@ -638,10 +621,7 @@ export const SettingsPage: React.FC = () => {
       {/* Logout Button */}
       <button
         onClick={handleLogout}
-        className="btn-3d w-full py-4 text-white hover:bg-mint/90 transition-all duration-200 flex items-center justify-center gap-3"
-        style={{
-          backgroundColor: COLORS.darkGray,
-        }}
+        className="btn-secondary w-full py-4 flex items-center justify-center gap-3"
       >
         <LogOut className="w-5 h-5" />
         <span className="font-semibold">Logout</span>

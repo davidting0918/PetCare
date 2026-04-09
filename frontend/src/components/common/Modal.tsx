@@ -23,7 +23,12 @@ const MAX_WIDTH_CLASSES = {
 };
 
 /**
- * Unified Modal component for consistent dialog UI across the application
+ * Unified Modal component for consistent dialog UI across the application.
+ *
+ * Dark-theme shell: surface-2 background, border-default outline, elevated
+ * shadow, and a 60%-opaque backdrop with blur. Header / body / footer
+ * sub-components inherit the same token palette so consumers don't need to
+ * re-state colors.
  *
  * @example
  * ```tsx
@@ -32,7 +37,7 @@ const MAX_WIDTH_CLASSES = {
  *   onClose={handleClose}
  *   title="Create New Pet"
  *   icon={<PawPrint className="w-5 h-5" />}
- *   iconBgColor="bg-orange/20"
+ *   iconBgColor="bg-accent-pink/15"
  *   maxWidth="lg"
  * >
  *   <form>...</form>
@@ -44,7 +49,7 @@ export const Modal: React.FC<ModalProps> = ({
   onClose,
   title,
   icon,
-  iconBgColor = 'bg-gray-100',
+  iconBgColor = 'bg-surface-3',
   children,
   maxWidth = 'md',
   maxHeight = '90vh',
@@ -67,11 +72,11 @@ export const Modal: React.FC<ModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
       onClick={handleOverlayClick}
     >
       <div
-        className={`bg-white rounded-lg shadow-3d ${MAX_WIDTH_CLASSES[maxWidth]} w-full ${className}`}
+        className={`bg-surface-2 rounded-2xl border border-border-default shadow-elevated ${MAX_WIDTH_CLASSES[maxWidth]} w-full ${className}`}
         style={{ maxHeight }}
       >
         {!hasHeader && (title || icon) && (
@@ -107,7 +112,7 @@ export interface ModalHeaderProps {
  * <ModalHeader
  *   title="Edit Profile"
  *   icon={<User className="w-5 h-5" />}
- *   iconBgColor="bg-mint/20"
+ *   iconBgColor="bg-accent-teal/15"
  *   onClose={handleClose}
  * />
  * ```
@@ -115,26 +120,26 @@ export interface ModalHeaderProps {
 export const ModalHeader: React.FC<ModalHeaderProps> = ({
   title,
   icon,
-  iconBgColor = 'bg-gray-100',
+  iconBgColor = 'bg-surface-3',
   onClose,
   showCloseButton = true,
   disableClose = false,
   className = ''
 }) => {
   return (
-    <div className={`flex items-center justify-between p-6 border-b border-gray-200 ${className}`}>
+    <div className={`flex items-center justify-between p-6 border-b border-border-subtle ${className}`}>
       <div className="flex items-center">
         {icon && (
           <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${iconBgColor}`}>
             {icon}
           </div>
         )}
-        {title && <h2 className="text-xl font-bold text-gray-800">{title}</h2>}
+        {title && <h2 className="text-xl font-bold text-text-primary">{title}</h2>}
       </div>
       {showCloseButton && onClose && (
         <button
           onClick={onClose}
-          className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+          className="p-2 text-text-tertiary hover:text-text-primary transition-colors"
           disabled={disableClose}
         >
           <X className="w-5 h-5" />

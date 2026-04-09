@@ -42,32 +42,14 @@ export default {
         warning: 'rgb(var(--warning) / <alpha-value>)',
         danger: 'rgb(var(--danger) / <alpha-value>)',
         info: 'rgb(var(--info) / <alpha-value>)',
-
-        // ─── Legacy compatibility aliases ─────────────────────────────
-        // These keep the existing 29 .tsx files (`bg-orange`, `text-earth`,
-        // `bg-mint`, `bg-primary`, etc.) rendering identically to master.
-        // Values now flow through legacy CSS variables in tokens.css instead
-        // of hex literals. To be removed once issues #54-#57 finish sweeping
-        // all consumer files; the new code in #53 onward should never use
-        // these names.
-        primary: 'rgb(var(--legacy-primary) / <alpha-value>)',
-        mint: 'rgb(var(--legacy-mint) / <alpha-value>)',
-        orange: 'rgb(var(--legacy-orange) / <alpha-value>)',
-        earth: 'rgb(var(--legacy-earth) / <alpha-value>)',
       },
       boxShadow: {
-        // New token-driven shadows (#53 onward).
         card: 'var(--shadow-card)',
         elevated: 'var(--shadow-elevated)',
         'selected-pink': 'var(--shadow-selected-pink)',
         'selected-teal': 'var(--shadow-selected-teal)',
         'selected-purple': 'var(--shadow-selected-purple)',
         'selected-blue': 'var(--shadow-selected-blue)',
-
-        // Legacy 3D shadows — kept until card-3d / btn-3d* are swept out.
-        '3d': 'var(--legacy-shadow-3d)',
-        '3d-hover': 'var(--legacy-shadow-3d-hover)',
-        '3d-pressed': 'var(--legacy-shadow-3d-pressed)',
       },
     },
   },

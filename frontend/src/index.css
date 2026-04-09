@@ -12,15 +12,15 @@
 
 body {
   margin: 0;
-  /* Background flows through the legacy CSS variable to keep the warm cream
-   * fallback during initial paint. Will be re-pointed to surface-0 once
-   * #54-#57 sweep all pages onto the dark token system. */
-  background-color: rgb(var(--legacy-primary));
+  /* Page background uses the dark surface-0 token. Matches the PWA manifest
+   * theme_color so there is no light flash on initial paint or status-bar
+   * tint mismatch when the app is launched as an installed PWA. */
+  background-color: rgb(var(--surface-0));
 }
 
 @layer components {
   /* ─────────────────────────────────────────────────────────────────────
-   * New token-driven component classes (#53 onward).
+   * Token-driven component classes.
    * Built from CSS variables in tokens.css. Use these in any new code.
    * ───────────────────────────────────────────────────────────────────── */
 
@@ -86,113 +86,8 @@ body {
   }
 
   /* ─────────────────────────────────────────────────────────────────────
-   * Legacy 3D component classes — DO NOT use in new code.
-   * Color values now flow through `--legacy-*` CSS variables in tokens.css
-   * so visual fidelity is preserved while the token system is in place.
-   * Will be deleted once issues #54-#57 sweep all consumer files.
+   * Animations
    * ───────────────────────────────────────────────────────────────────── */
-
-  .btn-3d {
-    @apply relative overflow-hidden rounded-lg transition-all duration-200 ease-out;
-    @apply shadow-3d active:shadow-3d-pressed;
-    background: linear-gradient(135deg,
-      rgb(var(--legacy-orange)) 0%,
-      rgb(var(--legacy-orange)) 50%,
-      rgb(var(--legacy-orange-deeper)) 100%);
-    transform: translateY(0px);
-  }
-
-  .btn-3d:hover {
-    @apply shadow-3d-hover;
-    transform: translateY(-2px);
-  }
-
-  .btn-3d:active {
-    @apply shadow-3d-pressed;
-    transform: translateY(1px);
-  }
-
-  .btn-3d-mint {
-    background: linear-gradient(135deg,
-      rgb(var(--legacy-mint)) 0%,
-      rgb(var(--legacy-mint)) 50%,
-      rgb(var(--legacy-mint-deeper)) 100%);
-  }
-
-  .btn-3d-earth {
-    background: linear-gradient(135deg,
-      rgb(var(--legacy-earth)) 0%,
-      rgb(var(--legacy-earth)) 50%,
-      rgb(var(--legacy-earth-deeper)) 100%);
-  }
-
-  .btn-3d-orange {
-    background: linear-gradient(135deg,
-      rgb(var(--legacy-orange)) 0%,
-      rgb(var(--legacy-orange)) 50%,
-      rgb(var(--legacy-orange-deeper)) 100%);
-  }
-
-  .card-3d {
-    @apply bg-white rounded-xl shadow-3d transition-all duration-200;
-    background: linear-gradient(135deg,
-      rgb(var(--legacy-card-from)) 0%,
-      rgb(var(--legacy-card-to)) 100%);
-  }
-
-  .card-3d:hover {
-    @apply shadow-3d-hover;
-    transform: translateY(-1px);
-  }
-
-  .input-3d {
-    @apply border-2 rounded-lg px-4 py-3 transition-all duration-200;
-    @apply focus:border-orange focus:shadow-3d focus:outline-none;
-    border-color: rgb(var(--legacy-input-border));
-    background: linear-gradient(135deg,
-      rgb(var(--legacy-card-from)) 0%,
-      rgb(var(--legacy-card-to)) 100%);
-  }
-
-  .progress-gradient {
-    background: linear-gradient(90deg,
-      rgb(var(--legacy-mint)) 0%,
-      rgb(var(--legacy-orange)) 50%,
-      rgb(var(--legacy-earth)) 100%);
-    background-size: 200% 100%;
-    animation: shimmer 2s ease-in-out infinite alternate;
-  }
-
-  .progress-gradient-ring {
-    background: conic-gradient(from 0deg,
-      rgb(var(--legacy-mint)) 0%,
-      rgb(var(--legacy-orange)) 50%,
-      rgb(var(--legacy-earth)) 100%,
-      rgb(var(--legacy-mint)) 100%);
-  }
-
-  .weight-trend-up {
-    background: linear-gradient(135deg,
-      rgb(var(--legacy-trend-up-from)) 0%,
-      rgb(var(--legacy-trend-up-to)) 100%);
-  }
-
-  .weight-trend-down {
-    background: linear-gradient(135deg,
-      rgb(var(--legacy-trend-down-from)) 0%,
-      rgb(var(--legacy-trend-down-to)) 100%);
-  }
-
-  .weight-trend-stable {
-    background: linear-gradient(135deg,
-      rgb(var(--legacy-trend-stable-from)) 0%,
-      rgb(var(--legacy-trend-stable-to)) 100%);
-  }
-
-  @keyframes shimmer {
-    0% { background-position: -200% 0; }
-    100% { background-position: 200% 0; }
-  }
 
   @keyframes shake {
     0%, 100% { transform: translateX(0); }
@@ -213,66 +108,20 @@ body {
     animation: spin 1s linear infinite;
   }
 
-  /* Circular Progress Ring */
-  .circular-progress {
-    position: relative;
-    transform: rotate(-90deg);
-  }
-
-  .circular-progress-ring {
-    fill: none;
-    stroke-width: 8;
-    stroke-linecap: round;
-  }
-
-  .circular-progress-bg {
-    stroke: rgb(var(--legacy-input-border));
-  }
-
-  .circular-progress-fill {
-    stroke: url(#progressGradient);
-    stroke-dasharray: 0 100;
-    transition: stroke-dasharray 1s ease-in-out;
-  }
-
-  /* Toggle Checkbox */
-  .toggle-checkbox {
-    @apply relative w-11 h-6 rounded-full outline-none cursor-pointer transition-colors duration-200;
-    background-color: rgb(var(--legacy-input-border));
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    appearance: none;
-  }
-
-  .toggle-checkbox:checked {
-    background-color: rgb(var(--legacy-orange));
-  }
-
-  .toggle-checkbox::before {
-    @apply absolute top-0.5 left-0.5 w-5 h-5 rounded-full shadow-sm transition-transform duration-200;
-    background-color: rgb(var(--legacy-card-from));
-    content: '';
-  }
-
-  .toggle-checkbox:checked::before {
-    @apply transform translate-x-5;
-  }
-
-  .toggle-checkbox:hover::before {
-    @apply shadow-md;
-  }
-
-  /* Scale Display Animation */
+  /* ─────────────────────────────────────────────────────────────────────
+   * Scale Display
+   *
+   * Retro electronic-scale aesthetic preserved per /pm discuss decision on
+   * 2026-04-08: dark gradient background, monospace font, and a glowing text
+   * color. The accent now flows through `--accent-teal` to align with the
+   * dark token system instead of the original emerald hex.
+   * ───────────────────────────────────────────────────────────────────── */
   .scale-display {
     background: linear-gradient(135deg,
-      rgb(var(--legacy-scale-bg-from)) 0%,
-      rgb(var(--legacy-scale-bg-to)) 100%);
-    color: rgb(var(--legacy-scale-text));
+      rgb(var(--surface-2)) 0%,
+      rgb(var(--surface-3)) 100%);
+    color: rgb(var(--accent-teal));
     font-family: 'Courier New', monospace;
-    text-shadow: 0 0 10px var(--legacy-scale-text-glow);
-  }
-
-  .weight-card-glow {
-    box-shadow: var(--legacy-weight-card-glow);
+    text-shadow: 0 0 10px var(--accent-teal-glow);
   }
 }

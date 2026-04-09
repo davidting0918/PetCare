@@ -3,7 +3,6 @@ import { Apple, X, Upload, Camera } from 'lucide-react';
 import { useFood } from '../../hooks';
 import { useFileUpload } from '../../hooks/useFileUpload';
 import { foodService } from '../../api';
-import { COLORS } from '../../constants/colors';
 import type { CreateFoodRequest, FoodType, TargetPet } from '../../types';
 
 interface CreateFoodFormProps {
@@ -171,19 +170,19 @@ export const CreateFoodForm: React.FC<CreateFoodFormProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="card-3d bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-surface-2 rounded-2xl border border-border-default shadow-elevated max-w-md w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+        <div className="sticky top-0 bg-surface-2 border-b border-border-subtle px-6 py-4 flex items-center justify-between">
           <div className="flex items-center">
-            <div className="w-10 h-10 rounded-full bg-orange/20 flex items-center justify-center mr-3">
-              <Apple className="w-5 h-5 text-orange" />
+            <div className="w-10 h-10 rounded-full bg-accent-blue/15 flex items-center justify-center mr-3">
+              <Apple className="w-5 h-5 text-accent-blue" />
             </div>
-            <h3 className="text-lg font-semibold text-earth">Add New Food</h3>
+            <h3 className="text-lg font-semibold text-text-primary">Add New Food</h3>
           </div>
           <button
             onClick={handleClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-text-tertiary hover:text-text-primary transition-colors"
             disabled={isLoading}
           >
             <X className="w-6 h-6" />
@@ -194,12 +193,12 @@ export const CreateFoodForm: React.FC<CreateFoodFormProps> = ({
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           {/* Photo Upload Section */}
           <div>
-            <label className="block text-sm font-medium text-earth mb-2">
+            <label className="block text-sm font-medium text-text-secondary mb-2">
               Photo (Optional)
             </label>
             <div className="flex gap-4">
               {/* Photo Preview */}
-              <div className="w-32 h-32 rounded-lg overflow-hidden bg-gray-100 border-2 border-gray-200 flex-shrink-0 relative">
+              <div className="w-32 h-32 rounded-xl overflow-hidden bg-surface-1 border border-border-subtle flex-shrink-0 relative">
                 {previewUrl ? (
                   <>
                     <img
@@ -208,12 +207,12 @@ export const CreateFoodForm: React.FC<CreateFoodFormProps> = ({
                       className="w-full h-full object-cover"
                     />
                     <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                      <Camera className="w-6 h-6 text-white" />
+                      <Camera className="w-6 h-6 text-text-primary" />
                     </div>
                   </>
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
-                    <Apple className="w-12 h-12 text-gray-300" />
+                    <Apple className="w-12 h-12 text-text-tertiary" />
                   </div>
                 )}
               </div>
@@ -231,8 +230,7 @@ export const CreateFoodForm: React.FC<CreateFoodFormProps> = ({
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isLoading}
-                  className="w-full px-4 py-2 bg-orange text-white rounded-lg hover:bg-orange/90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-                  style={{ backgroundColor: COLORS.orange }}
+                  className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   <Upload className="w-4 h-4" />
                   <span className="text-sm">
@@ -244,28 +242,28 @@ export const CreateFoodForm: React.FC<CreateFoodFormProps> = ({
                     type="button"
                     onClick={handleRemoveFile}
                     disabled={isLoading}
-                    className="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm disabled:opacity-50"
+                    className="btn-secondary w-full text-sm disabled:opacity-50"
                   >
                     Remove Selected
                   </button>
                 )}
                 {selectedFile && (
-                  <p className="text-xs text-gray-500 text-center">
+                  <p className="text-xs text-text-tertiary text-center">
                     {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)
                   </p>
                 )}
               </div>
             </div>
-            {errors.photo && <p className="text-red-600 text-xs mt-2">{errors.photo}</p>}
+            {errors.photo && <p className="text-danger text-xs mt-2">{errors.photo}</p>}
           </div>
 
           {/* Basic Information Section */}
           <div className="space-y-4">
-            <h4 className="font-semibold text-earth border-b pb-2">Basic Information</h4>
+            <h4 className="font-semibold text-text-primary border-b border-border-subtle pb-2">Basic Information</h4>
 
             {/* Brand */}
             <div>
-              <label className="block text-sm font-medium text-earth mb-2">
+              <label className="block text-sm font-medium text-text-secondary mb-2">
                 Brand *
               </label>
               <input
@@ -274,19 +272,17 @@ export const CreateFoodForm: React.FC<CreateFoodFormProps> = ({
                 onChange={(e) => handleInputChange('brand', e.target.value)}
                 placeholder="e.g., Royal Canin"
                 maxLength={100}
-                className={`w-full px-4 py-2 border-2 rounded-lg focus:ring-2 focus:ring-mint focus:border-mint ${
-                  errors.brand ? 'border-red-300' : 'border-mint/30'
-                }`}
+                className={`input-field ${errors.brand ? 'border-danger' : ''}`}
                 disabled={isLoading}
               />
               {errors.brand && (
-                <p className="text-red-500 text-sm mt-1">{errors.brand}</p>
+                <p className="text-danger text-sm mt-1">{errors.brand}</p>
               )}
             </div>
 
             {/* Product Name */}
             <div>
-              <label className="block text-sm font-medium text-earth mb-2">
+              <label className="block text-sm font-medium text-text-secondary mb-2">
                 Product Name *
               </label>
               <input
@@ -295,19 +291,17 @@ export const CreateFoodForm: React.FC<CreateFoodFormProps> = ({
                 onChange={(e) => handleInputChange('product_name', e.target.value)}
                 placeholder="e.g., Adult Medium"
                 maxLength={100}
-                className={`w-full px-4 py-2 border-2 rounded-lg focus:ring-2 focus:ring-mint focus:border-mint ${
-                  errors.product_name ? 'border-red-300' : 'border-mint/30'
-                }`}
+                className={`input-field ${errors.product_name ? 'border-danger' : ''}`}
                 disabled={isLoading}
               />
               {errors.product_name && (
-                <p className="text-red-500 text-sm mt-1">{errors.product_name}</p>
+                <p className="text-danger text-sm mt-1">{errors.product_name}</p>
               )}
             </div>
 
             {/* Food Type */}
             <div>
-              <label className="block text-sm font-medium text-earth mb-2">
+              <label className="block text-sm font-medium text-text-secondary mb-2">
                 Food Type *
               </label>
               <div className="grid grid-cols-2 gap-2">
@@ -316,10 +310,10 @@ export const CreateFoodForm: React.FC<CreateFoodFormProps> = ({
                     key={type}
                     type="button"
                     onClick={() => handleInputChange('food_type', type)}
-                    className={`py-2 px-4 rounded-lg border-2 transition-colors ${
+                    className={`py-2 px-4 rounded-xl border transition-colors ${
                       formData.food_type === type
-                        ? 'bg-orange/20 border-orange text-orange font-semibold'
-                        : 'border-gray-200 text-gray-600 hover:border-orange/50'
+                        ? 'bg-accent-blue/15 border-accent-blue text-accent-blue font-semibold'
+                        : 'border-border-default text-text-secondary hover:border-border-strong hover:text-text-primary'
                     }`}
                     disabled={isLoading}
                   >
@@ -331,13 +325,13 @@ export const CreateFoodForm: React.FC<CreateFoodFormProps> = ({
 
             {/* Target Pet */}
             <div>
-              <label className="block text-sm font-medium text-earth mb-2">
+              <label className="block text-sm font-medium text-text-secondary mb-2">
                 Target Pet *
               </label>
               <select
                 value={formData.target_pet}
                 onChange={(e) => handleInputChange('target_pet', e.target.value as TargetPet)}
-                className="w-full px-4 py-2 border-2 border-mint/30 rounded-lg focus:ring-2 focus:ring-mint focus:border-mint"
+                className="input-field"
                 disabled={isLoading}
               >
                 <option value="dog">Dog</option>
@@ -351,7 +345,7 @@ export const CreateFoodForm: React.FC<CreateFoodFormProps> = ({
 
             {/* Unit Weight */}
             <div>
-              <label className="block text-sm font-medium text-earth mb-2">
+              <label className="block text-sm font-medium text-text-secondary mb-2">
                 Unit Weight (grams) *
               </label>
               <input
@@ -362,25 +356,23 @@ export const CreateFoodForm: React.FC<CreateFoodFormProps> = ({
                 value={formData.unit_weight}
                 onChange={(e) => handleInputChange('unit_weight', parseFloat(e.target.value) || 0)}
                 placeholder="e.g., 400"
-                className={`w-full px-4 py-2 border-2 rounded-lg focus:ring-2 focus:ring-mint focus:border-mint ${
-                  errors.unit_weight ? 'border-red-300' : 'border-mint/30'
-                }`}
+                className={`input-field ${errors.unit_weight ? 'border-danger' : ''}`}
                 disabled={isLoading}
               />
               {errors.unit_weight && (
-                <p className="text-red-500 text-sm mt-1">{errors.unit_weight}</p>
+                <p className="text-danger text-sm mt-1">{errors.unit_weight}</p>
               )}
-              <p className="text-xs text-gray-500 mt-1">Weight of one unit (can, cup, etc.)</p>
+              <p className="text-xs text-text-tertiary mt-1">Weight of one unit (can, cup, etc.)</p>
             </div>
           </div>
 
           {/* Nutritional Information Section */}
           <div className="space-y-4">
-            <h4 className="font-semibold text-earth border-b pb-2">Nutritional Facts (per 100g)</h4>
+            <h4 className="font-semibold text-text-primary border-b border-border-subtle pb-2">Nutritional Facts (per 100g)</h4>
 
             {/* Calories */}
             <div>
-              <label className="block text-sm font-medium text-earth mb-2">
+              <label className="block text-sm font-medium text-text-secondary mb-2">
                 Calories (kcal/100g) *
               </label>
               <input
@@ -390,19 +382,17 @@ export const CreateFoodForm: React.FC<CreateFoodFormProps> = ({
                 max="1000"
                 value={formData.calories}
                 onChange={(e) => handleInputChange('calories', parseFloat(e.target.value) || 0)}
-                className={`w-full px-4 py-2 border-2 rounded-lg focus:ring-2 focus:ring-mint focus:border-mint ${
-                  errors.calories ? 'border-red-300' : 'border-mint/30'
-                }`}
+                className={`input-field ${errors.calories ? 'border-danger' : ''}`}
                 disabled={isLoading}
               />
               {errors.calories && (
-                <p className="text-red-500 text-sm mt-1">{errors.calories}</p>
+                <p className="text-danger text-sm mt-1">{errors.calories}</p>
               )}
             </div>
 
             {/* Protein */}
             <div>
-              <label className="block text-sm font-medium text-earth mb-2">
+              <label className="block text-sm font-medium text-text-secondary mb-2">
                 Protein (%) *
               </label>
               <input
@@ -412,14 +402,14 @@ export const CreateFoodForm: React.FC<CreateFoodFormProps> = ({
                 max="100"
                 value={formData.protein}
                 onChange={(e) => handleInputChange('protein', parseFloat(e.target.value) || 0)}
-                className="w-full px-4 py-2 border-2 border-mint/30 rounded-lg focus:ring-2 focus:ring-mint focus:border-mint"
+                className="input-field"
                 disabled={isLoading}
               />
             </div>
 
             {/* Fat */}
             <div>
-              <label className="block text-sm font-medium text-earth mb-2">
+              <label className="block text-sm font-medium text-text-secondary mb-2">
                 Fat (%) *
               </label>
               <input
@@ -429,14 +419,14 @@ export const CreateFoodForm: React.FC<CreateFoodFormProps> = ({
                 max="100"
                 value={formData.fat}
                 onChange={(e) => handleInputChange('fat', parseFloat(e.target.value) || 0)}
-                className="w-full px-4 py-2 border-2 border-mint/30 rounded-lg focus:ring-2 focus:ring-mint focus:border-mint"
+                className="input-field"
                 disabled={isLoading}
               />
             </div>
 
             {/* Moisture */}
             <div>
-              <label className="block text-sm font-medium text-earth mb-2">
+              <label className="block text-sm font-medium text-text-secondary mb-2">
                 Moisture (%) *
               </label>
               <input
@@ -446,14 +436,14 @@ export const CreateFoodForm: React.FC<CreateFoodFormProps> = ({
                 max="100"
                 value={formData.moisture}
                 onChange={(e) => handleInputChange('moisture', parseFloat(e.target.value) || 0)}
-                className="w-full px-4 py-2 border-2 border-mint/30 rounded-lg focus:ring-2 focus:ring-mint focus:border-mint"
+                className="input-field"
                 disabled={isLoading}
               />
             </div>
 
             {/* Carbohydrate */}
             <div>
-              <label className="block text-sm font-medium text-earth mb-2">
+              <label className="block text-sm font-medium text-text-secondary mb-2">
                 Carbohydrate (%) *
               </label>
               <input
@@ -463,26 +453,26 @@ export const CreateFoodForm: React.FC<CreateFoodFormProps> = ({
                 max="100"
                 value={formData.carbohydrate}
                 onChange={(e) => handleInputChange('carbohydrate', parseFloat(e.target.value) || 0)}
-                className="w-full px-4 py-2 border-2 border-mint/30 rounded-lg focus:ring-2 focus:ring-mint focus:border-mint"
+                className="input-field"
                 disabled={isLoading}
               />
             </div>
 
             {/* Total Nutrition Display */}
-            <div className={`p-3 rounded-lg ${isNutritionValid ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
-              <p className={`text-sm font-medium ${isNutritionValid ? 'text-green-700' : 'text-red-700'}`}>
+            <div className={`p-3 rounded-xl border ${isNutritionValid ? 'bg-success/10 border-success/30' : 'bg-danger/10 border-danger/30'}`}>
+              <p className={`text-sm font-medium ${isNutritionValid ? 'text-success' : 'text-danger'}`}>
                 Total: {totalNutrition.toFixed(2)}% {isNutritionValid ? '✓' : '⚠️ Exceeds 105%'}
               </p>
             </div>
             {errors.nutrition && (
-              <p className="text-red-500 text-sm">{errors.nutrition}</p>
+              <p className="text-danger text-sm">{errors.nutrition}</p>
             )}
           </div>
 
           {/* Submit Error */}
           {errors.submit && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-              <p className="text-red-600 text-sm">{errors.submit}</p>
+            <div className="bg-danger/10 border border-danger/30 rounded-xl p-3">
+              <p className="text-danger text-sm">{errors.submit}</p>
             </div>
           )}
 
@@ -491,15 +481,14 @@ export const CreateFoodForm: React.FC<CreateFoodFormProps> = ({
             <button
               type="button"
               onClick={handleClose}
-              className="flex-1 px-4 py-2 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              className="btn-secondary flex-1"
               disabled={isLoading}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex-1 btn-3d px-4 py-2 text-white rounded-lg disabled:opacity-50"
-              style={{ backgroundColor: COLORS.orange }}
+              className="btn-primary flex-1 disabled:opacity-50"
               disabled={isLoading || !isNutritionValid}
             >
               {isLoading ? 'Adding...' : 'Add Food'}

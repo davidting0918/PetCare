@@ -22,8 +22,8 @@ export const GroupPetsList: React.FC<GroupPetsListProps> = ({
   if (isLoading) {
     return (
       <div className="text-center py-6">
-        <PawPrint className="w-8 h-8 mx-auto mb-2 text-gray-400 animate-pulse" />
-        <p className="text-sm text-gray-500">Loading pets...</p>
+        <PawPrint className="w-8 h-8 mx-auto mb-2 text-text-tertiary animate-pulse" />
+        <p className="text-sm text-text-tertiary">Loading pets...</p>
       </div>
     );
   }
@@ -31,8 +31,8 @@ export const GroupPetsList: React.FC<GroupPetsListProps> = ({
   if (error) {
     return (
       <div className="text-center py-6">
-        <PawPrint className="w-8 h-8 mx-auto mb-2 text-red-400" />
-        <p className="text-sm text-red-600">{error}</p>
+        <PawPrint className="w-8 h-8 mx-auto mb-2 text-danger" />
+        <p className="text-sm text-danger">{error}</p>
       </div>
     );
   }
@@ -40,10 +40,10 @@ export const GroupPetsList: React.FC<GroupPetsListProps> = ({
   if (pets.length === 0) {
     return (
       <div className="text-center py-8">
-        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-          <PawPrint className="w-8 h-8 text-gray-400" />
+        <div className="w-16 h-16 bg-surface-2 rounded-full flex items-center justify-center mx-auto mb-3">
+          <PawPrint className="w-8 h-8 text-text-tertiary" />
         </div>
-        <p className="text-sm text-gray-600 mb-2">No pets in this group yet</p>
+        <p className="text-sm text-text-secondary mb-2">No pets in this group yet</p>
       </div>
     );
   }
@@ -54,11 +54,11 @@ export const GroupPetsList: React.FC<GroupPetsListProps> = ({
         return (
           <div
             key={pet.id}
-            className="bg-white border border-gray-200 rounded-lg p-3 hover:shadow-md transition-shadow"
+            className="bg-surface-2 border border-border-subtle rounded-xl p-3 hover:bg-surface-3 hover:border-border-default transition-colors"
           >
             <div className="flex items-center">
               {/* Pet Photo */}
-              <div className="w-12 h-12 rounded-full bg-gray-200 flex-shrink-0 overflow-hidden">
+              <div className="w-12 h-12 rounded-full bg-surface-1 ring-2 ring-accent-pink/40 flex-shrink-0 overflow-hidden">
                 {pet.photo_url ? (
                   <img
                     src={pet.photo_url}
@@ -66,7 +66,7 @@ export const GroupPetsList: React.FC<GroupPetsListProps> = ({
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <div className="w-full h-full bg-orange/30 flex items-center justify-center text-earth font-semibold text-sm">
+                  <div className="w-full h-full bg-accent-pink/15 flex items-center justify-center text-accent-pink font-semibold text-sm">
                     {pet.name.charAt(0).toUpperCase()}
                   </div>
                 )}
@@ -75,14 +75,14 @@ export const GroupPetsList: React.FC<GroupPetsListProps> = ({
               {/* Pet Info */}
               <div className="ml-3 flex-1">
                 <div className="flex items-center justify-between mb-1">
-                  <h4 className="font-semibold text-gray-800">{pet.name}</h4>
+                  <h4 className="font-semibold text-text-primary">{pet.name}</h4>
                 </div>
-                <p className="text-xs text-gray-600">
+                <p className="text-xs text-text-secondary">
                   {pet.breed || pet.pet_type} • {pet.gender || 'Unknown'}
                 </p>
                 <div className="flex items-center gap-2 mt-1">
                   {/* Owner Info */}
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-text-tertiary">
                     Owner: {pet.owner_name}
                   </p>
                   {/* Permission Badge */}
@@ -100,13 +100,13 @@ export const GroupPetsList: React.FC<GroupPetsListProps> = ({
               {/* Pet Stats */}
               <div className="ml-3 text-right">
                 {pet.current_weight_kg && (
-                  <p className="text-xs text-gray-500">
-                    Weight: <span className="font-semibold text-gray-700">{pet.current_weight_kg} kg</span>
+                  <p className="text-xs text-text-tertiary">
+                    Weight: <span className="font-semibold text-text-primary">{pet.current_weight_kg} kg</span>
                   </p>
                 )}
                 {pet.daily_calorie_target && (
-                  <p className="text-xs text-gray-500">
-                    Target: <span className="font-semibold text-gray-700">{pet.daily_calorie_target} kcal</span>
+                  <p className="text-xs text-text-tertiary">
+                    Target: <span className="font-semibold text-text-primary">{pet.daily_calorie_target} kcal</span>
                   </p>
                 )}
               </div>

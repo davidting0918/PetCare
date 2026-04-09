@@ -100,43 +100,43 @@ export const SignUpPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary via-orange/20 to-mint/20 flex flex-col items-center justify-center p-4 relative overflow-hidden">
-      {/* Animated Background Elements */}
+    <div className="min-h-screen bg-surface-0 flex flex-col items-center justify-center p-4 relative overflow-hidden">
+      {/* Animated Background Elements — soft accent glow */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-20 -left-20 w-40 h-40 bg-orange/20 rounded-full animate-pulse"></div>
-        <div className="absolute -bottom-20 -right-20 w-60 h-60 bg-mint/20 rounded-full animate-pulse delay-1000"></div>
-        <div className="absolute top-1/3 left-1/4 w-20 h-20 bg-earth/10 rounded-full animate-bounce delay-500"></div>
+        <div className="absolute -top-20 -left-20 w-40 h-40 bg-accent-pink/15 rounded-full blur-2xl animate-pulse"></div>
+        <div className="absolute -bottom-20 -right-20 w-60 h-60 bg-accent-purple/15 rounded-full blur-3xl animate-pulse delay-1000"></div>
+        <div className="absolute top-1/3 left-1/4 w-20 h-20 bg-accent-teal/10 rounded-full blur-xl animate-bounce delay-500"></div>
       </div>
 
-      {/* Header with Enhanced Animation */}
+      {/* Header */}
       <div className="text-center mb-8 relative z-10">
         <div className="flex items-center justify-center mb-4 group">
-          <div className="bg-gradient-to-br from-orange to-orange/80 rounded-full p-4 shadow-3d transform transition-all duration-300 group-hover:scale-110 group-hover:rotate-12">
-            <Heart className="w-8 h-8 text-white animate-pulse" />
+          <div className="bg-accent-pink rounded-full p-4 shadow-elevated transform transition-all duration-300 group-hover:scale-110 group-hover:rotate-12">
+            <Heart className="w-8 h-8 text-text-primary animate-pulse" />
           </div>
-          <PawPrint className="w-6 h-6 text-earth ml-2 animate-bounce" />
+          <PawPrint className="w-6 h-6 text-accent-pink ml-2 animate-bounce" />
         </div>
-        <h1 className="text-4xl font-bold text-earth mb-2 transform transition-all duration-300 hover:scale-105">
+        <h1 className="text-4xl font-bold text-text-primary mb-2 transform transition-all duration-300 hover:scale-105">
           Join PetCare
         </h1>
-        <p className="text-earth/70 text-lg">Create your account to start tracking your pet's health</p>
+        <p className="text-text-secondary text-lg">Create your account to start tracking your pet's health</p>
       </div>
 
-      {/* Signup Form with Enhanced Design */}
+      {/* Signup Form */}
       <div className="w-full max-w-md relative z-10">
-        <div className="card-3d p-8 mb-6 backdrop-blur-sm bg-white/95 border border-white/20">
-          <h2 className="text-2xl font-semibold text-gray-800 mb-6 text-center bg-gradient-to-r from-earth to-orange bg-clip-text text-transparent">
+        <div className="surface-card p-8 mb-6">
+          <h2 className="text-2xl font-semibold text-text-primary mb-6 text-center">
             Create Your Account
           </h2>
 
-          <form onSubmit={handleSignup} className="space-y-6">
+          <form onSubmit={handleSignup} className="space-y-5">
             {/* Name Field */}
-            <div className="transform transition-all duration-300 hover:scale-105">
-              <label htmlFor="name" className="block text-sm font-semibold text-gray-700 mb-2">
+            <div>
+              <label htmlFor="name" className="block text-sm font-semibold text-text-secondary mb-2">
                 Full Name
               </label>
               <div className="relative group">
-                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 group-focus-within:text-orange transition-colors" />
+                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-text-tertiary w-5 h-5 group-focus-within:text-accent-pink transition-colors z-10" />
                 <input
                   id="name"
                   name="name"
@@ -144,22 +144,20 @@ export const SignUpPage: React.FC = () => {
                   autoComplete="name"
                   value={formData.name}
                   onChange={handleInputChange}
-                  className={`input-3d pl-10 w-full transform transition-all duration-200 focus:scale-105 ${
-                    errors.name ? 'border-red-500' : ''
-                  }`}
+                  className={`input-field pl-10 ${errors.name ? 'border-danger' : ''}`}
                   placeholder="Enter your full name"
                 />
               </div>
-              {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name}</p>}
+              {errors.name && <p className="mt-1 text-sm text-danger">{errors.name}</p>}
             </div>
 
             {/* Email Field */}
-            <div className="transform transition-all duration-300 hover:scale-105">
-              <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-2">
+            <div>
+              <label htmlFor="email" className="block text-sm font-semibold text-text-secondary mb-2">
                 Email Address
               </label>
               <div className="relative group">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 group-focus-within:text-orange transition-colors" />
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-text-tertiary w-5 h-5 group-focus-within:text-accent-pink transition-colors z-10" />
                 <input
                   id="email"
                   name="email"
@@ -167,22 +165,20 @@ export const SignUpPage: React.FC = () => {
                   autoComplete="email"
                   value={formData.email}
                   onChange={handleInputChange}
-                  className={`input-3d pl-10 w-full transform transition-all duration-200 focus:scale-105 ${
-                    errors.email ? 'border-red-500' : ''
-                  }`}
+                  className={`input-field pl-10 ${errors.email ? 'border-danger' : ''}`}
                   placeholder="Enter your email"
                 />
               </div>
-              {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email}</p>}
+              {errors.email && <p className="mt-1 text-sm text-danger">{errors.email}</p>}
             </div>
 
             {/* Password Field */}
-            <div className="transform transition-all duration-300 hover:scale-105">
-              <label htmlFor="password" className="block text-sm font-semibold text-gray-700 mb-2">
+            <div>
+              <label htmlFor="password" className="block text-sm font-semibold text-text-secondary mb-2">
                 Password
               </label>
               <div className="relative group">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 group-focus-within:text-orange transition-colors" />
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-text-tertiary w-5 h-5 group-focus-within:text-accent-pink transition-colors z-10" />
                 <input
                   id="password"
                   name="password"
@@ -190,29 +186,27 @@ export const SignUpPage: React.FC = () => {
                   autoComplete="new-password"
                   value={formData.password}
                   onChange={handleInputChange}
-                  className={`input-3d pl-10 pr-10 w-full transform transition-all duration-200 focus:scale-105 ${
-                    errors.password ? 'border-red-500' : ''
-                  }`}
+                  className={`input-field pl-10 pr-10 ${errors.password ? 'border-danger' : ''}`}
                   placeholder="Create a password"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-orange transition-colors"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-text-tertiary hover:text-accent-pink transition-colors z-10"
                 >
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
-              {errors.password && <p className="mt-1 text-sm text-red-600">{errors.password}</p>}
+              {errors.password && <p className="mt-1 text-sm text-danger">{errors.password}</p>}
             </div>
 
             {/* Confirm Password Field */}
-            <div className="transform transition-all duration-300 hover:scale-105">
-              <label htmlFor="confirmPassword" className="block text-sm font-semibold text-gray-700 mb-2">
+            <div>
+              <label htmlFor="confirmPassword" className="block text-sm font-semibold text-text-secondary mb-2">
                 Confirm Password
               </label>
               <div className="relative group">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 group-focus-within:text-orange transition-colors" />
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-text-tertiary w-5 h-5 group-focus-within:text-accent-pink transition-colors z-10" />
                 <input
                   id="confirmPassword"
                   name="confirmPassword"
@@ -220,24 +214,22 @@ export const SignUpPage: React.FC = () => {
                   autoComplete="new-password"
                   value={formData.confirmPassword}
                   onChange={handleInputChange}
-                  className={`input-3d pl-10 pr-10 w-full transform transition-all duration-200 focus:scale-105 ${
-                    errors.confirmPassword ? 'border-red-500' : ''
-                  }`}
+                  className={`input-field pl-10 pr-10 ${errors.confirmPassword ? 'border-danger' : ''}`}
                   placeholder="Confirm your password"
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-orange transition-colors"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-text-tertiary hover:text-accent-pink transition-colors z-10"
                 >
                   {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
-              {errors.confirmPassword && <p className="mt-1 text-sm text-red-600">{errors.confirmPassword}</p>}
+              {errors.confirmPassword && <p className="mt-1 text-sm text-danger">{errors.confirmPassword}</p>}
             </div>
 
             {errors.submit && (
-              <div className="text-red-600 text-sm bg-gradient-to-r from-red-50 to-red-100 p-4 rounded-lg border border-red-200 transform animate-shake">
+              <div className="text-danger text-sm bg-danger/10 p-4 rounded-xl border border-danger/30 transform animate-shake">
                 {errors.submit}
               </div>
             )}
@@ -246,11 +238,11 @@ export const SignUpPage: React.FC = () => {
             <button
               type="submit"
               disabled={isLoading}
-              className="btn-3d w-full py-4 px-4 text-white font-semibold text-lg disabled:opacity-50 disabled:cursor-not-allowed transform transition-all duration-200 hover:scale-105"
+              className="btn-primary w-full py-4 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? (
                 <div className="flex items-center justify-center">
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-text-primary mr-2"></div>
                   Creating Account...
                 </div>
               ) : (
@@ -261,11 +253,11 @@ export const SignUpPage: React.FC = () => {
 
           {/* Sign In Link */}
           <div className="mt-6 text-center">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-text-secondary">
               Already have an account?{' '}
               <button
                 onClick={() => navigate('/login')}
-                className="font-medium text-orange hover:text-orange/80 focus:outline-none focus:underline transition-colors"
+                className="font-medium text-accent-pink hover:text-accent-pink-hover focus:outline-none focus:underline transition-colors"
               >
                 Sign in here
               </button>

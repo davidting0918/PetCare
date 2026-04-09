@@ -3,7 +3,6 @@ import { Users, X, AlertCircle } from 'lucide-react';
 import { useGroup } from '../../hooks';
 import { petService } from '../../api';
 import type { PetInfo } from '../../types';
-import { COLORS } from '../../constants/colors';
 
 interface AssignPetToGroupModalProps {
   isOpen: boolean;
@@ -84,19 +83,19 @@ export const AssignPetToGroupModal: React.FC<AssignPetToGroupModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-3d max-w-md w-full">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-surface-2 rounded-2xl border border-border-default shadow-elevated max-w-md w-full">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+        <div className="flex items-center justify-between p-6 border-b border-border-subtle">
           <div className="flex items-center">
-            <div className="w-8 h-8 bg-mint/20 rounded-full flex items-center justify-center mr-3">
-              <Users className="w-5 h-5 text-mint" />
+            <div className="w-8 h-8 bg-accent-teal/15 rounded-full flex items-center justify-center mr-3">
+              <Users className="w-5 h-5 text-accent-teal" />
             </div>
-            <h2 className="text-xl font-bold text-gray-800">Assign Pet to Group</h2>
+            <h2 className="text-xl font-bold text-text-primary">Assign Pet to Group</h2>
           </div>
           <button
             onClick={handleClose}
-            className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+            className="p-2 text-text-tertiary hover:text-text-primary transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -105,18 +104,18 @@ export const AssignPetToGroupModal: React.FC<AssignPetToGroupModalProps> = ({
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {/* Pet Info */}
-          <div className="bg-gray-50 rounded-lg p-4">
-            <p className="text-sm text-gray-600 mb-1">Pet</p>
-            <p className="font-semibold text-gray-800">{pet.name}</p>
-            <p className="text-xs text-gray-500">
+          <div className="bg-surface-1 rounded-xl p-4 border border-border-subtle">
+            <p className="text-sm text-text-tertiary mb-1">Pet</p>
+            <p className="font-semibold text-text-primary">{pet.name}</p>
+            <p className="text-xs text-text-tertiary">
               {pet.breed} • {pet.pet_type}
             </p>
           </div>
 
           {/* Current Group */}
           {pet.group_name && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <p className="text-sm text-blue-800">
+            <div className="bg-accent-blue/10 border border-accent-blue/30 rounded-xl p-3">
+              <p className="text-sm text-accent-blue">
                 <strong>Current Group:</strong> {pet.group_name}
               </p>
             </div>
@@ -124,20 +123,20 @@ export const AssignPetToGroupModal: React.FC<AssignPetToGroupModalProps> = ({
 
           {/* Error Message */}
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start">
-              <AlertCircle className="w-5 h-5 text-red-500 mr-2 flex-shrink-0 mt-0.5" />
-              <p className="text-red-600 text-sm">{error}</p>
+            <div className="bg-danger/10 border border-danger/30 rounded-xl p-3 flex items-start">
+              <AlertCircle className="w-5 h-5 text-danger mr-2 flex-shrink-0 mt-0.5" />
+              <p className="text-danger text-sm">{error}</p>
             </div>
           )}
 
           {/* Group Selection */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-text-secondary mb-2">
               Select Group
             </label>
             {creatorGroups.length === 0 ? (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                <p className="text-yellow-800 text-sm">
+              <div className="bg-warning/10 border border-warning/30 rounded-xl p-3">
+                <p className="text-warning text-sm">
                   You don't have any groups where you are the creator. Only pet owners can assign their pets to groups they created.
                 </p>
               </div>
@@ -145,7 +144,7 @@ export const AssignPetToGroupModal: React.FC<AssignPetToGroupModalProps> = ({
               <select
                 value={selectedGroupId}
                 onChange={(e) => setSelectedGroupId(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mint/50 focus:border-mint"
+                className="input-field"
                 disabled={isSubmitting}
               >
                 <option value="">(change to private pet)</option>
@@ -163,7 +162,7 @@ export const AssignPetToGroupModal: React.FC<AssignPetToGroupModalProps> = ({
             <button
               type="button"
               onClick={handleClose}
-              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              className="btn-secondary flex-1"
               disabled={isSubmitting}
             >
               Cancel
@@ -171,10 +170,7 @@ export const AssignPetToGroupModal: React.FC<AssignPetToGroupModalProps> = ({
             <button
               type="submit"
               disabled={isSubmitting || creatorGroups.length === 0}
-              className="flex-1 btn-3d text-white disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{
-                backgroundColor: COLORS.mint,
-              }}
+              className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting ? 'Assigning...' : 'Assign Pet'}
             </button>

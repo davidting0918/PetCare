@@ -151,20 +151,20 @@ export const EditUserInfoModal: React.FC<EditUserInfoModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-2xl shadow-3d max-w-md w-full max-h-[90vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-surface-2 rounded-2xl border border-border-default shadow-elevated max-w-md w-full max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+        <div className="flex items-center justify-between p-6 border-b border-border-subtle">
           <div className="flex items-center gap-2">
-            <User className="w-6 h-6 text-earth" />
-            <h2 className="text-xl font-bold text-earth">Edit Profile</h2>
+            <User className="w-6 h-6 text-accent-pink" />
+            <h2 className="text-xl font-bold text-text-primary">Edit Profile</h2>
           </div>
           <button
             onClick={handleClose}
-            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            className="p-2 text-text-tertiary hover:text-text-primary hover:bg-surface-3 rounded-full transition-colors"
             disabled={isLoading}
           >
-            <X className="w-5 h-5 text-gray-500" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
@@ -172,19 +172,19 @@ export const EditUserInfoModal: React.FC<EditUserInfoModalProps> = ({
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* Error Message */}
           {errors.submit && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-              <p className="text-red-600 text-sm">{errors.submit}</p>
+            <div className="bg-danger/10 border border-danger/30 rounded-xl p-3">
+              <p className="text-danger text-sm">{errors.submit}</p>
             </div>
           )}
 
           {/* Profile Photo Section */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">
+            <label className="block text-sm font-medium text-text-secondary mb-3">
               Profile Photo
             </label>
             <div className="flex items-center gap-4">
               {/* Avatar Preview */}
-              <div className="w-24 h-24 rounded-full bg-gray-200 flex-shrink-0 overflow-hidden shadow-3d relative">
+              <div className="w-24 h-24 rounded-full bg-surface-1 border border-border-subtle flex-shrink-0 overflow-hidden shadow-card relative">
                 {user.picture ? (
                   <img
                     src={user.picture.startsWith('http') ? user.picture : getPhotoUrl(user.picture) || ''}
@@ -192,13 +192,13 @@ export const EditUserInfoModal: React.FC<EditUserInfoModalProps> = ({
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <div className="w-full h-full bg-orange/30 flex items-center justify-center text-earth font-semibold text-3xl">
+                  <div className="w-full h-full bg-accent-pink/15 flex items-center justify-center text-accent-pink font-semibold text-3xl">
                     {user.name.charAt(0).toUpperCase()}
                   </div>
                 )}
                 {selectedFile && (
                   <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                    <Camera className="w-8 h-8 text-white" />
+                    <Camera className="w-8 h-8 text-text-primary" />
                   </div>
                 )}
               </div>
@@ -216,7 +216,7 @@ export const EditUserInfoModal: React.FC<EditUserInfoModalProps> = ({
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isLoading}
-                  className="w-full px-4 py-2 bg-mint text-white rounded-lg hover:bg-mint/90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   <Upload className="w-4 h-4" />
                   <span className="text-sm">
@@ -228,24 +228,24 @@ export const EditUserInfoModal: React.FC<EditUserInfoModalProps> = ({
                     type="button"
                     onClick={handleRemoveFile}
                     disabled={isLoading}
-                    className="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm disabled:opacity-50"
+                    className="btn-secondary w-full text-sm disabled:opacity-50"
                   >
                     Remove Selected
                   </button>
                 )}
                 {selectedFile && (
-                  <p className="text-xs text-gray-500 text-center">
+                  <p className="text-xs text-text-tertiary text-center">
                     {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)
                   </p>
                 )}
               </div>
             </div>
-            {errors.photo && <p className="text-red-600 text-xs mt-2">{errors.photo}</p>}
+            {errors.photo && <p className="text-danger text-xs mt-2">{errors.photo}</p>}
           </div>
 
           {/* Name Input */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-text-secondary mb-1">
               Name *
             </label>
             <input
@@ -259,37 +259,35 @@ export const EditUserInfoModal: React.FC<EditUserInfoModalProps> = ({
                   setErrors(newErrors);
                 }
               }}
-              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-mint/50 focus:border-mint ${
-                errors.name ? 'border-red-300' : 'border-gray-300'
-              }`}
+              className={`input-field ${errors.name ? 'border-danger' : ''}`}
               placeholder="Enter your name"
               disabled={isLoading}
             />
-            {errors.name && <p className="text-red-600 text-xs mt-1">{errors.name}</p>}
+            {errors.name && <p className="text-danger text-xs mt-1">{errors.name}</p>}
           </div>
 
           {/* Email (Read-only) */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-text-secondary mb-1">
               Email
             </label>
             <input
               type="email"
               value={user.email}
               disabled
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
+              className="input-field"
             />
-            <p className="text-xs text-gray-500 mt-1">Email cannot be changed</p>
+            <p className="text-xs text-text-tertiary mt-1">Email cannot be changed</p>
           </div>
         </form>
 
         {/* Footer Actions */}
-        <div className="flex gap-3 p-6 border-t border-gray-200">
+        <div className="flex gap-3 p-6 border-t border-border-subtle">
           <button
             type="button"
             onClick={handleClose}
             disabled={isLoading}
-            className="flex-1 px-4 py-3 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:opacity-50"
+            className="btn-secondary flex-1 py-3 disabled:opacity-50"
           >
             Cancel
           </button>
@@ -297,7 +295,7 @@ export const EditUserInfoModal: React.FC<EditUserInfoModalProps> = ({
             type="submit"
             onClick={handleSubmit}
             disabled={isLoading}
-            className="flex-1 px-4 py-3 bg-mint text-white rounded-lg hover:bg-mint/90 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            className="btn-primary flex-1 py-3 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isLoading ? 'Saving...' : 'Save Changes'}
           </button>

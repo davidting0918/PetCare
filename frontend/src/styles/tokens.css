@@ -13,10 +13,6 @@
  * Section order:
  *   1. Dark theme tokens (default — applied via :root)
  *   2. Light theme placeholder ([data-theme="light"], values to be filled later)
- *   3. Legacy compatibility tokens (preserve the warm-pastel palette consumed
- *      by the .tsx files that still reference `mint` / `orange` / `earth` /
- *      `primary` / `card-3d` / `btn-3d` etc. — to be removed once #54-#57
- *      finish sweeping all consumers).
  */
 
 :root {
@@ -72,43 +68,6 @@
   --shadow-selected-teal: 0 0 0 1px rgb(var(--accent-teal) / 0.5), 0 0 24px rgb(var(--accent-teal) / 0.35);
   --shadow-selected-purple: 0 0 0 1px rgb(var(--accent-purple) / 0.5), 0 0 24px rgb(var(--accent-purple) / 0.35);
   --shadow-selected-blue: 0 0 0 1px rgb(var(--accent-blue) / 0.5), 0 0 24px rgb(var(--accent-blue) / 0.35);
-
-  /* ─── Legacy compatibility (warm-pastel palette, to be retired) ─────── *
-   * Used by `bg-mint` / `bg-orange` / `text-earth` / `bg-primary` Tailwind
-   * utilities and by the `card-3d` / `btn-3d*` / `input-3d` / `progress-*`
-   * / `scale-display` / `weight-card-glow` component classes in index.css.
-   * Will be removed once issues #54-#57 sweep all consumer .tsx files.
-   */
-  --legacy-primary: 242 234 211;        /* #F2EAD3 (cream — page bg) */
-  --legacy-mint: 184 230 211;           /* #B8E6D3 */
-  --legacy-mint-deeper: 163 216 196;    /* #A3D8C4 */
-  --legacy-orange: 244 194 161;         /* #F4C2A1 */
-  --legacy-orange-deeper: 232 182 144;  /* #E8B690 */
-  --legacy-earth: 141 112 83;           /* #8D7053 */
-  --legacy-earth-deeper: 122 97 71;     /* #7A6147 */
-
-  --legacy-card-from: 255 255 255;      /* #FFFFFF (card-3d gradient start) */
-  --legacy-card-to: 250 250 250;        /* #FAFAFA (card-3d gradient end) */
-  --legacy-input-border: 229 231 235;   /* #E5E7EB (gray-200, input-3d border, circular-progress-bg) */
-
-  --legacy-trend-up-from: 16 185 129;     /* #10B981 */
-  --legacy-trend-up-to: 52 211 153;       /* #34D399 */
-  --legacy-trend-down-from: 239 68 68;    /* #EF4444 */
-  --legacy-trend-down-to: 248 113 113;    /* #F87171 */
-  --legacy-trend-stable-from: 107 114 128;/* #6B7280 */
-  --legacy-trend-stable-to: 156 163 175;  /* #9CA3AF */
-
-  --legacy-scale-bg-from: 31 41 55;       /* #1F2937 */
-  --legacy-scale-bg-to: 55 65 81;         /* #374151 */
-  --legacy-scale-text: 16 185 129;        /* #10B981 */
-  --legacy-scale-text-glow: rgba(16, 185, 129, 0.5);
-
-  --legacy-weight-card-glow: 0 4px 20px rgba(180, 230, 211, 0.3), 0 2px 10px rgba(180, 230, 211, 0.2);
-
-  /* Shadow strings for the legacy 3D button/card system. */
-  --legacy-shadow-3d: 0 4px 8px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1);
-  --legacy-shadow-3d-hover: 0 6px 12px rgba(0, 0, 0, 0.2), 0 3px 6px rgba(0, 0, 0, 0.15);
-  --legacy-shadow-3d-pressed: inset 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 /*

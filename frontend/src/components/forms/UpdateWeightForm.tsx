@@ -143,19 +143,19 @@ export const UpdateWeightForm: React.FC<UpdateWeightFormProps> = ({
   if (!isOpen || !weightRecord) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-3d max-w-md w-full">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-surface-2 rounded-2xl border border-border-default shadow-elevated max-w-md w-full">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+        <div className="flex items-center justify-between p-6 border-b border-border-subtle">
           <div className="flex items-center">
-            <div className="w-8 h-8 bg-mint/20 rounded-full flex items-center justify-center mr-3">
-              <Scale className="w-5 h-5 text-mint" />
+            <div className="w-8 h-8 bg-accent-teal/15 rounded-full flex items-center justify-center mr-3">
+              <Scale className="w-5 h-5 text-accent-teal" />
             </div>
-            <h2 className="text-xl font-bold text-gray-800">{title}</h2>
+            <h2 className="text-xl font-bold text-text-primary">{title}</h2>
           </div>
           <button
             onClick={handleClose}
-            className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+            className="p-2 text-text-tertiary hover:text-text-primary transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -165,14 +165,14 @@ export const UpdateWeightForm: React.FC<UpdateWeightFormProps> = ({
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {/* Submit Error */}
           {errors.submit && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-              <p className="text-red-600 text-sm">{errors.submit}</p>
+            <div className="bg-danger/10 border border-danger/30 rounded-xl p-3">
+              <p className="text-danger text-sm">{errors.submit}</p>
             </div>
           )}
 
           {/* Weight Input */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-text-secondary mb-1">
               Weight (kg) *
             </label>
             <input
@@ -182,32 +182,30 @@ export const UpdateWeightForm: React.FC<UpdateWeightFormProps> = ({
               max="200"
               value={formData.weight || ''}
               onChange={(e) => handleInputChange('weight', e.target.value ? parseFloat(e.target.value) : 0)}
-              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-mint/50 focus:border-mint ${
-                errors.weight ? 'border-red-300' : 'border-gray-300'
-              }`}
+              className={`input-field ${errors.weight ? 'border-danger' : ''}`}
               placeholder="0.00"
               disabled={isLoading}
             />
-            {errors.weight && <p className="text-red-600 text-xs mt-1">{errors.weight}</p>}
+            {errors.weight && <p className="text-danger text-xs mt-1">{errors.weight}</p>}
           </div>
 
           {/* Timestamp Input */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-text-secondary mb-1">
               Date
             </label>
             <input
               type="datetime-local"
               value={formData.timestamp || ''}
               onChange={(e) => handleInputChange('timestamp', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mint/50 focus:border-mint"
+              className="input-field"
               disabled={isLoading}
             />
           </div>
 
           {/* Notes */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-text-secondary mb-1">
               Notes (Optional)
             </label>
             <textarea
@@ -215,14 +213,12 @@ export const UpdateWeightForm: React.FC<UpdateWeightFormProps> = ({
               onChange={(e) => handleInputChange('notes', e.target.value)}
               rows={3}
               maxLength={500}
-              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-mint/50 focus:border-mint resize-none ${
-                errors.notes ? 'border-red-300' : 'border-gray-300'
-              }`}
+              className={`input-field resize-none ${errors.notes ? 'border-danger' : ''}`}
               placeholder="Enter notes"
               disabled={isLoading}
             />
-            {errors.notes && <p className="text-red-600 text-xs mt-1">{errors.notes}</p>}
-            <p className="text-gray-500 text-xs mt-1">
+            {errors.notes && <p className="text-danger text-xs mt-1">{errors.notes}</p>}
+            <p className="text-text-tertiary text-xs mt-1">
               {formData.notes?.length || 0}/500 characters
             </p>
           </div>
@@ -232,7 +228,7 @@ export const UpdateWeightForm: React.FC<UpdateWeightFormProps> = ({
             <button
               type="button"
               onClick={handleClose}
-              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              className="btn-secondary flex-1"
               disabled={isLoading}
             >
               Cancel
@@ -240,7 +236,7 @@ export const UpdateWeightForm: React.FC<UpdateWeightFormProps> = ({
             <button
               type="submit"
               disabled={isLoading}
-              className="flex-1 btn-3d btn-3d-mint text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? 'Updating...' : 'Update Weight'}
             </button>

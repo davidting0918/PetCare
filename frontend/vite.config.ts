@@ -13,8 +13,11 @@ export default defineConfig({
         name: 'PetCare - Pet Health Tracker',
         short_name: 'PetCare',
         description: 'Track your pet\'s health, meals, and weight',
-        theme_color: '#ffffff',
-        background_color: '#ffffff',
+        // surface-0 hex (rgb(14 18 24)) — matches the dark token system so the
+        // installed PWA launches without a light flash and the mobile status
+        // bar tints to the new dark theme.
+        theme_color: '#0E1218',
+        background_color: '#0E1218',
         display: 'standalone',
         orientation: 'portrait',
         icons: [
