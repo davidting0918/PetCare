@@ -367,37 +367,70 @@ export const MealPage: React.FC = () => {
                   stack: 'total',
                   label: MEAL_TYPES.breakfast.label,
                   color: getMealTypeChartColor('breakfast', chartPalette),
+                  valueFormatter: (v: number | null) => v ? `${Math.round(v)} kcal` : '0 kcal',
                 },
                 {
                   data: chartData.map(d => d.lunch),
                   stack: 'total',
                   label: MEAL_TYPES.lunch.label,
                   color: getMealTypeChartColor('lunch', chartPalette),
+                  valueFormatter: (v: number | null) => v ? `${Math.round(v)} kcal` : '0 kcal',
                 },
                 {
                   data: chartData.map(d => d.dinner),
                   stack: 'total',
                   label: MEAL_TYPES.dinner.label,
                   color: getMealTypeChartColor('dinner', chartPalette),
+                  valueFormatter: (v: number | null) => v ? `${Math.round(v)} kcal` : '0 kcal',
                 },
                 {
                   data: chartData.map(d => d.snack),
                   stack: 'total',
                   label: MEAL_TYPES.snack.label,
                   color: getMealTypeChartColor('snack', chartPalette),
+                  valueFormatter: (v: number | null) => v ? `${Math.round(v)} kcal` : '0 kcal',
                 },
                 {
                   data: chartData.map(d => d.unclassified),
                   stack: 'total',
                   label: MEAL_TYPES.unclassified.label,
                   color: getMealTypeChartColor('unclassified', chartPalette),
+                  valueFormatter: (v: number | null) => v ? `${Math.round(v)} kcal` : '0 kcal',
                 },
               ]}
               height={chartHeight}
               borderRadius={4}
               grid={{ horizontal: true }}
               margin={{ top: 20, right: 16, bottom: 24, left: 40 }}
+              slotProps={{
+                tooltip: {
+                  sx: {
+                    '& .MuiChartsTooltip-paper, & .MuiChartsTooltip-table': {
+                      backgroundColor: chartPalette.surface3,
+                      border: `1px solid ${chartPalette.borderDefault}`,
+                      borderRadius: '12px',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                    },
+                    '& .MuiChartsTooltip-cell': {
+                      color: chartPalette.textPrimary,
+                      borderBottomColor: chartPalette.borderSubtle,
+                      fontSize: '12px',
+                    },
+                    '& .MuiChartsTooltip-valueCell': {
+                      color: chartPalette.textSecondary,
+                      fontWeight: 600,
+                    },
+                    '& .MuiChartsTooltip-mark': {
+                      borderRadius: '3px',
+                    },
+                  },
+                },
+              }}
               sx={{
+                // Catch-all: ensure every SVG text element uses theme colors
+                '& text': {
+                  fill: chartPalette.textSecondary,
+                },
                 '& .MuiChartsGrid-root line': {
                   stroke: chartPalette.borderSubtle,
                   strokeWidth: 0.5,
@@ -409,8 +442,13 @@ export const MealPage: React.FC = () => {
                 '& .MuiChartsAxis-root .MuiChartsAxis-tick': {
                   stroke: 'transparent',
                 },
-                '& .MuiChartsLegend-series text': {
-                  fill: chartPalette.textSecondary,
+                // Legend (rendered as HTML in v8)
+                '& .MuiChartsLegend-root': {
+                  color: chartPalette.textSecondary,
+                  fontSize: '11px',
+                },
+                '& .MuiChartsLegend-series text, & .MuiChartsLegend-label': {
+                  fill: `${chartPalette.textSecondary} !important`,
                   fontSize: '11px !important',
                 },
               }}
