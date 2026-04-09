@@ -114,6 +114,7 @@ export const fetchTodayMeals = createAsyncThunk(
         try {
             const queryFilters = {
                 pet_id: petId,
+                local_date: new Date().toLocaleDateString('en-CA'),
                 ...filters
             };
             const response = await mealService.getTodayMeals(queryFilters);

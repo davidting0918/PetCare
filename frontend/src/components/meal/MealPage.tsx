@@ -81,7 +81,7 @@ export const MealPage: React.FC = () => {
       dateFrom.setDate(dateFrom.getDate() - 14);
 
       getMealRecords(petId, {
-        date_from: dateFrom.toISOString().split('T')[0],
+        date_from: dateFrom.toLocaleDateString('en-CA'),
         limit: 100
       }).catch(err => console.error('❌ MealPage: Failed to load meals:', err));
     }
@@ -119,11 +119,11 @@ export const MealPage: React.FC = () => {
     for (let i = 0; i < days; i++) {
       const date = new Date(start);
       date.setDate(date.getDate() + i);
-      const dateStr = date.toISOString().split('T')[0];
+      const dateStr = date.toLocaleDateString('en-CA');
 
       const dayMeals = meals.filter(m => {
         const localDate = utcToLocal(m.timestamp);
-        const localDateStr = localDate.toISOString().split('T')[0];
+        const localDateStr = localDate.toLocaleDateString('en-CA');
         return localDateStr === dateStr;
       });
 
@@ -179,7 +179,7 @@ export const MealPage: React.FC = () => {
     console.log('✅', message);
     if (petId) {
       await refreshMealRecords(petId, {
-        date_from: dateRange.startDate.toISOString().split('T')[0],
+        date_from: dateRange.startDate.toLocaleDateString('en-CA'),
         limit: 100
       });
       await getTodayMeals(petId);
