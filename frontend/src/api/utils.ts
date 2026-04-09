@@ -1,10 +1,12 @@
 /**
  * Photo URL Utility
  *
- * Converts relative photo URLs from the database to full URLs
- * using environment-specific base URLs.
- *
- * Static URLs are public and do not require authentication.
+ * Resolves photo URLs returned by the backend into something the browser
+ * can render. After the Cloudinary migration (#69) the backend stores
+ * absolute `https://res.cloudinary.com/...` URLs and this helper just
+ * passes them through. The legacy `/static/...` relative-path branch is
+ * kept as a backstop for any rows in the DB that pre-date the migration
+ * (and for local dev environments that have not yet been re-uploaded).
  */
 
 /**
@@ -24,14 +26,28 @@ function getBaseUrl(): string {
 }
 
 /**
- * Converts a relative photo URL to a full URL
+ * Resolves a photo URL value from the database into a renderable URL.
  *
- * @param relativePath - The relative path from the database (e.g., "/static/pet_photos/a91a9a94.jpg")
- * @returns The full URL, or null if the relative path is invalid/empty
+ * Behaviour:
+ * - Empty / null / undefined input → returns `null`
+ * - Absolute URL (starts with `http://` or `https://`) → returned unchanged
+ *   (this is the Cloudinary path; the backend stores the full secure URL)
+ * - Relative path (e.g. `/static/pet_photos/abc.jpg`) → prefixed with the
+ *   environment-specific `VITE_*_BASE_URL` (legacy fallback for any rows
+ *   that pre-date the Cloudinary migration in #69)
+ *
+ * @param relativePath - The value stored in the database
+ * @returns The full URL the browser can fetch, or `null` if not resolvable
  *
  * @example
- * getPhotoUrl("/static/pet_photos/a91a9a94.jpg")
- * // Returns: "https://api.example.com/static/pet_photos/a91a9a94.jpg"
+ * // Cloudinary (post-#69)
+ * getPhotoUrl("https://res.cloudinary.com/x/image/upload/v1/petcare/pet_photos/abc.jpg")
+ * // → "https://res.cloudinary.com/x/image/upload/v1/petcare/pet_photos/abc.jpg"
+ *
+ * @example
+ * // Legacy relative path
+ * getPhotoUrl("/static/pet_photos/abc.jpg")
+ * // → "https://api.example.com/static/pet_photos/abc.jpg"
  */
 export function getPhotoUrl(relativePath: string | null | undefined): string | null {
     // Handle null, undefined, or empty strings
@@ -39,6 +55,13 @@ export function getPhotoUrl(relativePath: string | null | undefined): string | n
         return null;
     }
 
+    // Cloudinary (and any other absolute URL) is already renderable as-is.
+    // After the backend migration in #69 this is the common path.
+    if (relativePath.startsWith('http://') || relativePath.startsWith('https://')) {
+        return relativePath;
+    }
+
+    // Legacy fallback: relative path that needs the env base URL prefixed.
     // Get base URL based on environment
     const baseUrl = getBaseUrl();
 
