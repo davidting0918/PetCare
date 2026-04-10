@@ -5,6 +5,7 @@ import groupReducer from './slices/groupSlice';
 import weightReducer from './slices/weightSlice';
 import mealReducer from './slices/mealSlice';
 import foodReducer from './slices/foodSlice';
+import medicineReducer from './slices/medicineSlice';
 
 export const store = configureStore({
   reducer: {
@@ -14,6 +15,7 @@ export const store = configureStore({
     weight: weightReducer,
     meal: mealReducer,
     food: foodReducer,
+    medicine: medicineReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
@@ -68,4 +70,18 @@ export {
   clearFoodState,
   clearError as clearFoodError
 } from './slices/foodSlice';
+export {
+  fetchMedications,
+  createMedication,
+  updateMedication,
+  deleteMedication,
+  fetchCourses,
+  createCourse,
+  endCourse,
+  fetchTodaySchedule,
+  createLog,
+  deleteLog,
+  clearMedicineState,
+  clearMedicineError
+} from './slices/medicineSlice';
 export type { PetAccess } from './slices/petSlice';

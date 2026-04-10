@@ -5,3 +5,4 @@ export * from './GroupService';
 export * from './WeightService';
 export * from './MealService';
 export * from './FoodService';
+export * from './MedicineService';
