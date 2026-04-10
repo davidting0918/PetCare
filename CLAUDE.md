@@ -119,7 +119,7 @@ The flow only applies to **code-mutating skill work that opens a PR**. Read-only
 
 ## Project Overview
 
-PetCare is a pet health tracking web app for families. It tracks daily food intake (with calorie counting), weight, and (planned) medication. The product is mobile-first, PWA-installable, and built around **group-based collaboration** so multiple family members can share care of the same pet.
+PetCare is a pet health tracking web app for families. It tracks daily food intake (with calorie counting), weight, and medication. The product is mobile-first, PWA-installable, and built around **group-based collaboration** so multiple family members can share care of the same pet.
 
 The repo is a monorepo with three top-level concerns:
 - `backend/` — FastAPI + asyncpg PostgreSQL API (Python 3.13)
@@ -181,7 +181,7 @@ Frontend env vars (consumed in [src/api/client.ts](frontend/src/api/client.ts)) 
 
 The backend uses a **router → service → db** layering enforced by directory:
 
-- [backend/main.py](backend/main.py) — FastAPI app factory. Registers CORS (env-driven), seven routers, exposes `/scalar` for API docs, and runs `init_database` / `close_database` in the lifespan handler.
+- [backend/main.py](backend/main.py) — FastAPI app factory. Registers CORS (env-driven), eight routers, exposes `/scalar` for API docs, and runs `init_database` / `close_database` in the lifespan handler.
 - [backend/routers/](backend/routers/) — Thin HTTP layer. One router per resource (`auth`, `user`, `group`, `pet`, `food`, `meal`, `weight`). Handles validation, auth dependencies, and delegates to a service. The standard response envelope is `{"status": 1, "data": {...}, "message": "..."}` (status `1` = success). Always honor this contract in new endpoints.
 - [backend/services/](backend/services/) — All business logic. Each service depends on `get_db()` lazily via a `@property` (see `AuthService.db`) so the global asyncpg pool is initialized at app startup, not import time. **`get_db()` is the single seam where unit tests mock the database.**
 - [backend/models/](backend/models/) — Pydantic schemas + table-name constants (e.g. `user_table = "users"`). There is **no ORM**; SQL is hand-written in services using the asyncpg client wrapper.
@@ -398,7 +398,7 @@ The repo uses a `category:value` label system. **Source of truth is [.claude/lab
 
 - **`type:*`** (6) — kind of work, mirrors conventional-commit prefixes. Every issue and PR gets exactly one. `type:feat`, `type:fix`, `type:refactor`, `type:test`, `type:docs`, `type:chore`.
 - **`area:*`** (5) — which top-level part of the monorepo is touched. At least one required, multiple allowed (e.g. a schema-touching backend change is `area:backend` + `area:database`). `area:backend`, `area:frontend`, `area:database`, `area:ci`, `area:claude`.
-- **`domain:*`** (8) — feature domain, one-to-one with `/bte`'s domain argument plus `medicine` (planned). Apply when the work is scoped to a specific service / module: `auth`, `user`, `group`, `pet`, `food`, `meal`, `weight`, `medicine`.
+- **`domain:*`** (8) — feature domain, one-to-one with `/bte`'s domain argument. Apply when the work is scoped to a specific service / module: `auth`, `user`, `group`, `pet`, `food`, `meal`, `weight`, `medicine`.
 - **`test:*`** (2) — test tier, only when `type:test` is set. `test:unit` for `backend/tests/unit/`, `test:integration` for `backend/tests/integration/` (covers schema verification too — there is no `test:schema`).
 
 Total: **21 custom labels**. All 9 GitHub default labels were deleted on 2026-04-08 (`bug` / `documentation` / `enhancement` were replaced by `type:fix` / `type:docs` / `type:feat`; the other 6 were unused on this single-developer repo).

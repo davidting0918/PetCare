@@ -11,7 +11,7 @@
 # - Every issue/PR SHOULD carry exactly one `type:*` and at least one `area:*`.
 # - `domain:*` only applies when the work is scoped to a backend service or
 #   the matching frontend module. The valid set is the same as `/bte`'s domain
-#   argument plus `medicine` (planned, not yet implemented).
+#   argument.
 # - `test:*` only applies when `type:test` is set. `test:integration`
 #   covers schema-verification work as well — there is no `test:schema`.
 # - Skills (`/be`, `/fe`, `/bte`) auto-apply labels based on the commit
@@ -94,7 +94,7 @@ labels:
     description: "Weight records and weight trend tracking"
   - name: "domain:medicine"
     color: "fbca04"
-    description: "Medication tracking (planned, not yet implemented)"
+    description: "Medication tracking, treatment courses, daily schedules"
 
   # ===== test: which test tier (only with type:test) =====
   - name: "test:unit"
