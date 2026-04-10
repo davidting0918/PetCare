@@ -32,5 +32,9 @@ export {
 } from './foods';
 
 export {
+  useMedicine
+} from './medicine';
+
+export {
   useRefresh
 } from './useRefresh';

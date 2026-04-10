@@ -5,10 +5,10 @@ import { LoginPage } from './components/auth/LoginPage';
 import { SignUpPage } from './components/auth/SignupPage';
 import { DashboardPage } from './components/dashboard';
 import { MainLayout } from './components/layout/MainLayout';
-import { ComingSoon } from './components/common/ComingSoon';
 import { SettingsPage } from './components/settings';
 import { WeightPage } from './components/weight';
 import { MealPage } from './components/meal';
+import { MedicinePage } from './components/medicine';
 import type { NavigationTab } from './types';
 
 // Loading component
@@ -94,12 +94,7 @@ const AppLayout: React.FC = () => {
         />
         <Route
           path="/medicine"
-          element={
-            <ComingSoon
-              title="Medicine Management"
-              description="Keep track of medications, set reminders, and log when medicines are given."
-            />
-          }
+          element={<MedicinePage />}
         />
         <Route
           path="/weight"

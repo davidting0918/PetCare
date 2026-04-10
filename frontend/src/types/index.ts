@@ -7,6 +7,7 @@ export * from './group';
 export * from './weight';
 export * from './meal';
 export * from './food';
+export * from './medicine';
 
 // Common API Types
 export interface ApiResponse<T> {
