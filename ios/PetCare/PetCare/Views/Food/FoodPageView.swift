@@ -2,7 +2,6 @@ import SwiftUI
 
 struct FoodPageView: View {
     var dataStore: DataStore
-    @State private var foodVM = FoodViewModel()
     @State private var showCreateFood = false
 
     var body: some View {
@@ -25,13 +24,13 @@ struct FoodPageView: View {
 
                         let columns = [GridItem(.flexible()), GridItem(.flexible())]
                         LazyVGrid(columns: columns, spacing: 12) {
-                            ForEach(foodVM.foods) { food in
+                            ForEach(dataStore.foods) { food in
                                 FoodCard(food: food)
                             }
                         }
                         .padding(.horizontal)
 
-                        if foodVM.foods.isEmpty && !foodVM.isLoading {
+                        if dataStore.foods.isEmpty {
                             Text("No foods in database yet")
                                 .foregroundStyle(Color.textTertiary)
                                 .padding(.top, 20)
@@ -41,14 +40,7 @@ struct FoodPageView: View {
                 }
             }
             .sheet(isPresented: $showCreateFood) {
-                CreateFoodSheet(dataStore: dataStore, foodVM: foodVM)
-            }
-            .onChange(of: dataStore.currentGroupId) { _, newGid in
-                guard let gid = newGid else { return }
-                Task { await foodVM.loadFoods(groupId: gid) }
-            }
-            .task {
-                if let gid = dataStore.currentGroupId { await foodVM.loadFoods(groupId: gid) }
+                CreateFoodSheet(dataStore: dataStore)
             }
         }
     }
@@ -97,7 +89,6 @@ struct FoodCard: View {
 
 struct CreateFoodSheet: View {
     var dataStore: DataStore
-    var foodVM: FoodViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var brand = ""
     @State private var productName = ""
@@ -150,7 +141,8 @@ struct CreateFoodSheet: View {
                 proteinPercentage: nil, fatPercentage: nil,
                 moisturePercentage: nil, carbohydratePercentage: nil
             )
-            _ = try? await foodVM.createFood(groupId: gid, request)
+            _ = try? await APIClient.shared.createFood(groupId: gid, request)
+            await dataStore.refreshFoods(groupId: gid)
             dismiss()
         }
     }

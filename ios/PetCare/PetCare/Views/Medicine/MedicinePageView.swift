@@ -2,7 +2,6 @@ import SwiftUI
 
 struct MedicinePageView: View {
     var dataStore: DataStore
-    @State private var medicineVM = MedicineViewModel()
     @State private var showCreateMedication = false
     @State private var showCreateCourse = false
 
@@ -14,15 +13,17 @@ struct MedicinePageView: View {
                 ScrollView {
                     VStack(spacing: 16) {
                         HeaderView(title: "Medicine", dataStore: dataStore) {
-                            if let pet = dataStore.selectedPet, let gid = pet.groupId {
-                                await medicineVM.refresh(petId: pet.id, groupId: gid)
+                            if let petId = dataStore.currentPetId, let gid = dataStore.currentGroupId {
+                                await dataStore.refreshMedications(groupId: gid)
+                                await dataStore.refreshCourses(petId: petId)
+                                await dataStore.refreshTodaySchedule(petId: petId)
                             }
                         }
 
                         if let pet = dataStore.selectedPet {
-                            TodayChecklistSection(schedule: medicineVM.todaySchedule, medicineVM: medicineVM, petId: pet.id)
-                            ActiveCoursesSection(courses: medicineVM.courses, medicineVM: medicineVM, petId: pet.id, onAddCourse: { showCreateCourse = true })
-                            MedicationDatabaseSection(medications: medicineVM.medications, onAdd: { showCreateMedication = true })
+                            TodayChecklistSection(schedule: dataStore.todaySchedule, dataStore: dataStore, petId: pet.id)
+                            ActiveCoursesSection(courses: dataStore.courses, onAddCourse: { showCreateCourse = true })
+                            MedicationDatabaseSection(medications: dataStore.medications, onAdd: { showCreateMedication = true })
                         } else {
                             Text("Select a pet to view medicine")
                                 .foregroundStyle(Color.textTertiary)
@@ -33,19 +34,12 @@ struct MedicinePageView: View {
             }
             .navigationBarHidden(true)
             .sheet(isPresented: $showCreateMedication) {
-                CreateMedicationSheet(dataStore: dataStore, medicineVM: medicineVM)
+                CreateMedicationSheet(dataStore: dataStore)
             }
             .sheet(isPresented: $showCreateCourse) {
-                CreateCourseSheet(dataStore: dataStore, medicineVM: medicineVM)
+                CreateCourseSheet(dataStore: dataStore)
             }
-            .onChange(of: dataStore.selectedPet?.id) { _, _ in loadAll() }
-            .task { loadAll() }
         }
-    }
-
-    private func loadAll() {
-        guard let pet = dataStore.selectedPet, let gid = pet.groupId else { return }
-        Task { await medicineVM.refresh(petId: pet.id, groupId: gid) }
     }
 }
 
@@ -53,7 +47,7 @@ struct MedicinePageView: View {
 
 struct TodayChecklistSection: View {
     let schedule: TodaySchedule?
-    var medicineVM: MedicineViewModel
+    var dataStore: DataStore
     let petId: String
 
     var body: some View {
@@ -75,7 +69,7 @@ struct TodayChecklistSection: View {
 
             if let items = schedule?.scheduledCourses, !items.isEmpty {
                 ForEach(items) { item in
-                    ChecklistRow(item: item, medicineVM: medicineVM, petId: petId)
+                    ChecklistRow(item: item, dataStore: dataStore, petId: petId)
                 }
             } else {
                 Text("No medications scheduled for today")
@@ -88,7 +82,7 @@ struct TodayChecklistSection: View {
 
 struct ChecklistRow: View {
     let item: ScheduledCourseItem
-    var medicineVM: MedicineViewModel
+    var dataStore: DataStore
     let petId: String
     @State private var isToggling = false
 
@@ -118,7 +112,8 @@ struct ChecklistRow: View {
                     guard let log = item.completedLogs?.last else { return }
                     isToggling = true
                     Task {
-                        try? await medicineVM.undoDone(logId: log.logId ?? "", petId: petId)
+                        try? await APIClient.shared.undoMedicineDone(logId: log.logId ?? "")
+                        await dataStore.refreshTodaySchedule(petId: petId)
                         isToggling = false
                     }
                 } label: {
@@ -130,7 +125,8 @@ struct ChecklistRow: View {
                     guard let cid = item.courseId else { return }
                     isToggling = true
                     Task {
-                        try? await medicineVM.markDone(courseId: cid, petId: petId)
+                        try? await APIClient.shared.markMedicineDone(CreateLogRequest(courseId: cid, loggedAt: nil))
+                        await dataStore.refreshTodaySchedule(petId: petId)
                         isToggling = false
                     }
                 } label: {
@@ -150,8 +146,6 @@ struct ChecklistRow: View {
 
 struct ActiveCoursesSection: View {
     let courses: [TreatmentCourse]
-    var medicineVM: MedicineViewModel
-    let petId: String
     var onAddCourse: () -> Void
 
     var body: some View {
@@ -262,7 +256,6 @@ struct MedicationDatabaseSection: View {
 
 struct CreateMedicationSheet: View {
     var dataStore: DataStore
-    var medicineVM: MedicineViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
 
@@ -282,7 +275,11 @@ struct CreateMedicationSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
                         guard let gid = dataStore.currentGroupId else { return }
-                        Task { try? await medicineVM.createMedication(name: name, groupId: gid); dismiss() }
+                        Task {
+                            _ = try? await APIClient.shared.createMedication(CreateMedicationRequest(name: name, groupId: gid))
+                            await dataStore.refreshMedications(groupId: gid)
+                            dismiss()
+                        }
                     }
                     .disabled(name.isEmpty)
                 }
@@ -293,7 +290,6 @@ struct CreateMedicationSheet: View {
 
 struct CreateCourseSheet: View {
     var dataStore: DataStore
-    var medicineVM: MedicineViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var selectedMedId: String?
     @State private var dosage = ""
@@ -307,7 +303,7 @@ struct CreateCourseSheet: View {
                     Section("Medication") {
                         Picker("Select", selection: $selectedMedId) {
                             Text("Choose...").tag(nil as String?)
-                            ForEach(medicineVM.medications) { med in
+                            ForEach(dataStore.medications) { med in
                                 Text(med.name).tag(med.id as String?)
                             }
                         }
@@ -333,7 +329,9 @@ struct CreateCourseSheet: View {
                                 frequencyDays: Int(frequencyDays),
                                 startDate: nil, endDate: nil
                             )
-                            try? await medicineVM.createCourse(req, petId: petId)
+                            _ = try? await APIClient.shared.createCourse(req)
+                            await dataStore.refreshCourses(petId: petId)
+                            await dataStore.refreshTodaySchedule(petId: petId)
                             dismiss()
                         }
                     }
