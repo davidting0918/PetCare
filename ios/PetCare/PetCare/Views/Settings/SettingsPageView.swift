@@ -3,8 +3,6 @@ import SwiftUI
 struct SettingsPageView: View {
     var authViewModel: AuthViewModel
     var dataStore: DataStore
-    @State private var groupVM = GroupViewModel()
-    @State private var petVM = PetViewModel()
     @State private var showCreatePet = false
     @State private var showCreateGroup = false
     @State private var showJoinGroup = false
@@ -18,18 +16,14 @@ struct SettingsPageView: View {
                     VStack(spacing: 16) {
                         HeaderView(title: "Settings", dataStore: dataStore)
 
-                        // User profile
                         if let user = authViewModel.user {
                             UserProfileCard(user: user)
                         }
 
-                        // My Pets
                         MyPetsSection(pets: dataStore.pets, onCreatePet: { showCreatePet = true })
 
-                        // Groups
-                        GroupsSection(groupVM: groupVM, onCreateGroup: { showCreateGroup = true }, onJoinGroup: { showJoinGroup = true })
+                        GroupsSection(groups: dataStore.groups, onCreateGroup: { showCreateGroup = true }, onJoinGroup: { showJoinGroup = true })
 
-                        // Actions
                         VStack(spacing: 12) {
                             Button { authViewModel.logout() } label: {
                                 HStack {
@@ -53,12 +47,11 @@ struct SettingsPageView: View {
                 CreatePetSheet(dataStore: dataStore)
             }
             .sheet(isPresented: $showCreateGroup) {
-                CreateGroupSheet(groupVM: groupVM)
+                CreateGroupSheet(dataStore: dataStore)
             }
             .sheet(isPresented: $showJoinGroup) {
-                JoinGroupSheet(groupVM: groupVM)
+                JoinGroupSheet(dataStore: dataStore)
             }
-            .task { await groupVM.loadGroups() }
         }
     }
 }
@@ -151,7 +144,7 @@ struct MyPetsSection: View {
 // MARK: - Groups
 
 struct GroupsSection: View {
-    var groupVM: GroupViewModel
+    var groups: [PetGroup]
     var onCreateGroup: () -> Void
     var onJoinGroup: () -> Void
 
@@ -170,11 +163,11 @@ struct GroupsSection: View {
             }
             .padding(.horizontal)
 
-            if groupVM.groups.isEmpty {
+            if groups.isEmpty {
                 Text("No groups yet").foregroundStyle(Color.textTertiary)
                     .frame(maxWidth: .infinity).padding()
             } else {
-                ForEach(groupVM.groups) { group in
+                ForEach(groups) { group in
                     GroupRow(group: group)
                 }
             }
@@ -269,7 +262,7 @@ struct CreatePetSheet: View {
 }
 
 struct CreateGroupSheet: View {
-    var groupVM: GroupViewModel
+    var dataStore: DataStore
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
 
@@ -285,7 +278,11 @@ struct CreateGroupSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        Task { _ = try? await groupVM.createGroup(name: name); dismiss() }
+                        Task {
+                            _ = try? await APIClient.shared.createGroup(CreateGroupRequest(name: name))
+                            await dataStore.refreshGroups()
+                            dismiss()
+                        }
                     }
                     .disabled(name.isEmpty)
                 }
@@ -295,7 +292,7 @@ struct CreateGroupSheet: View {
 }
 
 struct JoinGroupSheet: View {
-    var groupVM: GroupViewModel
+    var dataStore: DataStore
     @Environment(\.dismiss) private var dismiss
     @State private var inviteCode = ""
     @State private var preview: InvitationPreview?
@@ -315,7 +312,11 @@ struct JoinGroupSheet: View {
                             Text("Invited by: \(p.inviterName)")
                             Text("Role: \(p.role)")
                             Button("Join Group") {
-                                Task { try? await groupVM.joinGroup(inviteCode: inviteCode); dismiss() }
+                                Task {
+                                    _ = try? await APIClient.shared.joinGroup(inviteCode: inviteCode)
+                                    await dataStore.refreshGroups()
+                                    dismiss()
+                                }
                             }
                             .foregroundStyle(Color.accentTeal)
                         }
@@ -332,7 +333,7 @@ struct JoinGroupSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Look Up") {
                         Task {
-                            do { preview = try await groupVM.previewInvitation(inviteCode: inviteCode) }
+                            do { preview = try await APIClient.shared.previewInvitation(inviteCode: inviteCode) }
                             catch { errorMessage = error.localizedDescription }
                         }
                     }

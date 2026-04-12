@@ -3,8 +3,6 @@ import Charts
 
 struct MealPageView: View {
     var dataStore: DataStore
-    @State private var mealVM = MealViewModel()
-    @State private var foodVM = FoodViewModel()
     @State private var showCreateMeal = false
 
     var body: some View {
@@ -15,24 +13,22 @@ struct MealPageView: View {
                 ScrollView {
                     VStack(spacing: 16) {
                         HeaderView(title: "Meals", dataStore: dataStore) {
-                            if let pet = dataStore.selectedPet {
-                                await mealVM.refresh(petId: pet.id)
+                            if let petId = dataStore.currentPetId {
+                                await dataStore.refreshMeals(petId: petId)
+                                await dataStore.refreshTodaySummary(petId: petId)
                             }
                         }
 
                         if let pet = dataStore.selectedPet {
-                            // Today's summary
-                            if let summary = mealVM.todaySummary {
+                            if let summary = dataStore.todaySummary {
                                 TodaySummaryCard(summary: summary, calorieTarget: pet.dailyCalorieTarget)
                             }
 
-                            // Calorie chart
-                            if !mealVM.meals.isEmpty {
-                                CalorieChartCard(meals: mealVM.meals)
+                            if !dataStore.meals.isEmpty {
+                                CalorieChartCard(meals: dataStore.meals)
                             }
 
-                            // Meals list
-                            MealListSection(meals: mealVM.meals)
+                            MealListSection(meals: dataStore.meals)
                         } else {
                             Text("Select a pet to view meals")
                                 .foregroundStyle(Color.textTertiary)
@@ -41,7 +37,6 @@ struct MealPageView: View {
                     }
                 }
 
-                // FAB
                 VStack {
                     Spacer()
                     HStack {
@@ -62,23 +57,13 @@ struct MealPageView: View {
             }
             .navigationBarHidden(true)
             .sheet(isPresented: $showCreateMeal) {
-                CreateMealSheet(dataStore: dataStore, foodVM: foodVM) {
-                    if let pet = dataStore.selectedPet {
-                        Task { await mealVM.refresh(petId: pet.id) }
+                CreateMealSheet(dataStore: dataStore) {
+                    if let petId = dataStore.currentPetId {
+                        Task {
+                            await dataStore.refreshMeals(petId: petId)
+                            await dataStore.refreshTodaySummary(petId: petId)
+                        }
                     }
-                }
-            }
-            .onChange(of: dataStore.selectedPet?.id) { _, newId in
-                guard let petId = newId else { return }
-                Task {
-                    await mealVM.refresh(petId: petId)
-                    if let gid = dataStore.currentGroupId { await foodVM.loadFoods(groupId: gid) }
-                }
-            }
-            .task {
-                if let pet = dataStore.selectedPet {
-                    await mealVM.refresh(petId: pet.id)
-                    if let gid = pet.groupId { await foodVM.loadFoods(groupId: gid) }
                 }
             }
         }
@@ -238,7 +223,6 @@ struct MealRow: View {
 
 struct CreateMealSheet: View {
     var dataStore: DataStore
-    var foodVM: FoodViewModel
     var onCreated: () -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var selectedFoodId: String?
@@ -258,7 +242,7 @@ struct CreateMealSheet: View {
                     Section("Food") {
                         Picker("Select Food", selection: $selectedFoodId) {
                             Text("Choose...").tag(nil as String?)
-                            ForEach(foodVM.foods) { food in
+                            ForEach(dataStore.foods) { food in
                                 Text(food.displayName).tag(food.id as String?)
                             }
                         }

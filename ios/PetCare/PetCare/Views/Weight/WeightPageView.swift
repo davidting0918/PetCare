@@ -3,7 +3,6 @@ import Charts
 
 struct WeightPageView: View {
     var dataStore: DataStore
-    @State private var weightVM = WeightViewModel()
     @State private var showCreateWeight = false
 
     var body: some View {
@@ -14,15 +13,17 @@ struct WeightPageView: View {
                 ScrollView {
                     VStack(spacing: 16) {
                         HeaderView(title: "Weight", dataStore: dataStore) {
-                            if let pet = dataStore.selectedPet { await weightVM.loadRecords(petId: pet.id) }
+                            if let petId = dataStore.currentPetId {
+                                await dataStore.refreshWeights(petId: petId)
+                            }
                         }
 
                         if dataStore.selectedPet != nil {
-                            if !weightVM.records.isEmpty {
-                                WeightChartCard(records: weightVM.records)
-                                WeightStatsRow(vm: weightVM)
+                            if !dataStore.weightRecords.isEmpty {
+                                WeightChartCard(records: dataStore.weightRecords)
+                                WeightStatsRow(dataStore: dataStore)
                             }
-                            WeightRecordsList(records: weightVM.records)
+                            WeightRecordsList(records: dataStore.weightRecords)
                         } else {
                             Text("Select a pet to view weight records")
                                 .foregroundStyle(Color.textTertiary)
@@ -51,17 +52,10 @@ struct WeightPageView: View {
             .navigationBarHidden(true)
             .sheet(isPresented: $showCreateWeight) {
                 CreateWeightSheet(dataStore: dataStore) {
-                    if let pet = dataStore.selectedPet {
-                        Task { await weightVM.loadRecords(petId: pet.id) }
+                    if let petId = dataStore.currentPetId {
+                        Task { await dataStore.refreshWeights(petId: petId) }
                     }
                 }
-            }
-            .onChange(of: dataStore.selectedPet?.id) { _, newId in
-                guard let petId = newId else { return }
-                Task { await weightVM.loadRecords(petId: petId) }
-            }
-            .task {
-                if let pet = dataStore.selectedPet { await weightVM.loadRecords(petId: pet.id) }
             }
         }
     }
@@ -107,13 +101,13 @@ struct WeightChartCard: View {
 }
 
 struct WeightStatsRow: View {
-    let vm: WeightViewModel
+    let dataStore: DataStore
 
     var body: some View {
         HStack(spacing: 12) {
-            StatCard(title: "Records", value: "\(vm.totalRecords)", icon: "number", color: .accentBlue)
-            StatCard(title: "Average", value: vm.averageWeight.map { String(format: "%.1f kg", $0) } ?? "—", icon: "divide", color: .accentPurple)
-            StatCard(title: "Change", value: vm.weightChange.map { String(format: "%+.1f kg", $0) } ?? "—", icon: "arrow.up.arrow.down", color: .accentTeal)
+            StatCard(title: "Records", value: "\(dataStore.weightTotal)", icon: "number", color: .accentBlue)
+            StatCard(title: "Average", value: dataStore.averageWeight.map { String(format: "%.1f kg", $0) } ?? "—", icon: "divide", color: .accentPurple)
+            StatCard(title: "Change", value: dataStore.weightChange.map { String(format: "%+.1f kg", $0) } ?? "—", icon: "arrow.up.arrow.down", color: .accentTeal)
         }
         .padding(.horizontal)
     }
@@ -161,8 +155,7 @@ struct WeightRecordsList: View {
                         Spacer()
                         if let by = record.recordedByName {
                             HStack(spacing: 4) {
-                                Image(systemName: "person.fill")
-                                    .font(.caption2)
+                                Image(systemName: "person.fill").font(.caption2)
                                 Text(by).font(.caption)
                             }
                             .foregroundStyle(Color.textTertiary)
