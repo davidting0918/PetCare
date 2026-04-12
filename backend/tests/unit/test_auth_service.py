@@ -210,21 +210,32 @@ class TestFindValidToken:
 class TestGetOrCreateToken:
     @pytest.mark.asyncio
     async def test_returns_existing_token_without_inserting(self, auth_service, mock_db):
-        # Arrange: existing valid token in DB
-        mock_db.read_one.return_value = _make_token_row(token="cached.jwt.token")
+        # Arrange: first read_one returns existing token, second returns access_token id
+        mock_db.read_one.side_effect = [
+            _make_token_row(token="cached.jwt.token"),  # find_valid_token
+            {"id": 42},  # look up access_token id for refresh token FK
+        ]
 
         # Act
         result = await auth_service.get_or_create_token("u_test01")
 
-        # Assert: returns the cached token
-        assert result == {"access_token": "cached.jwt.token", "token_type": "bearer"}
-        # Assert: no insert happened
-        assert mock_db.insert_one.await_count == 0
+        # Assert: returns the cached token + a refresh token
+        assert result["access_token"] == "cached.jwt.token"
+        assert result["token_type"] == "bearer"
+        assert "refresh_token" in result
+        # Assert: no access_token insert, but one refresh_token insert
+        assert mock_db.insert_one.await_count == 1
+        table_arg = mock_db.insert_one.await_args.args[0]
+        assert table_arg == "refresh_tokens"
 
     @pytest.mark.asyncio
     async def test_creates_new_token_when_none_exists(self, auth_service, mock_db):
-        # Arrange: no existing token
-        mock_db.read_one.return_value = None
+        # Arrange: first read_one returns None (no existing token),
+        # second returns access_token id for refresh token FK
+        mock_db.read_one.side_effect = [
+            None,  # find_valid_token
+            {"id": 99},  # look up access_token id
+        ]
 
         # Act
         result = await auth_service.get_or_create_token("u_test01")
@@ -232,12 +243,14 @@ class TestGetOrCreateToken:
         # Assert: returns a new token wrapped in the dict envelope
         assert result["token_type"] == "bearer"
         assert isinstance(result["access_token"], str) and len(result["access_token"]) > 0
+        assert "refresh_token" in result
 
-        # Assert: persisted to access_tokens table
-        assert mock_db.insert_one.await_count == 1
-        table_arg, payload_arg = mock_db.insert_one.await_args.args
-        assert table_arg == "access_tokens"
-        assert payload_arg["user_id"] == "u_test01"
+        # Assert: two inserts — one for access_tokens, one for refresh_tokens
+        assert mock_db.insert_one.await_count == 2
+        first_call_table = mock_db.insert_one.await_args_list[0].args[0]
+        second_call_table = mock_db.insert_one.await_args_list[1].args[0]
+        assert first_call_table == "access_tokens"
+        assert second_call_table == "refresh_tokens"
 
 
 # ================================================================
