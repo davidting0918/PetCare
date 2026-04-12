@@ -1,5 +1,5 @@
 import { apiClient } from "../client";
-import type { EmailLoginRequest, GoogleLoginRequest, LoginResponse, ApiResponse } from "../../types";
+import type { EmailLoginRequest, GoogleLoginRequest, LoginResponse, RefreshTokenRequest, RefreshTokenResponse, ApiResponse } from "../../types";
 
 class AuthService {
     private basePath = '/auth';
@@ -11,6 +11,11 @@ class AuthService {
 
     async googleLogin(request: GoogleLoginRequest): Promise<ApiResponse<LoginResponse>> {
         const response = await apiClient.post(`${this.basePath}/google/login`, request);
+        return response.data;
+    }
+
+    async refreshToken(request: RefreshTokenRequest): Promise<ApiResponse<RefreshTokenResponse>> {
+        const response = await apiClient.post(`${this.basePath}/token/refresh`, request);
         return response.data;
     }
 }
