@@ -220,6 +220,30 @@ update
     public.access_tokens for each row execute function update_updated_at_column();
 
 
+-- refresh tokens table
+CREATE TABLE refresh_tokens (
+	id serial4 NOT NULL,
+	"token" text NOT NULL,
+	user_id varchar(8) NOT NULL,
+	access_token_id int4 NOT NULL,
+	expires_at timestamptz NOT NULL,
+	is_active bool DEFAULT true,
+	created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	updated_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	CONSTRAINT refresh_tokens_pkey PRIMARY KEY (id),
+	CONSTRAINT refresh_tokens_token_unique UNIQUE ("token"),
+	CONSTRAINT refresh_tokens_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE,
+	CONSTRAINT refresh_tokens_access_token_id_fkey FOREIGN KEY (access_token_id) REFERENCES public.access_tokens(id) ON DELETE CASCADE
+);
+CREATE INDEX idx_refresh_tokens_token ON public.refresh_tokens USING btree ("token");
+CREATE INDEX idx_refresh_tokens_user_id ON public.refresh_tokens USING btree (user_id, is_active);
+
+create trigger update_refresh_tokens_updated_at before
+update
+    on
+    public.refresh_tokens for each row execute function update_updated_at_column();
+
+
 -- api keys table
 CREATE TABLE api_keys (
 	id serial4 NOT NULL,
