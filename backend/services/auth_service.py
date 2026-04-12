@@ -1,4 +1,5 @@
 import os
+import secrets
 import uuid
 from datetime import datetime as dt
 from datetime import timedelta as td
@@ -14,12 +15,14 @@ from backend.models.auth import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     ACCESS_TOKEN_SECRET_KEY,
     ALGORITHM,
+    REFRESH_TOKEN_EXPIRE_DAYS,
     AccessToken,
     access_token_table,
     api_key_scheme,
     api_key_table,
     oauth2_scheme,
     pwd_context,
+    refresh_token_table,
 )
 from backend.models.group import CreateGroupRequest
 from backend.models.user import User, UserInfo, user_table
@@ -82,18 +85,37 @@ class AuthService:
         existing_token = await self.find_valid_token(user_id)
 
         if existing_token:
-            return {
-                "access_token": existing_token.token,
-                "token_type": "bearer",
-            }
+            access_token_str = existing_token.token
         else:
             access_token = self.create_access_token(user_id=user_id)
             await self.db.insert_one(access_token_table, access_token.model_dump())
+            access_token_str = access_token.token
 
-            return {
-                "access_token": access_token.token,
-                "token_type": "bearer",
-            }
+        # Look up access_token row id for refresh token FK
+        at_row = await self.db.read_one(
+            f"SELECT id FROM {access_token_table} WHERE token = '{access_token_str}' AND is_active = True"
+        )
+        access_token_id = at_row["id"] if at_row else 1
+
+        # Always create a fresh refresh token on login
+        refresh_token_str = secrets.token_urlsafe(64)
+        refresh_expires = dt.now(tz.utc) + td(days=REFRESH_TOKEN_EXPIRE_DAYS)
+        await self.db.insert_one(
+            refresh_token_table,
+            {
+                "token": refresh_token_str,
+                "user_id": user_id,
+                "access_token_id": access_token_id,
+                "expires_at": refresh_expires,
+                "is_active": True,
+            },
+        )
+
+        return {
+            "access_token": access_token_str,
+            "token_type": "bearer",
+            "refresh_token": refresh_token_str,
+        }
 
     async def authenticate_google_user(self, token: str) -> Optional[User]:
         google_user_info = await self.google_provider.verify_token(token)
@@ -141,6 +163,63 @@ class AuthService:
             """
             await self.db.execute(query)
             return new_user
+
+    async def refresh_access_token(self, refresh_token_str: str) -> dict:
+        """Validate a refresh token and issue a new access + refresh token pair."""
+        sql = f"""
+        SELECT * FROM {refresh_token_table}
+        WHERE token = '{refresh_token_str}'
+          AND is_active = True
+          AND expires_at > CURRENT_TIMESTAMP
+        """
+        rt = await self.db.read_one(sql)
+
+        if not rt:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired refresh token",
+            )
+
+        user_id = rt["user_id"]
+
+        # Revoke the used refresh token
+        await self.db.execute(f"UPDATE {refresh_token_table} SET is_active = False WHERE id = {rt['id']}")
+
+        # Create new access token
+        access_token = self.create_access_token(user_id=user_id)
+        await self.db.insert_one(access_token_table, access_token.model_dump())
+
+        # Look up the new access token id
+        at_row = await self.db.read_one(
+            f"SELECT id FROM {access_token_table} WHERE token = '{access_token.token}' AND is_active = True"
+        )
+        new_at_id = at_row["id"] if at_row else 1
+
+        # Create new refresh token
+        new_refresh = secrets.token_urlsafe(64)
+        refresh_expires = dt.now(tz.utc) + td(days=REFRESH_TOKEN_EXPIRE_DAYS)
+        await self.db.insert_one(
+            refresh_token_table,
+            {
+                "token": new_refresh,
+                "user_id": user_id,
+                "access_token_id": new_at_id,
+                "expires_at": refresh_expires,
+                "is_active": True,
+            },
+        )
+
+        return {
+            "access_token": access_token.token,
+            "token_type": "bearer",
+            "refresh_token": new_refresh,
+        }
+
+    async def revoke_refresh_tokens(self, user_id: str) -> None:
+        """Revoke all active refresh tokens for a user (called on logout)."""
+        await self.db.execute(
+            f"UPDATE {refresh_token_table} SET is_active = False WHERE user_id = '{user_id}' AND is_active = True"
+        )
 
     def verify_password(self, password: str, hashed_pwd: str) -> bool:
         return pwd_context.verify(password, hashed_pwd)
