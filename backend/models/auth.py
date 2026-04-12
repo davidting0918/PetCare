@@ -9,10 +9,12 @@ from pydantic import BaseModel
 load_dotenv("backend/.env")
 
 ACCESS_TOKEN_EXPIRE_MINUTES = 120
+REFRESH_TOKEN_EXPIRE_DAYS = 30
 ALGORITHM = "HS256"
 ACCESS_TOKEN_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 
 access_token_table = "access_tokens"
+refresh_token_table = "refresh_tokens"
 api_key_table = "api_keys"
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/access_token")
@@ -42,6 +44,10 @@ class AccessToken(BaseModel):
 class EmailAuthRequest(BaseModel):
     email: str
     pwd: str
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
 
 
 class APIKey(BaseModel):

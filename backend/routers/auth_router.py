@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 
-from backend.models.auth import EmailAuthRequest, GoogleAuthRequest
+from backend.models.auth import EmailAuthRequest, GoogleAuthRequest, RefreshTokenRequest
 from backend.services.auth_service import AuthService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -23,6 +23,7 @@ async def validate_email_login_route(request: EmailAuthRequest) -> dict:
         "data": {
             "access_token": token_info["access_token"],
             "token_type": token_info["token_type"],
+            "refresh_token": token_info["refresh_token"],
             "user": {
                 "id": user.id,
                 "email": user.email,
@@ -47,6 +48,7 @@ async def validate_google_login_route(request: GoogleAuthRequest) -> dict:
         "data": {
             "access_token": token_info["access_token"],
             "token_type": token_info["token_type"],
+            "refresh_token": token_info["refresh_token"],
             "user": {
                 "id": user.id,
                 "email": user.email,
@@ -55,6 +57,21 @@ async def validate_google_login_route(request: GoogleAuthRequest) -> dict:
             },
         },
         "message": "Google login successful",
+    }
+
+
+@router.post("/token/refresh")
+async def refresh_token_route(request: RefreshTokenRequest) -> dict:
+    token_info = await auth_service.refresh_access_token(request.refresh_token)
+
+    return {
+        "status": 1,
+        "data": {
+            "access_token": token_info["access_token"],
+            "token_type": token_info["token_type"],
+            "refresh_token": token_info["refresh_token"],
+        },
+        "message": "Token refreshed successfully",
     }
 
 
