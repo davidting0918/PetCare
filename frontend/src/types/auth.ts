@@ -21,7 +21,18 @@ export interface SignupRequest {
 export interface LoginResponse {
   access_token: string;
   token_type: string;
+  refresh_token: string;
   user: User;
+}
+
+export interface RefreshTokenRequest {
+  refresh_token: string;
+}
+
+export interface RefreshTokenResponse {
+  access_token: string;
+  token_type: string;
+  refresh_token: string;
 }
 
 // App Auth State

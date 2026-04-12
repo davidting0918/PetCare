@@ -1,9 +1,11 @@
-import axios, { type AxiosInstance } from 'axios';
+import axios, { type AxiosInstance, type InternalAxiosRequestConfig } from 'axios';
 
 class ApiClient {
     private client: AxiosInstance;
     private baseUrl: string;
     private isHandling401 = false;
+    private isRefreshing = false;
+    private refreshPromise: Promise<string | null> | null = null;
 
     constructor(environment: string) {
         if (environment === 'prod') {
@@ -17,8 +19,6 @@ class ApiClient {
         this.client = axios.create({
             baseURL: this.baseUrl,
             timeout: 10000,
-            // Don't set default Content-Type here
-            // Let axios automatically set it based on request data
         });
 
         this.setupInterceptors();
@@ -26,7 +26,6 @@ class ApiClient {
 
     private setupInterceptors() {
         this.client.interceptors.request.use((config) => {
-            // Add auth token if not present
             if (!config.headers.Authorization) {
                 const token = localStorage.getItem('petcare_token');
                 if (token) {
@@ -34,15 +33,11 @@ class ApiClient {
                 }
             }
 
-            // Only process JSON data, skip FormData (for file uploads)
             if (config.data && ['post', 'put', 'patch'].includes(config.method?.toLowerCase() || '')) {
-                // Check if data is FormData (for file uploads)
                 if (!(config.data instanceof FormData)) {
-                    // Set Content-Type for JSON and clean undefined values
                     config.headers['Content-Type'] = 'application/json';
                     config.data = this.removeUndefined(config.data);
                 }
-                // If it's FormData, axios will automatically set the correct Content-Type with boundary
             }
 
             return config;
@@ -52,13 +47,77 @@ class ApiClient {
 
         this.client.interceptors.response.use(
             (response) => response,
-            (error) => {
-                if (error.response?.status === 401 && !this.isHandling401) {
-                    this.handle401Error();
+            async (error) => {
+                const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+
+                if (error.response?.status === 401 && !originalRequest._retry) {
+                    // Skip refresh for auth endpoints themselves
+                    const isAuthEndpoint = originalRequest.url?.includes('/auth/');
+                    if (isAuthEndpoint) {
+                        return Promise.reject(error);
+                    }
+
+                    originalRequest._retry = true;
+
+                    const refreshToken = localStorage.getItem('petcare_refresh_token');
+                    if (refreshToken) {
+                        try {
+                            const newToken = await this.tryRefresh(refreshToken);
+                            if (newToken) {
+                                originalRequest.headers.Authorization = `Bearer ${newToken}`;
+                                return this.client(originalRequest);
+                            }
+                        } catch {
+                            // Refresh failed — fall through to logout
+                        }
+                    }
+
+                    // No refresh token or refresh failed — logout
+                    if (!this.isHandling401) {
+                        this.handle401Error();
+                    }
                 }
                 return Promise.reject(error);
             }
         );
+    }
+
+    private async tryRefresh(refreshToken: string): Promise<string | null> {
+        // If already refreshing, wait for the in-progress refresh
+        if (this.isRefreshing && this.refreshPromise) {
+            return this.refreshPromise;
+        }
+
+        this.isRefreshing = true;
+        this.refreshPromise = this.doRefresh(refreshToken);
+
+        try {
+            const result = await this.refreshPromise;
+            return result;
+        } finally {
+            this.isRefreshing = false;
+            this.refreshPromise = null;
+        }
+    }
+
+    private async doRefresh(refreshToken: string): Promise<string | null> {
+        try {
+            const response = await axios.post(`${this.baseUrl}/auth/token/refresh`, {
+                refresh_token: refreshToken,
+            });
+
+            const data = response.data;
+            if (data.status === 1 && data.data) {
+                localStorage.setItem('petcare_token', data.data.access_token);
+                localStorage.setItem('petcare_refresh_token', data.data.refresh_token);
+                return data.data.access_token;
+            }
+            return null;
+        } catch {
+            // Refresh token is invalid/expired — clear it
+            localStorage.removeItem('petcare_refresh_token');
+            return null;
+        }
     }
 
     private handle401Error() {
@@ -69,17 +128,15 @@ class ApiClient {
         const isAuthPage = currentPath === '/login' || currentPath === '/signup';
 
         if (!isAuthPage) {
-            console.log('🔒 ApiClient: 401 detected, clearing auth and redirecting to login');
-
-            // 清理本地儲存
             localStorage.removeItem('petcare_token');
+            localStorage.removeItem('petcare_refresh_token');
             localStorage.removeItem('petcare_user_id');
             localStorage.removeItem('petcare_user_email');
             localStorage.removeItem('petcare_user_name');
+            localStorage.removeItem('petcare_user_picture');
             localStorage.removeItem('petcare_selected_pet');
 
             window.dispatchEvent(new CustomEvent('auth:logout'));
-
             window.location.href = '/login';
         }
 
@@ -103,7 +160,6 @@ class ApiClient {
                 cleaned[key] = value;
             }
         }
-        console.log(cleaned);
         return cleaned as T;
     }
 }

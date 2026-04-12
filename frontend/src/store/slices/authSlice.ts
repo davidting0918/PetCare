@@ -31,8 +31,8 @@ export const loginUser = createAsyncThunk(
       });
 
       if (response.status === 1 && response.data) {
-        // Store token in localStorage
         localStorage.setItem('petcare_token', response.data.access_token);
+        localStorage.setItem('petcare_refresh_token', response.data.refresh_token);
         localStorage.setItem('petcare_user_id', response.data.user.id);
         localStorage.setItem('petcare_user_email', response.data.user.email);
         localStorage.setItem('petcare_user_name', response.data.user.name);
@@ -60,8 +60,8 @@ export const loginGoogleUser = createAsyncThunk(
       });
 
       if (response.status === 1 && response.data) {
-        // Store token in localStorage
         localStorage.setItem('petcare_token', response.data.access_token);
+        localStorage.setItem('petcare_refresh_token', response.data.refresh_token);
         localStorage.setItem('petcare_user_id', response.data.user.id);
         localStorage.setItem('petcare_user_email', response.data.user.email);
         localStorage.setItem('petcare_user_name', response.data.user.name);
@@ -164,6 +164,7 @@ const authSlice = createSlice({
     logout: (state) => {
       // Clear localStorage
       localStorage.removeItem('petcare_token');
+      localStorage.removeItem('petcare_refresh_token');
       localStorage.removeItem('petcare_user_id');
       localStorage.removeItem('petcare_user_email');
       localStorage.removeItem('petcare_user_name');
