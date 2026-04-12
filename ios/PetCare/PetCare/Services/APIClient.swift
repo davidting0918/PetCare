@@ -17,8 +17,10 @@ final class APIClient {
         decoder = JSONDecoder()
     }
 
+    private var isRefreshing = false
+
     private var token: String? {
-        UserDefaults.standard.string(forKey: "petcare_token")
+        KeychainHelper.read(forKey: KeychainHelper.accessTokenKey)
     }
 
     // MARK: - Auth
@@ -26,7 +28,24 @@ final class APIClient {
     func googleLogin(idToken: String) async throws -> LoginResponseData {
         let body = GoogleLoginRequest(token: idToken)
         let response: APIResponse<LoginResponseData> = try await post(path: "/auth/google/login", body: body, authenticated: false)
-        return try unwrap(response)
+        let data = try unwrap(response)
+        // Save tokens to Keychain
+        KeychainHelper.save(data.accessToken, forKey: KeychainHelper.accessTokenKey)
+        KeychainHelper.save(data.refreshToken, forKey: KeychainHelper.refreshTokenKey)
+        return data
+    }
+
+    func refreshTokens() async throws -> RefreshResponseData {
+        guard let refreshToken = KeychainHelper.read(forKey: KeychainHelper.refreshTokenKey) else {
+            throw APIError.unauthorized
+        }
+        let body = RefreshTokenRequest(refreshToken: refreshToken)
+        let response: APIResponse<RefreshResponseData> = try await post(path: "/auth/token/refresh", body: body, authenticated: false)
+        let data = try unwrap(response)
+        // Save new tokens to Keychain
+        KeychainHelper.save(data.accessToken, forKey: KeychainHelper.accessTokenKey)
+        KeychainHelper.save(data.refreshToken, forKey: KeychainHelper.refreshTokenKey)
+        return data
     }
 
     func fetchCurrentUser() async throws -> UserInfo {
@@ -314,6 +333,47 @@ final class APIClient {
         guard let http = httpResponse as? HTTPURLResponse else { throw APIError.invalidResponse }
 
         if http.statusCode == 401 {
+            // Try silent refresh if we have a refresh token and aren't already refreshing
+            if !isRefreshing, KeychainHelper.read(forKey: KeychainHelper.refreshTokenKey) != nil {
+                isRefreshing = true
+                do {
+                    _ = try await refreshTokens()
+                    isRefreshing = false
+                    // Retry the original request with the new token
+                    var retryRequest = request
+                    if let newToken = token {
+                        retryRequest.setValue("Bearer \(newToken)", forHTTPHeaderField: "Authorization")
+                    }
+                    return try await executeWithoutRetry(retryRequest)
+                } catch {
+                    isRefreshing = false
+                    // Refresh failed — clear tokens and notify
+                    KeychainHelper.deleteAll()
+                    await MainActor.run { NotificationCenter.default.post(name: Self.unauthorizedNotification, object: nil) }
+                    throw APIError.unauthorized
+                }
+            }
+            // No refresh token or already refreshing — give up
+            KeychainHelper.deleteAll()
+            await MainActor.run { NotificationCenter.default.post(name: Self.unauthorizedNotification, object: nil) }
+            throw APIError.unauthorized
+        }
+
+        guard (200...299).contains(http.statusCode) else {
+            let message = String(data: data, encoding: .utf8) ?? "Unknown error"
+            throw APIError.httpError(statusCode: http.statusCode, message: message)
+        }
+
+        return try decoder.decode(APIResponse<Response>.self, from: data)
+    }
+
+    /// Execute without 401 retry (used for retried requests after refresh)
+    private func executeWithoutRetry<Response: Codable>(_ request: URLRequest) async throws -> APIResponse<Response> {
+        let (data, httpResponse) = try await session.data(for: request)
+        guard let http = httpResponse as? HTTPURLResponse else { throw APIError.invalidResponse }
+
+        if http.statusCode == 401 {
+            KeychainHelper.deleteAll()
             await MainActor.run { NotificationCenter.default.post(name: Self.unauthorizedNotification, object: nil) }
             throw APIError.unauthorized
         }
