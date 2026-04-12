@@ -9,14 +9,25 @@ final class AuthViewModel {
     var errorMessage: String?
     private var unauthorizedObserver: Any?
 
-    var isLoggedIn: Bool { accessToken != nil && user != nil }
+    var isLoggedIn: Bool { accessToken != nil }
 
+    /// Default init (no token)
     init() {
-        // Listen for 401 notifications from APIClient
+        setupUnauthorizedObserver()
+    }
+
+    /// Init with a restored token from Keychain — assume logged in immediately
+    init(restoredToken: String?) {
+        self.accessToken = restoredToken
+        setupUnauthorizedObserver()
+    }
+
+    private func setupUnauthorizedObserver() {
         unauthorizedObserver = NotificationCenter.default.addObserver(
             forName: APIClient.unauthorizedNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            self?.logout()
+            guard let self else { return }
+            Task { @MainActor in self.logout() }
         }
     }
 
@@ -26,18 +37,16 @@ final class AuthViewModel {
         }
     }
 
-    /// Try to restore session from persisted token on app launch
+    /// Validate the token in background — if invalid, 401 handler will auto-logout
     @MainActor
-    func restoreSession() async {
-        guard let savedToken = UserDefaults.standard.string(forKey: "petcare_token") else { return }
-        self.accessToken = savedToken
+    func validateSession() async {
+        guard accessToken != nil else { return }
         do {
             let userInfo = try await APIClient.shared.fetchCurrentUser()
             self.user = User(id: userInfo.id, email: userInfo.email, name: userInfo.name, picture: userInfo.picture)
         } catch {
-            // Token is invalid — clear it
-            self.accessToken = nil
-            UserDefaults.standard.removeObject(forKey: "petcare_token")
+            // 401 triggers the unauthorized observer → auto logout
+            // Other errors: might be a network blip, don't logout
         }
     }
 
@@ -59,9 +68,9 @@ final class AuthViewModel {
                 return
             }
             let loginData = try await APIClient.shared.googleLogin(idToken: idToken)
+            // Tokens are saved to Keychain inside APIClient.googleLogin()
             self.accessToken = loginData.accessToken
             self.user = loginData.user
-            UserDefaults.standard.set(loginData.accessToken, forKey: "petcare_token")
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -73,6 +82,8 @@ final class AuthViewModel {
         GIDSignIn.sharedInstance.signOut()
         accessToken = nil
         user = nil
+        KeychainHelper.deleteAll()
+        // Also clean up legacy UserDefaults token if it exists
         UserDefaults.standard.removeObject(forKey: "petcare_token")
     }
 }
