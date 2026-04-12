@@ -2,7 +2,7 @@ import SwiftUI
 
 struct SettingsPageView: View {
     var authViewModel: AuthViewModel
-    var petSelector: PetSelectorViewModel
+    var dataStore: DataStore
     @State private var groupVM = GroupViewModel()
     @State private var petVM = PetViewModel()
     @State private var showCreatePet = false
@@ -16,7 +16,7 @@ struct SettingsPageView: View {
 
                 ScrollView {
                     VStack(spacing: 16) {
-                        HeaderView(title: "Settings", petSelector: petSelector)
+                        HeaderView(title: "Settings", dataStore: dataStore)
 
                         // User profile
                         if let user = authViewModel.user {
@@ -24,7 +24,7 @@ struct SettingsPageView: View {
                         }
 
                         // My Pets
-                        MyPetsSection(pets: petSelector.pets, onCreatePet: { showCreatePet = true })
+                        MyPetsSection(pets: dataStore.pets, onCreatePet: { showCreatePet = true })
 
                         // Groups
                         GroupsSection(groupVM: groupVM, onCreateGroup: { showCreateGroup = true }, onJoinGroup: { showJoinGroup = true })
@@ -50,7 +50,7 @@ struct SettingsPageView: View {
             }
             .navigationBarHidden(true)
             .sheet(isPresented: $showCreatePet) {
-                CreatePetSheet(petSelector: petSelector)
+                CreatePetSheet(dataStore: dataStore)
             }
             .sheet(isPresented: $showCreateGroup) {
                 CreateGroupSheet(groupVM: groupVM)
@@ -228,7 +228,7 @@ struct GroupRow: View {
 // MARK: - Create / Join Sheets
 
 struct CreatePetSheet: View {
-    var petSelector: PetSelectorViewModel
+    var dataStore: DataStore
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
     @State private var petType: PetType = .dog
@@ -257,7 +257,7 @@ struct CreatePetSheet: View {
                         Task {
                             let req = CreatePetRequest(name: name, petType: petType, breed: breed.isEmpty ? nil : breed, gender: nil, birthDate: nil, currentWeightKg: nil, targetWeightKg: nil, dailyCalorieTarget: nil, notes: nil)
                             _ = try? await APIClient.shared.createPet(req)
-                            await petSelector.loadPets()
+                            await dataStore.refreshPets()
                             dismiss()
                         }
                     }

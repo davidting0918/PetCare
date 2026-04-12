@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct FoodPageView: View {
-    var petSelector: PetSelectorViewModel
+    var dataStore: DataStore
     @State private var foodVM = FoodViewModel()
     @State private var showCreateFood = false
 
@@ -41,14 +41,14 @@ struct FoodPageView: View {
                 }
             }
             .sheet(isPresented: $showCreateFood) {
-                CreateFoodSheet(petSelector: petSelector, foodVM: foodVM)
+                CreateFoodSheet(dataStore: dataStore, foodVM: foodVM)
             }
-            .onChange(of: petSelector.selectedPet?.groupId) { _, newGid in
+            .onChange(of: dataStore.currentGroupId) { _, newGid in
                 guard let gid = newGid else { return }
                 Task { await foodVM.loadFoods(groupId: gid) }
             }
             .task {
-                if let gid = petSelector.selectedPet?.groupId { await foodVM.loadFoods(groupId: gid) }
+                if let gid = dataStore.currentGroupId { await foodVM.loadFoods(groupId: gid) }
             }
         }
     }
@@ -96,7 +96,7 @@ struct FoodCard: View {
 }
 
 struct CreateFoodSheet: View {
-    var petSelector: PetSelectorViewModel
+    var dataStore: DataStore
     var foodVM: FoodViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var brand = ""
@@ -140,7 +140,7 @@ struct CreateFoodSheet: View {
     }
 
     private func save() {
-        guard let gid = petSelector.selectedPet?.groupId else { return }
+        guard let gid = dataStore.currentGroupId else { return }
         isCreating = true
         Task {
             let request = CreateFoodRequest(

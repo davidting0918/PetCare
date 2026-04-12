@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct MedicinePageView: View {
-    var petSelector: PetSelectorViewModel
+    var dataStore: DataStore
     @State private var medicineVM = MedicineViewModel()
     @State private var showCreateMedication = false
     @State private var showCreateCourse = false
@@ -13,13 +13,13 @@ struct MedicinePageView: View {
 
                 ScrollView {
                     VStack(spacing: 16) {
-                        HeaderView(title: "Medicine", petSelector: petSelector) {
-                            if let pet = petSelector.selectedPet, let gid = pet.groupId {
+                        HeaderView(title: "Medicine", dataStore: dataStore) {
+                            if let pet = dataStore.selectedPet, let gid = pet.groupId {
                                 await medicineVM.refresh(petId: pet.id, groupId: gid)
                             }
                         }
 
-                        if let pet = petSelector.selectedPet {
+                        if let pet = dataStore.selectedPet {
                             TodayChecklistSection(schedule: medicineVM.todaySchedule, medicineVM: medicineVM, petId: pet.id)
                             ActiveCoursesSection(courses: medicineVM.courses, medicineVM: medicineVM, petId: pet.id, onAddCourse: { showCreateCourse = true })
                             MedicationDatabaseSection(medications: medicineVM.medications, onAdd: { showCreateMedication = true })
@@ -33,18 +33,18 @@ struct MedicinePageView: View {
             }
             .navigationBarHidden(true)
             .sheet(isPresented: $showCreateMedication) {
-                CreateMedicationSheet(petSelector: petSelector, medicineVM: medicineVM)
+                CreateMedicationSheet(dataStore: dataStore, medicineVM: medicineVM)
             }
             .sheet(isPresented: $showCreateCourse) {
-                CreateCourseSheet(petSelector: petSelector, medicineVM: medicineVM)
+                CreateCourseSheet(dataStore: dataStore, medicineVM: medicineVM)
             }
-            .onChange(of: petSelector.selectedPet?.id) { _, _ in loadAll() }
+            .onChange(of: dataStore.selectedPet?.id) { _, _ in loadAll() }
             .task { loadAll() }
         }
     }
 
     private func loadAll() {
-        guard let pet = petSelector.selectedPet, let gid = pet.groupId else { return }
+        guard let pet = dataStore.selectedPet, let gid = pet.groupId else { return }
         Task { await medicineVM.refresh(petId: pet.id, groupId: gid) }
     }
 }
@@ -261,7 +261,7 @@ struct MedicationDatabaseSection: View {
 // MARK: - Create Sheets
 
 struct CreateMedicationSheet: View {
-    var petSelector: PetSelectorViewModel
+    var dataStore: DataStore
     var medicineVM: MedicineViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
@@ -281,7 +281,7 @@ struct CreateMedicationSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        guard let gid = petSelector.selectedPet?.groupId else { return }
+                        guard let gid = dataStore.currentGroupId else { return }
                         Task { try? await medicineVM.createMedication(name: name, groupId: gid); dismiss() }
                     }
                     .disabled(name.isEmpty)
@@ -292,7 +292,7 @@ struct CreateMedicationSheet: View {
 }
 
 struct CreateCourseSheet: View {
-    var petSelector: PetSelectorViewModel
+    var dataStore: DataStore
     var medicineVM: MedicineViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var selectedMedId: String?
@@ -325,7 +325,7 @@ struct CreateCourseSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        guard let petId = petSelector.selectedPet?.id, let medId = selectedMedId else { return }
+                        guard let petId = dataStore.selectedPet?.id, let medId = selectedMedId else { return }
                         Task {
                             let req = CreateCourseRequest(
                                 petId: petId, medicationId: medId,

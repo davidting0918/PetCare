@@ -2,7 +2,7 @@ import SwiftUI
 import Charts
 
 struct MealPageView: View {
-    var petSelector: PetSelectorViewModel
+    var dataStore: DataStore
     @State private var mealVM = MealViewModel()
     @State private var foodVM = FoodViewModel()
     @State private var showCreateMeal = false
@@ -14,13 +14,13 @@ struct MealPageView: View {
 
                 ScrollView {
                     VStack(spacing: 16) {
-                        HeaderView(title: "Meals", petSelector: petSelector) {
-                            if let pet = petSelector.selectedPet {
+                        HeaderView(title: "Meals", dataStore: dataStore) {
+                            if let pet = dataStore.selectedPet {
                                 await mealVM.refresh(petId: pet.id)
                             }
                         }
 
-                        if let pet = petSelector.selectedPet {
+                        if let pet = dataStore.selectedPet {
                             // Today's summary
                             if let summary = mealVM.todaySummary {
                                 TodaySummaryCard(summary: summary, calorieTarget: pet.dailyCalorieTarget)
@@ -62,21 +62,21 @@ struct MealPageView: View {
             }
             .navigationBarHidden(true)
             .sheet(isPresented: $showCreateMeal) {
-                CreateMealSheet(petSelector: petSelector, foodVM: foodVM) {
-                    if let pet = petSelector.selectedPet {
+                CreateMealSheet(dataStore: dataStore, foodVM: foodVM) {
+                    if let pet = dataStore.selectedPet {
                         Task { await mealVM.refresh(petId: pet.id) }
                     }
                 }
             }
-            .onChange(of: petSelector.selectedPet?.id) { _, newId in
+            .onChange(of: dataStore.selectedPet?.id) { _, newId in
                 guard let petId = newId else { return }
                 Task {
                     await mealVM.refresh(petId: petId)
-                    if let gid = petSelector.selectedPet?.groupId { await foodVM.loadFoods(groupId: gid) }
+                    if let gid = dataStore.currentGroupId { await foodVM.loadFoods(groupId: gid) }
                 }
             }
             .task {
-                if let pet = petSelector.selectedPet {
+                if let pet = dataStore.selectedPet {
                     await mealVM.refresh(petId: pet.id)
                     if let gid = pet.groupId { await foodVM.loadFoods(groupId: gid) }
                 }
@@ -237,7 +237,7 @@ struct MealRow: View {
 // MARK: - Create Meal Sheet
 
 struct CreateMealSheet: View {
-    var petSelector: PetSelectorViewModel
+    var dataStore: DataStore
     var foodVM: FoodViewModel
     var onCreated: () -> Void
     @Environment(\.dismiss) private var dismiss
@@ -294,7 +294,7 @@ struct CreateMealSheet: View {
     }
 
     private func createMeal() {
-        guard let petId = petSelector.selectedPet?.id, let foodId = selectedFoodId else { return }
+        guard let petId = dataStore.selectedPet?.id, let foodId = selectedFoodId else { return }
         isCreating = true
         Task {
             do {
