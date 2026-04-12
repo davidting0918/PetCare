@@ -97,8 +97,8 @@ final class APIClient {
 
     // MARK: - Groups
 
-    func fetchMyGroups() async throws -> [Group] {
-        let response: APIResponse<[Group]> = try await get(path: "/groups/my_groups")
+    func fetchMyGroups() async throws -> [PetGroup] {
+        let response: APIResponse<[PetGroup]> = try await get(path: "/groups/my_groups")
         return try unwrap(response)
     }
 
@@ -112,8 +112,8 @@ final class APIClient {
         return try unwrap(response)
     }
 
-    func createGroup(_ request: CreateGroupRequest) async throws -> Group {
-        let response: APIResponse<Group> = try await post(path: "/groups/create", body: request)
+    func createGroup(_ request: CreateGroupRequest) async throws -> PetGroup {
+        let response: APIResponse<PetGroup> = try await post(path: "/groups/create", body: request)
         return try unwrap(response)
     }
 
@@ -132,9 +132,9 @@ final class APIClient {
         return try unwrap(response)
     }
 
-    func joinGroup(inviteCode: String) async throws -> Group {
+    func joinGroup(inviteCode: String) async throws -> PetGroup {
         let body = JoinGroupRequest(inviteCode: inviteCode)
-        let response: APIResponse<Group> = try await post(path: "/groups/join", body: body)
+        let response: APIResponse<PetGroup> = try await post(path: "/groups/join", body: body)
         return try unwrap(response)
     }
 

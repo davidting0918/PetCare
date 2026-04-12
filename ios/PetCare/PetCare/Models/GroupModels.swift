@@ -1,6 +1,6 @@
 import Foundation
 
-struct Group: Codable, Identifiable {
+struct PetGroup: Codable, Identifiable {
     let id: String
     let name: String
     let creatorId: String?

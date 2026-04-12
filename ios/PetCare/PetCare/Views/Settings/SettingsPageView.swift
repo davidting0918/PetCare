@@ -183,7 +183,7 @@ struct GroupsSection: View {
 }
 
 struct GroupRow: View {
-    let group: Group
+    let group: PetGroup
 
     var body: some View {
         HStack {

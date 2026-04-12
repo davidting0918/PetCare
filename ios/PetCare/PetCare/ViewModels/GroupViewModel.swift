@@ -2,7 +2,7 @@ import Foundation
 
 @Observable
 final class GroupViewModel {
-    var groups: [Group] = []
+    var groups: [PetGroup] = []
     var members: [String: [GroupMember]] = [:]
     var groupPets: [String: [GroupPet]] = [:]
     var isLoading = false
@@ -38,7 +38,7 @@ final class GroupViewModel {
     }
 
     @MainActor
-    func createGroup(name: String) async throws -> Group {
+    func createGroup(name: String) async throws -> PetGroup {
         let group = try await APIClient.shared.createGroup(CreateGroupRequest(name: name))
         await loadGroups()
         return group

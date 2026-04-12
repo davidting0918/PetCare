@@ -10,3 +10,12 @@ storage
 repo
 
 .claude/settings.json
+
+# iOS / Xcode
+**/xcuserdata/
+*.xcuserstate
+DerivedData/
+*.ipa
+*.dSYM.zip
+*.dSYM
+ios/PetCare/PetCare/Info.plist
