@@ -2,40 +2,40 @@ import SwiftUI
 
 struct MainTabView: View {
     var authViewModel: AuthViewModel
-    var petSelector: PetSelectorViewModel
+    var dataStore: DataStore
     @State private var selectedTab = 0
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            DashboardPageView(petSelector: petSelector)
+            DashboardPageView(dataStore: dataStore)
                 .tabItem {
                     Image(systemName: "chart.bar.fill")
                     Text("Dashboard")
                 }
                 .tag(0)
 
-            MealPageView(petSelector: petSelector)
+            MealPageView(dataStore: dataStore)
                 .tabItem {
                     Image(systemName: "fork.knife")
                     Text("Meals")
                 }
                 .tag(1)
 
-            MedicinePageView(petSelector: petSelector)
+            MedicinePageView(dataStore: dataStore)
                 .tabItem {
                     Image(systemName: "pills.fill")
                     Text("Medicine")
                 }
                 .tag(2)
 
-            WeightPageView(petSelector: petSelector)
+            WeightPageView(dataStore: dataStore)
                 .tabItem {
                     Image(systemName: "scalemass.fill")
                     Text("Weight")
                 }
                 .tag(3)
 
-            SettingsPageView(authViewModel: authViewModel, petSelector: petSelector)
+            SettingsPageView(authViewModel: authViewModel, dataStore: dataStore)
                 .tabItem {
                     Image(systemName: "gearshape.fill")
                     Text("Settings")

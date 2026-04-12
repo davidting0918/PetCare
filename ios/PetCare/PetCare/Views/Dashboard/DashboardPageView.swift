@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct DashboardPageView: View {
-    var petSelector: PetSelectorViewModel
+    var dataStore: DataStore
 
     var body: some View {
         NavigationStack {
@@ -10,13 +10,13 @@ struct DashboardPageView: View {
 
                 ScrollView {
                     VStack(spacing: 16) {
-                        HeaderView(title: "Dashboard", petSelector: petSelector) {
-                            await petSelector.refresh()
+                        HeaderView(title: "Dashboard", dataStore: dataStore) {
+                            await dataStore.refreshPets()
                         }
 
-                        if let pet = petSelector.selectedPet {
-                            PetSummaryCard(pet: pet, details: petSelector.selectedPetDetails)
-                            QuickStatsGrid(details: petSelector.selectedPetDetails)
+                        if let pet = dataStore.selectedPet {
+                            PetSummaryCard(pet: pet, details: dataStore.selectedPetDetails)
+                            QuickStatsGrid(details: dataStore.selectedPetDetails)
                         } else {
                             emptyState
                         }

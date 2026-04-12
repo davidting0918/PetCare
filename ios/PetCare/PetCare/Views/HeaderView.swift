@@ -2,7 +2,7 @@ import SwiftUI
 
 struct HeaderView: View {
     let title: String
-    var petSelector: PetSelectorViewModel
+    var dataStore: DataStore
     var onRefresh: (() async -> Void)?
     @State private var showPetPicker = false
     @State private var isRefreshing = false
@@ -30,10 +30,10 @@ struct HeaderView: View {
                 }
             }
 
-            if petSelector.pets.count > 1 {
+            if dataStore.pets.count > 1 {
                 Button { showPetPicker = true } label: {
                     HStack(spacing: 4) {
-                        Text(petSelector.selectedPet?.name ?? "Select Pet")
+                        Text(dataStore.selectedPet?.name ?? "Select Pet")
                             .font(.subheadline).fontWeight(.medium)
                             .lineLimit(1)
                             .foregroundStyle(Color.textPrimary)
@@ -47,7 +47,7 @@ struct HeaderView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
                 .sheet(isPresented: $showPetPicker) {
-                    PetPickerSheet(petSelector: petSelector, isPresented: $showPetPicker)
+                    PetPickerSheet(dataStore: dataStore, isPresented: $showPetPicker)
                         .presentationDetents([.medium])
                 }
             }
@@ -59,14 +59,14 @@ struct HeaderView: View {
 }
 
 struct PetPickerSheet: View {
-    var petSelector: PetSelectorViewModel
+    var dataStore: DataStore
     @Binding var isPresented: Bool
 
     var body: some View {
         NavigationStack {
-            List(petSelector.pets) { pet in
+            List(dataStore.pets) { pet in
                 Button {
-                    petSelector.selectPet(pet)
+                    Task { await dataStore.switchPet(pet) }
                     isPresented = false
                 } label: {
                     HStack {
@@ -95,7 +95,7 @@ struct PetPickerSheet: View {
                             }
                         }
                         Spacer()
-                        if pet.id == petSelector.selectedPet?.id {
+                        if pet.id == dataStore.selectedPet?.id {
                             Image(systemName: "checkmark.circle.fill")
                                 .foregroundStyle(Color.accentPink)
                         }

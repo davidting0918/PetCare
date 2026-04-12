@@ -2,7 +2,7 @@ import SwiftUI
 import Charts
 
 struct WeightPageView: View {
-    var petSelector: PetSelectorViewModel
+    var dataStore: DataStore
     @State private var weightVM = WeightViewModel()
     @State private var showCreateWeight = false
 
@@ -13,11 +13,11 @@ struct WeightPageView: View {
 
                 ScrollView {
                     VStack(spacing: 16) {
-                        HeaderView(title: "Weight", petSelector: petSelector) {
-                            if let pet = petSelector.selectedPet { await weightVM.loadRecords(petId: pet.id) }
+                        HeaderView(title: "Weight", dataStore: dataStore) {
+                            if let pet = dataStore.selectedPet { await weightVM.loadRecords(petId: pet.id) }
                         }
 
-                        if petSelector.selectedPet != nil {
+                        if dataStore.selectedPet != nil {
                             if !weightVM.records.isEmpty {
                                 WeightChartCard(records: weightVM.records)
                                 WeightStatsRow(vm: weightVM)
@@ -50,18 +50,18 @@ struct WeightPageView: View {
             }
             .navigationBarHidden(true)
             .sheet(isPresented: $showCreateWeight) {
-                CreateWeightSheet(petSelector: petSelector) {
-                    if let pet = petSelector.selectedPet {
+                CreateWeightSheet(dataStore: dataStore) {
+                    if let pet = dataStore.selectedPet {
                         Task { await weightVM.loadRecords(petId: pet.id) }
                     }
                 }
             }
-            .onChange(of: petSelector.selectedPet?.id) { _, newId in
+            .onChange(of: dataStore.selectedPet?.id) { _, newId in
                 guard let petId = newId else { return }
                 Task { await weightVM.loadRecords(petId: petId) }
             }
             .task {
-                if let pet = petSelector.selectedPet { await weightVM.loadRecords(petId: pet.id) }
+                if let pet = dataStore.selectedPet { await weightVM.loadRecords(petId: pet.id) }
             }
         }
     }
@@ -179,7 +179,7 @@ struct WeightRecordsList: View {
 }
 
 struct CreateWeightSheet: View {
-    var petSelector: PetSelectorViewModel
+    var dataStore: DataStore
     var onCreated: () -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var weightStr = ""
@@ -217,7 +217,7 @@ struct CreateWeightSheet: View {
     }
 
     private func save() {
-        guard let petId = petSelector.selectedPet?.id, let weight = Double(weightStr) else { return }
+        guard let petId = dataStore.selectedPet?.id, let weight = Double(weightStr) else { return }
         isCreating = true
         Task {
             do {
