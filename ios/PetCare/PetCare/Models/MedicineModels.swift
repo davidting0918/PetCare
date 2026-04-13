@@ -20,7 +20,7 @@ struct TreatmentCourse: Codable, Identifiable {
     let petId: String?
     let medicationId: String?
     let medicationName: String?
-    let dosage: String?
+    let dosage: Double?
     let frequencyDays: Int?
     let startDate: String?
     let endDate: String?
@@ -57,7 +57,7 @@ struct ScheduledCourseItem: Codable, Identifiable {
     var id: String { courseId ?? UUID().uuidString }
     let courseId: String?
     let medicationName: String?
-    let dosage: String?
+    let dosage: Double?
     let timesToday: Int?
     let completedLogs: [CompletedLog]?
 
@@ -117,7 +117,7 @@ struct UpdateMedicationRequest: Codable {
 struct CreateCourseRequest: Codable {
     let petId: String
     let medicationId: String
-    let dosage: String?
+    let dosage: Double?
     let frequencyDays: Int?
     let startDate: String?
     let endDate: String?

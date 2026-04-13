@@ -35,9 +35,13 @@ struct MedicinePageView: View {
             .navigationBarHidden(true)
             .sheet(isPresented: $showCreateMedication) {
                 CreateMedicationSheet(dataStore: dataStore)
+                    .presentationDetents([.medium])
+                    .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showCreateCourse) {
                 CreateCourseSheet(dataStore: dataStore)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
             }
         }
     }
@@ -99,7 +103,7 @@ struct ChecklistRow: View {
                     .font(.subheadline).fontWeight(.medium)
                     .foregroundStyle(Color.textPrimary)
                 if let dosage = item.dosage {
-                    Text(dosage).font(.caption).foregroundStyle(Color.textSecondary)
+                    Text(String(format: "%.1f", dosage)).font(.caption).foregroundStyle(Color.textSecondary)
                 }
             }
 
@@ -190,7 +194,7 @@ struct CourseRow: View {
                     .font(.subheadline).fontWeight(.medium)
                     .foregroundStyle(Color.textPrimary)
                 HStack(spacing: 8) {
-                    if let dosage = course.dosage { Text(dosage).font(.caption).foregroundStyle(Color.textSecondary) }
+                    if let dosage = course.dosage { Text(String(format: "%.1f", dosage)).font(.caption).foregroundStyle(Color.textSecondary) }
                     if let freq = course.frequencyDays { Text("Every \(freq)d").font(.caption).foregroundStyle(Color.textTertiary) }
                 }
             }
@@ -325,7 +329,7 @@ struct CreateCourseSheet: View {
                         Task {
                             let req = CreateCourseRequest(
                                 petId: petId, medicationId: medId,
-                                dosage: dosage.isEmpty ? nil : dosage,
+                                dosage: dosage.isEmpty ? nil : Double(dosage),
                                 frequencyDays: Int(frequencyDays),
                                 startDate: nil, endDate: nil
                             )

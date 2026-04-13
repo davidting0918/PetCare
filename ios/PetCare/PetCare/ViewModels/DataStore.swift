@@ -12,6 +12,7 @@ final class DataStore {
     var selectedPetDetails: PetDetails?
     var groups: [PetGroup] = []
     var foods: [Food] = []
+    var foodDetailsCache: [String: Food] = [:]  // foodId → full Food with nutrition
     var meals: [Meal] = []
     var todaySummary: TodaySummary?
     var weightRecords: [WeightRecord] = []
@@ -62,6 +63,8 @@ final class DataStore {
             foods = CacheManager.load([Food].self, forKey: CacheManager.foodsKey(groupId)) ?? []
             medications = CacheManager.load([Medication].self, forKey: CacheManager.medicationsKey(groupId)) ?? []
         }
+
+        foodDetailsCache = CacheManager.load([String: Food].self, forKey: "food_details_all") ?? [:]
     }
 
     // MARK: - Preload all (async, called after login or on app launch)
@@ -185,11 +188,35 @@ final class DataStore {
             let fetched = try await APIClient.shared.fetchFoods(groupId: groupId)
             foods = fetched
             CacheManager.save(fetched, forKey: CacheManager.foodsKey(groupId))
+            // Background: progressively fetch full details for each food
+            Task { await fetchAllFoodDetails(foods: fetched) }
         } catch {
             #if DEBUG
             print("DataStore.refreshFoods failed: \(error)")
             #endif
         }
+    }
+
+    /// Progressively fetch full details for each food in background
+    @MainActor
+    private func fetchAllFoodDetails(foods: [Food]) async {
+        for food in foods {
+            // Skip if already cached
+            if foodDetailsCache[food.id] != nil { continue }
+            do {
+                let detail = try await APIClient.shared.fetchFoodDetails(foodId: food.id)
+                foodDetailsCache[detail.id] = detail
+            } catch {
+                // Non-critical — user can still tap to load on demand
+            }
+        }
+        // Persist cache
+        CacheManager.save(foodDetailsCache, forKey: "food_details_all")
+    }
+
+    /// Get full food details — from cache first, fallback to the list data
+    func getFoodDetail(foodId: String) -> Food? {
+        foodDetailsCache[foodId] ?? foods.first { $0.id == foodId }
     }
 
     @MainActor
@@ -279,6 +306,7 @@ final class DataStore {
         selectedPetDetails = nil
         groups = []
         foods = []
+        foodDetailsCache = [:]
         meals = []
         todaySummary = nil
         weightRecords = []

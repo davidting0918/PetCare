@@ -5,44 +5,53 @@ struct Meal: Codable, Identifiable {
     let petId: String?
     let petName: String?
     let foodId: String?
-    let foodDetails: MealFoodDetails?
+    let foodName: String?         // "Brand - Product Name" (from list API)
+    let foodBrand: String?        // (from details API only)
+    let foodProductName: String?  // (from details API only)
+    let userId: String?
+    let fedByName: String?
     let servingType: String?
     let servingAmount: Double?
     let actualWeightG: Double?
     let calories: Double?
-    let recordedBy: String?
-    let fedAt: String?
+    let timestamp: String?        // API returns "timestamp", not "fed_at"
     let mealType: String?
     let notes: String?
     let groupId: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, calories, notes
+        case id, calories, notes, timestamp
         case petId = "pet_id"
         case petName = "pet_name"
         case foodId = "food_id"
-        case foodDetails = "food_details"
+        case foodName = "food_name"
+        case foodBrand = "food_brand"
+        case foodProductName = "food_product_name"
+        case userId = "user_id"
+        case fedByName = "fed_by_name"
         case servingType = "serving_type"
         case servingAmount = "serving_amount"
         case actualWeightG = "actual_weight_g"
-        case recordedBy = "recorded_by"
-        case fedAt = "fed_at"
         case mealType = "meal_type"
         case groupId = "group_id"
     }
-}
 
-struct MealFoodDetails: Codable {
-    let brand: String?
-    let productName: String?
-    let foodType: String?
-    let photoUrl: String?
+    /// Display name: prefer food_name (list API), fallback to brand + product (detail API)
+    var displayFoodName: String {
+        if let fn = foodName, !fn.isEmpty { return fn }
+        let parts = [foodBrand, foodProductName].compactMap { $0 }.filter { !$0.isEmpty }
+        return parts.isEmpty ? "Unknown Food" : parts.joined(separator: " - ")
+    }
 
-    enum CodingKeys: String, CodingKey {
-        case brand
-        case productName = "product_name"
-        case foodType = "food_type"
-        case photoUrl = "photo_url"
+    /// Date string for grouping (YYYY-MM-DD)
+    var dateString: String {
+        String(timestamp?.prefix(10) ?? "")
+    }
+
+    /// Short time display
+    var timeString: String {
+        guard let ts = timestamp, ts.count >= 16 else { return "" }
+        return String(ts.prefix(16)).replacingOccurrences(of: "T", with: " ")
     }
 }
 
@@ -53,7 +62,6 @@ struct TodaySummary: Codable {
     let calorieTarget: Int?
     let targetAchievementPercentage: Double?
     let mealDistribution: [String: Int]?
-    let feedingTimeline: [[String: String]]?
 
     enum CodingKeys: String, CodingKey {
         case date
@@ -62,7 +70,6 @@ struct TodaySummary: Codable {
         case calorieTarget = "calorie_target"
         case targetAchievementPercentage = "target_achievement_percentage"
         case mealDistribution = "meal_distribution"
-        case feedingTimeline = "feeding_timeline"
     }
 }
 

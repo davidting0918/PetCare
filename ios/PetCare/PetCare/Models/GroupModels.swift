@@ -1,29 +1,45 @@
 import Foundation
 
 struct PetGroup: Codable, Identifiable {
-    let id: String
-    let name: String
-    let creatorId: String?
-    let creatorName: String?
+    var id: String { groupId }
+    let groupId: String
+    let groupName: String
     let role: String?
-    let memberCount: Int?
+    let userId: String?
+    let userName: String?
     let createdAt: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, name, role
-        case creatorId = "creator_id"
-        case creatorName = "creator_name"
-        case memberCount = "member_count"
+        case role
+        case groupId = "group_id"
+        case groupName = "group_name"
+        case userId = "user_id"
+        case userName = "user_name"
         case createdAt = "created_at"
     }
+
+    var name: String { groupName }
 }
 
 struct GroupMember: Codable, Identifiable {
-    let id: String
-    let name: String
-    let email: String
+    var id: String { userId }
+    let userId: String
+    let userName: String
+    let userEmail: String
     let role: String
-    let picture: String?
+    let userPicture: String?
+
+    enum CodingKeys: String, CodingKey {
+        case role
+        case userId = "user_id"
+        case userName = "user_name"
+        case userEmail = "user_email"
+        case userPicture = "user_picture"
+    }
+
+    var name: String { userName }
+    var email: String { userEmail }
+    var picture: String? { userPicture }
 }
 
 struct GroupPet: Codable, Identifiable {

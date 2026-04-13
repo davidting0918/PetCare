@@ -58,7 +58,7 @@ struct PetDetails: Codable, Identifiable {
     let breed: String?
     let gender: PetGender?
     let birthDate: String?
-    let age: String?
+    let age: Double?
     let currentWeightKg: Double?
     let targetWeightKg: Double?
     let heightCm: Double?
@@ -99,9 +99,12 @@ struct CreatePetRequest: Codable {
     let petType: PetType
     let breed: String?
     let gender: PetGender?
-    let birthDate: String?
+    let birthDate: Int?
     let currentWeightKg: Double?
     let targetWeightKg: Double?
+    let heightCm: Double?
+    let isSpayed: Bool?
+    let microchipId: String?
     let dailyCalorieTarget: Int?
     let notes: String?
 
@@ -111,6 +114,9 @@ struct CreatePetRequest: Codable {
         case birthDate = "birth_date"
         case currentWeightKg = "current_weight_kg"
         case targetWeightKg = "target_weight_kg"
+        case heightCm = "height_cm"
+        case isSpayed = "is_spayed"
+        case microchipId = "microchip_id"
         case dailyCalorieTarget = "daily_calorie_target"
     }
 }
@@ -119,17 +125,21 @@ struct UpdatePetRequest: Codable {
     var name: String?
     var breed: String?
     var gender: PetGender?
-    var birthDate: String?
-    var currentWeightKg: Double?
+    var birthDate: Int?
     var targetWeightKg: Double?
+    var heightCm: Double?
+    var isSpayed: Bool?
+    var microchipId: String?
     var dailyCalorieTarget: Int?
     var notes: String?
 
     enum CodingKeys: String, CodingKey {
         case name, breed, gender, notes
         case birthDate = "birth_date"
-        case currentWeightKg = "current_weight_kg"
         case targetWeightKg = "target_weight_kg"
+        case heightCm = "height_cm"
+        case isSpayed = "is_spayed"
+        case microchipId = "microchip_id"
         case dailyCalorieTarget = "daily_calorie_target"
     }
 }

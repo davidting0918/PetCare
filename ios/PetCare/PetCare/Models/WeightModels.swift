@@ -3,21 +3,24 @@ import Foundation
 struct WeightRecord: Codable, Identifiable {
     let id: String
     let petId: String?
-    let weightKg: Double
+    let weight: Double
+    let userId: String?
+    let userName: String?
     let timestamp: String?
-    let recordedBy: String?
-    let recordedByName: String?
     let notes: String?
     let createdAt: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, timestamp, notes
+        case id, weight, timestamp, notes
         case petId = "pet_id"
-        case weightKg = "weight_kg"
-        case recordedBy = "recorded_by"
-        case recordedByName = "recorded_by_name"
+        case userId = "user_id"
+        case userName = "user_name"
         case createdAt = "created_at"
     }
+
+    // Convenience alias for views
+    var weightKg: Double { weight }
+    var recordedByName: String? { userName }
 }
 
 struct WeightListResponse: Codable {
@@ -35,24 +38,18 @@ struct WeightListResponse: Codable {
 
 struct CreateWeightRequest: Codable {
     let petId: String
-    let weightKg: Double
+    let weight: Double
     let timestamp: String?
     let notes: String?
 
     enum CodingKeys: String, CodingKey {
-        case notes, timestamp
+        case weight, notes, timestamp
         case petId = "pet_id"
-        case weightKg = "weight_kg"
     }
 }
 
 struct UpdateWeightRequest: Codable {
-    var weightKg: Double?
+    var weight: Double?
     var timestamp: String?
     var notes: String?
-
-    enum CodingKeys: String, CodingKey {
-        case notes, timestamp
-        case weightKg = "weight_kg"
-    }
 }
