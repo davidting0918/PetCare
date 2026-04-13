@@ -3,7 +3,7 @@ import Foundation
 final class APIClient {
     static let shared = APIClient()
 
-    private let baseURL = "https://petcare-staging.onrender.com"
+    private let baseURL = "https://petcare-staging-gc76.onrender.com"
     private let session: URLSession
     private let decoder: JSONDecoder
 
