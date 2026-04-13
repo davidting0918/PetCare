@@ -1,10 +1,14 @@
+import logging
 import os
+import time
 
 import httpx
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 
 from backend.models.auth import GoogleUserInfo
+
+logger = logging.getLogger(__name__)
 
 
 class GoogleAuthProvider:
@@ -16,6 +20,14 @@ class GoogleAuthProvider:
         self.allowed_client_ids = [client_id]
         if ios_client_id:
             self.allowed_client_ids.append(ios_client_id)
+
+    def _record_external_timing(self, service: str, duration_ms: float) -> None:
+        try:
+            from backend.core.metrics import metrics_collector
+
+            metrics_collector.record_external_call(service, duration_ms)
+        except Exception:
+            pass
 
     async def exchange_code_for_tokens(self, authorization_code: str, redirect_uri: str) -> dict:
         """Exchange authorization code for access token and ID token"""
@@ -29,21 +41,29 @@ class GoogleAuthProvider:
             "redirect_uri": redirect_uri,
         }
 
-        async with httpx.AsyncClient() as client:
-            response = await client.post(token_url, data=data)
-            response.raise_for_status()
-            return response.json()
+        start = time.perf_counter()
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(token_url, data=data)
+                response.raise_for_status()
+                return response.json()
+        finally:
+            self._record_external_timing("google_oauth_exchange", (time.perf_counter() - start) * 1000.0)
 
     async def verify_token(self, token: str) -> GoogleUserInfo:
         # Try each allowed client ID (web, iOS, etc.)
+        start = time.perf_counter()
         last_error = None
-        for cid in self.allowed_client_ids:
-            try:
-                id_info = id_token.verify_oauth2_token(token, google_requests.Request(), cid)
-                return GoogleUserInfo(
-                    id=id_info["sub"], email=id_info["email"], name=id_info["name"], picture=id_info["picture"]
-                )
-            except Exception as e:
-                last_error = e
-                continue
-        raise last_error
+        try:
+            for cid in self.allowed_client_ids:
+                try:
+                    id_info = id_token.verify_oauth2_token(token, google_requests.Request(), cid)
+                    return GoogleUserInfo(
+                        id=id_info["sub"], email=id_info["email"], name=id_info["name"], picture=id_info["picture"]
+                    )
+                except Exception as e:
+                    last_error = e
+                    continue
+            raise last_error
+        finally:
+            self._record_external_timing("google_oauth_verify", (time.perf_counter() - start) * 1000.0)
