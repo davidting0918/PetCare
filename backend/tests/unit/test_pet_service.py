@@ -122,16 +122,13 @@ class TestGetUserPetPermission:
     @pytest.mark.asyncio
     @pytest.mark.parametrize("role_value", ["owner", "creator", "member", "viewer"])
     async def test_returns_role_when_user_has_access(self, pet_service, mock_db, role_value):
-        mock_db.read_one.side_effect = [
-            _make_pet_row(),
-            {"user_permission": role_value},
-        ]
+        mock_db.read_one.return_value = {"id": "p_test01", "user_permission": role_value}
         result = await pet_service._get_user_pet_permission("p_test01", "u_test01")
         assert result == role_value
 
     @pytest.mark.asyncio
     async def test_no_membership_raises_403(self, pet_service, mock_db):
-        mock_db.read_one.side_effect = [_make_pet_row(), None]
+        mock_db.read_one.return_value = {"id": "p_test01", "user_permission": None}
 
         with pytest.raises(HTTPException) as exc:
             await pet_service._get_user_pet_permission("p_test01", "u_outsider")
@@ -183,12 +180,10 @@ class TestCreatePet:
 class TestUpdatePet:
     @pytest.mark.asyncio
     async def test_owner_can_update_pet(self, pet_service, mock_db):
-        # Arrange: permission helper sees owner, then get_pet_details path runs
+        # Arrange: permission helper (1 call), then get_pet_details path
         mock_db.read_one.side_effect = [
-            _make_pet_row(),  # _can_modify_pet → pet lookup
-            {"user_permission": "owner"},  # _can_modify_pet → permission lookup
-            _make_pet_row(),  # get_pet_details → pet lookup
-            {"user_permission": "owner"},  # get_pet_details permission check pet lookup
+            {"id": "p_test01", "user_permission": "owner"},  # _can_modify_pet → single query
+            {"id": "p_test01", "user_permission": "owner"},  # get_pet_details → _can_view_pet
             _make_pet_row(name="Updated"),  # get_pet_details → final fetch
         ]
 
@@ -201,10 +196,7 @@ class TestUpdatePet:
 
     @pytest.mark.asyncio
     async def test_viewer_cannot_update_pet(self, pet_service, mock_db):
-        mock_db.read_one.side_effect = [
-            _make_pet_row(),
-            {"user_permission": "viewer"},
-        ]
+        mock_db.read_one.return_value = {"id": "p_test01", "user_permission": "viewer"}
 
         with pytest.raises(HTTPException) as exc:
             await pet_service.update_pet("p_test01", UpdatePetRequest(name="Updated"), "u_viewer")
@@ -220,10 +212,7 @@ class TestUpdatePet:
 class TestDeletePet:
     @pytest.mark.asyncio
     async def test_owner_can_delete_pet(self, pet_service, mock_db):
-        mock_db.read_one.side_effect = [
-            _make_pet_row(),
-            {"user_permission": "owner"},
-        ]
+        mock_db.read_one.return_value = {"id": "p_test01", "user_permission": "owner"}
 
         result = await pet_service.delete_pet("p_test01", "u_owner")
 
@@ -234,10 +223,7 @@ class TestDeletePet:
     @pytest.mark.asyncio
     @pytest.mark.parametrize("role", ["creator", "member", "viewer"])
     async def test_non_owner_cannot_delete_pet(self, pet_service, mock_db, role):
-        mock_db.read_one.side_effect = [
-            _make_pet_row(),
-            {"user_permission": role},
-        ]
+        mock_db.read_one.return_value = {"id": "p_test01", "user_permission": role}
 
         with pytest.raises(HTTPException) as exc:
             await pet_service.delete_pet("p_test01", "u_other")
@@ -254,8 +240,7 @@ class TestAssignPetToGroup:
     @pytest.mark.asyncio
     async def test_owner_who_is_creator_of_target_group_can_assign(self, pet_service, mock_db):
         mock_db.read_one.side_effect = [
-            _make_pet_row(),  # _is_owner → pet lookup
-            {"user_permission": "owner"},  # _is_owner → permission lookup
+            {"id": "p_test01", "user_permission": "owner"},  # _is_owner → single query
             {"group_id": "grp_target", "role": "creator"},  # target group role check
             {  # get pet info for response
                 "pet_id": "p_test01",
@@ -277,10 +262,7 @@ class TestAssignPetToGroup:
 
     @pytest.mark.asyncio
     async def test_non_owner_cannot_assign_pet(self, pet_service, mock_db):
-        mock_db.read_one.side_effect = [
-            _make_pet_row(),
-            {"user_permission": "member"},
-        ]
+        mock_db.read_one.return_value = {"id": "p_test01", "user_permission": "member"}
 
         with pytest.raises(HTTPException) as exc:
             await pet_service.assign_pet_to_group(
@@ -292,8 +274,7 @@ class TestAssignPetToGroup:
     @pytest.mark.asyncio
     async def test_target_group_not_found_raises_404(self, pet_service, mock_db):
         mock_db.read_one.side_effect = [
-            _make_pet_row(),
-            {"user_permission": "owner"},
+            {"id": "p_test01", "user_permission": "owner"},  # _is_owner → single query
             None,  # target group role lookup → not a member
         ]
 
@@ -306,8 +287,7 @@ class TestAssignPetToGroup:
     @pytest.mark.asyncio
     async def test_owner_must_be_creator_of_target_group(self, pet_service, mock_db):
         mock_db.read_one.side_effect = [
-            _make_pet_row(),
-            {"user_permission": "owner"},
+            {"id": "p_test01", "user_permission": "owner"},  # _is_owner → single query
             {"group_id": "grp_target", "role": "member"},
         ]
 

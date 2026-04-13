@@ -44,49 +44,36 @@ class PetService:
 
     async def _get_user_pet_permission(self, pet_id: str, user_id: str) -> str:
         """
-        Determine user's permission level for a specific pet.
+        Determine user's permission level for a specific pet in a single query.
 
-        Args:
-            pet_id: Target pet ID
-            user_id: User requesting access
+        Combines pet existence check and group membership permission lookup
+        into one JOIN query using parameterized inputs.
 
         Returns:
-            tuple[Pet, str]: Pet object and permission level ("owner", "creator", "member", "viewer", "none")
+            str: Permission level ("owner", "creator", "member", "viewer")
 
         Raises:
-            HTTPException: If pet not found or user has no access
+            HTTPException: 404 if pet not found, 403 if user has no access
         """
-
-        # first check if pet exists
-        sql = f"""
-        select * from pets where id = '{pet_id}' and is_active = true
+        sql = """
+        SELECT
+            p.id,
+            CASE WHEN p.owner_id = $2 THEN 'owner' ELSE gm.role END AS user_permission
+        FROM pets p
+        LEFT JOIN group_members gm
+            ON gm.group_id = p.group_id
+            AND gm.user_id = $2
+            AND gm.is_active = TRUE
+        WHERE p.id = $1 AND p.is_active = TRUE
         """
-        pet = await self.db.read_one(sql)
-        if not pet:
+        result = await self.db.read_one(sql, pet_id, user_id)
+        if not result:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pet not found")
-
-        sql = f"""
-        select
-            case
-                when p.owner_id = '{user_id}' then 'owner'
-                else gm.role
-            end as user_permission
-        from
-            pets p
-        left join group_members gm
-                using (group_id)
-        where
-            gm.user_id = '{user_id}'
-            and p.id = '{pet_id}'
-            and p.is_active = true
-            and gm.is_active = true
-        """
-        permission = await self.db.read_one(sql)
-        if not permission:
+        if not result["user_permission"]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="User doesn't have permission to this pet"
             )
-        return permission["user_permission"]
+        return result["user_permission"]
 
     async def _is_owner(self, pet_id: str, user_id: str) -> bool:
         permission = await self._get_user_pet_permission(pet_id, user_id)

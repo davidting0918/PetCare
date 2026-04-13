@@ -320,6 +320,36 @@ class MedicineService:
             updated_at=record["updated_at"],
         )
 
+    def _course_from_enriched_row(self, record: dict) -> TreatmentCourseInfo:
+        """Build TreatmentCourseInfo from a row that already has JOINed columns."""
+        times = record["times_per_day"]
+        if isinstance(times, (list, tuple)):
+            times_list = [str(t) for t in times]
+        else:
+            times_list = [str(times)]
+
+        return TreatmentCourseInfo(
+            id=record["id"],
+            pet_id=record["pet_id"],
+            pet_name=record.get("pet_name") or "Unknown",
+            medication_id=record["medication_id"],
+            medication_name=record.get("medication_name") or "Unknown",
+            medication_type=record.get("medication_type") or "other",
+            group_id=record["group_id"],
+            dosage=float(record["dosage"]),
+            dosage_unit=record["dosage_unit"],
+            frequency_days=record["frequency_days"],
+            times_per_day=times_list,
+            start_date=str(record["start_date"]),
+            end_date=str(record["end_date"]) if record["end_date"] else None,
+            notes=record.get("notes"),
+            created_by=record.get("created_by"),
+            created_by_name=record.get("created_by_name"),
+            is_active=record["is_active"],
+            created_at=record["created_at"],
+            updated_at=record["updated_at"],
+        )
+
     async def list_courses(
         self,
         pet_id: str,
@@ -341,12 +371,20 @@ class MedicineService:
         # "all" — no extra condition
 
         sql = f"""
-        SELECT tc.* FROM {treatment_course_table} tc
+        SELECT tc.*,
+               p.name AS pet_name,
+               m.name AS medication_name,
+               m.medication_type,
+               u.name AS created_by_name
+        FROM {treatment_course_table} tc
+        LEFT JOIN pets p ON tc.pet_id = p.id
+        LEFT JOIN {medication_table} m ON tc.medication_id = m.id
+        LEFT JOIN users u ON tc.created_by = u.id
         WHERE {' AND '.join(conditions)}
         ORDER BY tc.created_at DESC
         """
         records = await self.db.read(sql, pet_id)
-        return [await self._enrich_course(r) for r in records]
+        return [self._course_from_enriched_row(r) for r in records]
 
     async def update_course(
         self,
@@ -582,11 +620,12 @@ class MedicineService:
         """
         courses = await self.db.read(course_sql, pet_id, check_date)
 
-        # Get all logs for this pet on this date
+        # Get all logs for this pet on this date (JOIN medications for ad-hoc enrichment)
         log_sql = f"""
-        SELECT ml.*, u.name as administered_by_name
+        SELECT ml.*, u.name as administered_by_name, m.name as medication_name
         FROM {medication_log_table} ml
         LEFT JOIN users u ON ml.administered_by = u.id
+        LEFT JOIN {medication_table} m ON ml.medication_id = m.id
         WHERE ml.pet_id = $1
           AND ml.is_active = TRUE
           AND DATE(ml.administered_at) = $2
@@ -636,10 +675,30 @@ class MedicineService:
                 )
 
         # Ad-hoc logs: logs without a course_id on this date
+        # Data is already enriched via JOINs above — no per-record queries needed
         ad_hoc_logs = []
         for log in logs:
             if not log.get("course_id"):
-                ad_hoc_logs.append(await self._enrich_log(log))
+                ad_hoc_logs.append(
+                    MedicationLogInfo(
+                        id=log["id"],
+                        pet_id=log["pet_id"],
+                        medication_id=log["medication_id"],
+                        medication_name=log.get("medication_name") or "Unknown",
+                        group_id=log["group_id"],
+                        course_id=log.get("course_id"),
+                        dosage=float(log["dosage"]),
+                        dosage_unit=log["dosage_unit"],
+                        time_of_day=log.get("time_of_day"),
+                        administered_at=log["administered_at"],
+                        administered_by=log.get("administered_by"),
+                        administered_by_name=log.get("administered_by_name"),
+                        notes=log.get("notes"),
+                        is_active=log["is_active"],
+                        created_at=log["created_at"],
+                        updated_at=log["updated_at"],
+                    )
+                )
 
         total = len(scheduled_items)
         completed = sum(1 for item in scheduled_items if item.is_done)
