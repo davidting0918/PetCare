@@ -20,13 +20,17 @@ message. This keeps unit tests and local imports working without env vars
 while still failing loudly the moment a real upload is attempted.
 """
 
+import logging
 import os
+import time
 from typing import Any, Dict
 
 import cloudinary
 import cloudinary.uploader
 from fastapi import HTTPException, status
 from starlette.concurrency import run_in_threadpool
+
+logger = logging.getLogger(__name__)
 
 
 def _configure_cloudinary() -> None:
@@ -90,6 +94,7 @@ async def upload_image(
             resource_type="image",
         )
 
+    start = time.perf_counter()
     try:
         result = await run_in_threadpool(_do_upload)
     except Exception as exc:
@@ -97,6 +102,14 @@ async def upload_image(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Cloudinary upload failed: {exc}",
         )
+    finally:
+        duration_ms = (time.perf_counter() - start) * 1000.0
+        try:
+            from backend.core.metrics import metrics_collector
+
+            metrics_collector.record_external_call("cloudinary", duration_ms)
+        except Exception:
+            pass
 
     return {
         "secure_url": result["secure_url"],

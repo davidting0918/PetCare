@@ -1,4 +1,6 @@
+import logging
 import os
+import time
 from contextlib import asynccontextmanager
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
@@ -6,6 +8,8 @@ from typing import Any, Dict, List, Optional
 import asyncpg
 from asyncpg import Pool
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv("backend/.env")
@@ -108,6 +112,16 @@ class PostgresAsyncClient:
         else:
             return obj
 
+    # ================== Timing Helper ==================
+
+    def _record_query_timing(self, operation: str, duration_ms: float) -> None:
+        try:
+            from backend.core.metrics import metrics_collector
+
+            metrics_collector.record_db_query(operation, duration_ms)
+        except Exception:
+            pass
+
     # ================== Simple Query Methods ==================
 
     async def read(self, query: str, *args: Any) -> List[Dict[str, Any]]:
@@ -121,6 +135,7 @@ class PostgresAsyncClient:
         Returns:
             List[Dict[str, Any]]: Query results as list of dictionaries with Decimal values converted to float
         """
+        start = time.perf_counter()
         try:
             async with self.get_connection() as conn:
                 rows = await conn.fetch(query, *args)
@@ -128,6 +143,8 @@ class PostgresAsyncClient:
                 return self._convert_decimals_to_floats(result)
         except Exception as e:
             raise e
+        finally:
+            self._record_query_timing("read", (time.perf_counter() - start) * 1000.0)
 
     async def read_one(self, query: str, *args: Any) -> Optional[Dict[str, Any]]:
         """
@@ -142,6 +159,7 @@ class PostgresAsyncClient:
                 First query result as dictionary with Decimal values converted to float,
                 or None if no result
         """
+        start = time.perf_counter()
         try:
             async with self.get_connection() as conn:
                 row = await conn.fetchrow(query, *args)
@@ -152,6 +170,8 @@ class PostgresAsyncClient:
 
         except Exception as e:
             raise e
+        finally:
+            self._record_query_timing("read_one", (time.perf_counter() - start) * 1000.0)
 
     async def insert_one(self, table: str, data: Dict[str, Any]) -> Any:
         """
@@ -164,6 +184,7 @@ class PostgresAsyncClient:
         Returns:
             Any: The ID of the inserted record (if table has 'id' column), or the full inserted record
         """
+        start = time.perf_counter()
         try:
             # Convert timestamp fields automatically
 
@@ -190,6 +211,8 @@ class PostgresAsyncClient:
 
         except Exception as e:
             raise e
+        finally:
+            self._record_query_timing("insert_one", (time.perf_counter() - start) * 1000.0)
 
     async def insert(self, table: str, data: List[Dict[str, Any]]) -> List[Any]:
         """
@@ -202,6 +225,7 @@ class PostgresAsyncClient:
         Returns:
             List[Any]: List of inserted record IDs (if table has 'id' column), or list of full inserted records
         """
+        start = time.perf_counter()
         try:
             if not data:
                 return []
@@ -252,6 +276,8 @@ class PostgresAsyncClient:
 
         except Exception as e:
             raise e
+        finally:
+            self._record_query_timing("insert", (time.perf_counter() - start) * 1000.0)
 
     async def execute(self, query: str, *args: Any) -> str:
         """
@@ -264,9 +290,13 @@ class PostgresAsyncClient:
         Returns:
             str: Result status from the database (e.g., "INSERT 0 1", "UPDATE 1", "DELETE 1")
         """
-        async with self.get_connection() as conn:
-            result = await conn.execute(query, *args)
-            return result
+        start = time.perf_counter()
+        try:
+            async with self.get_connection() as conn:
+                result = await conn.execute(query, *args)
+                return result
+        finally:
+            self._record_query_timing("execute", (time.perf_counter() - start) * 1000.0)
 
     async def execute_returning(self, query: str, *args: Any) -> Any:
         """
@@ -279,9 +309,13 @@ class PostgresAsyncClient:
         Returns:
             Any: The returned value from the RETURNING clause with Decimal values converted to float
         """
-        async with self.get_connection() as conn:
-            result = await conn.fetchrow(query, *args)
-            if result:
-                result_dict = dict(result)
-                return self._convert_decimals_to_floats(result_dict)
-            return None
+        start = time.perf_counter()
+        try:
+            async with self.get_connection() as conn:
+                result = await conn.fetchrow(query, *args)
+                if result:
+                    result_dict = dict(result)
+                    return self._convert_decimals_to_floats(result_dict)
+                return None
+        finally:
+            self._record_query_timing("execute_returning", (time.perf_counter() - start) * 1000.0)

@@ -1,18 +1,22 @@
 import logging
+import time
 from contextlib import asynccontextmanager
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from scalar_fastapi import get_scalar_api_reference
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from backend.core.db_manager import close_database, init_database
 from backend.core.environment import env_config, get_config
+from backend.core.metrics import metrics_collector
 from backend.routers.auth_router import router as auth_router
 from backend.routers.food_router import router as food_router
 from backend.routers.group_router import router as group_router
 from backend.routers.meal_router import router as meal_router
 from backend.routers.medicine_router import router as medicine_router
+from backend.routers.metrics_router import router as metrics_router
 from backend.routers.pet_router import router as pet_router
 from backend.routers.user_router import router as user_router
 from backend.routers.weight_router import router as weight_router
@@ -21,6 +25,22 @@ logging.basicConfig(
     level=getattr(logging, get_config("log_level")), format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+
+class TimingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next) -> Response:
+        start = time.perf_counter()
+        response = await call_next(request)
+        duration_ms = (time.perf_counter() - start) * 1000.0
+
+        method = request.method
+        path = request.url.path
+        status_code = response.status_code
+
+        logger.info("%s %s %d %.1fms", method, path, status_code, duration_ms)
+        metrics_collector.record_request(method, path, status_code, duration_ms)
+
+        return response
 
 
 @asynccontextmanager
@@ -69,6 +89,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.add_middleware(TimingMiddleware)
+
 app.include_router(auth_router)
 app.include_router(user_router)
 app.include_router(group_router)
@@ -77,6 +99,7 @@ app.include_router(food_router)
 app.include_router(meal_router)
 app.include_router(weight_router)
 app.include_router(medicine_router)
+app.include_router(metrics_router)
 
 
 # Add Scalar API documentation
