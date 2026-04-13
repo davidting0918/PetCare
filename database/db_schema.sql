@@ -81,6 +81,7 @@ CREATE INDEX idx_group_members_active ON public.group_members USING btree (group
 CREATE INDEX idx_group_members_group_id ON public.group_members USING btree (group_id);
 CREATE INDEX idx_group_members_role ON public.group_members USING btree (group_id, role);
 CREATE INDEX idx_group_members_user_id ON public.group_members USING btree (user_id);
+CREATE INDEX idx_group_members_user_active ON public.group_members USING btree (user_id, is_active, role);
 
 create trigger update_group_members_updated_at before
 update

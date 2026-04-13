@@ -592,14 +592,7 @@ class MealService:
 
     async def get_meal_statistics(self, filters: MealQueryFilters, user_id: str) -> MealStatistics:
         """
-        Generate comprehensive meal statistics for a time period.
-
-        Args:
-            filters: Query filters with date range
-            user_id: User requesting the statistics
-
-        Returns:
-            MealStatistics: Statistical summary
+        Generate comprehensive meal statistics for a time period using SQL aggregation.
         """
         # Require date range for statistics
         if not filters.date_from or not filters.date_to:
@@ -608,15 +601,56 @@ class MealService:
                 detail="Date range (date_from and date_to) is required for statistics",
             )
 
-        # Get all meals in the period
-        stat_filters = MealQueryFilters(**filters.model_dump())
-        stat_filters.limit = 10000  # Get all meals for accurate statistics
-        stat_filters.offset = 0
+        # Validate permissions
+        if filters.pet_id:
+            pet_context = await self._get_pet_group_context(filters.pet_id)
+            group_id = pet_context["group_id"]
+            if not await self._can_view_meals(user_id, group_id):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You don't have permission to view meals for this pet",
+                )
+        elif filters.group_id:
+            if not await self._can_view_meals(user_id, filters.group_id):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You don't have permission to view meals for this group",
+                )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Either pet_id or group_id must be provided",
+            )
 
-        meals = await self.get_meals(stat_filters, user_id)
+        # Calculate date range
+        from_date = dt.strptime(filters.date_from, "%Y-%m-%d")
+        to_date = dt.strptime(filters.date_to, "%Y-%m-%d")
+        total_days = (to_date - from_date).days + 1
 
-        if not meals:
-            # Return empty statistics if no meals found
+        # Build scope filter
+        scope_filter = "m.pet_id = $3" if filters.pet_id else "p.group_id = $3"
+        scope_param = filters.pet_id if filters.pet_id else filters.group_id
+
+        # 1. Aggregate totals in SQL
+        agg_sql = f"""
+        SELECT
+            COUNT(*) AS total_meals,
+            COALESCE(SUM(m.calories), 0) AS total_calories,
+            COALESCE(SUM(m.actual_weight_g), 0) AS total_weight_g,
+            COALESCE(SUM(m.protein_g), 0) AS total_protein,
+            COALESCE(SUM(m.fat_g), 0) AS total_fat,
+            COALESCE(SUM(m.moisture_g), 0) AS total_moisture,
+            COALESCE(SUM(m.carbohydrate_g), 0) AS total_carbs
+        FROM meals m
+        JOIN pets p ON m.pet_id = p.id
+        WHERE m.is_active = TRUE
+          AND DATE(m.timestamp) BETWEEN $1 AND $2
+          AND {scope_filter}
+        """
+        agg = await self.db.read_one(agg_sql, filters.date_from, filters.date_to, scope_param)
+
+        total_meals = int(agg["total_meals"])
+        if total_meals == 0:
             return MealStatistics(
                 date_from=filters.date_from,
                 date_to=filters.date_to,
@@ -635,86 +669,59 @@ class MealService:
                 most_used_foods=[],
             )
 
-        # Calculate date range
-        from_date = dt.strptime(filters.date_from, "%Y-%m-%d")
-        to_date = dt.strptime(filters.date_to, "%Y-%m-%d")
-        total_days = (to_date - from_date).days + 1
+        total_calories = float(agg["total_calories"])
+        total_weight_g = float(agg["total_weight_g"])
+        total_protein = float(agg["total_protein"])
+        total_fat = float(agg["total_fat"])
+        total_moisture = float(agg["total_moisture"])
+        total_carbs = float(agg["total_carbs"])
 
-        # Basic statistics
-        total_meals = len(meals)
-        total_calories = sum(meal.calories for meal in meals)
-        total_weight = sum(meal.actual_weight_g for meal in meals)
-
-        # Get detailed nutrition data
-        detailed_query = """
-        SELECT protein_g, fat_g, moisture_g, carbohydrate_g, meal_type, user_id, food_id
+        # 2. Meal type distribution via SQL GROUP BY
+        type_sql = f"""
+        SELECT COALESCE(m.meal_type::text, 'unspecified') AS meal_type, COUNT(*) AS cnt
         FROM meals m
         JOIN pets p ON m.pet_id = p.id
         WHERE m.is_active = TRUE
-        AND DATE(m.timestamp) BETWEEN $1 AND $2
-        """ + (
-            "AND m.pet_id = $3" if filters.pet_id else "AND p.group_id = $3"
-        )
+          AND DATE(m.timestamp) BETWEEN $1 AND $2
+          AND {scope_filter}
+        GROUP BY meal_type
+        """
+        type_rows = await self.db.read(type_sql, filters.date_from, filters.date_to, scope_param)
+        meal_type_distribution = {row["meal_type"]: int(row["cnt"]) for row in type_rows}
 
-        nutrition_params = [filters.date_from, filters.date_to]
-        nutrition_params.append(filters.pet_id if filters.pet_id else filters.group_id)
+        # 3. Top 5 feeders via SQL GROUP BY + JOIN
+        feeder_sql = f"""
+        SELECT u.name AS user_name, COUNT(*) AS meal_count
+        FROM meals m
+        JOIN pets p ON m.pet_id = p.id
+        JOIN users u ON m.user_id = u.id
+        WHERE m.is_active = TRUE
+          AND DATE(m.timestamp) BETWEEN $1 AND $2
+          AND {scope_filter}
+        GROUP BY u.id, u.name
+        ORDER BY meal_count DESC
+        LIMIT 5
+        """
+        feeder_rows = await self.db.read(feeder_sql, filters.date_from, filters.date_to, scope_param)
+        most_active_feeders = [
+            {"user_name": row["user_name"], "meal_count": int(row["meal_count"])} for row in feeder_rows
+        ]
 
-        nutrition_data = await self.db.read(detailed_query, *nutrition_params)
-
-        # Calculate nutritional averages
-        total_protein = sum(row["protein_g"] for row in nutrition_data)
-        total_fat = sum(row["fat_g"] for row in nutrition_data)
-        total_moisture = sum(row["moisture_g"] for row in nutrition_data)
-        total_carbs = sum(row["carbohydrate_g"] for row in nutrition_data)
-
-        # Meal type distribution
-        meal_type_counts = {}
-        for row in nutrition_data:
-            meal_type = row["meal_type"] or "unspecified"
-            meal_type_counts[meal_type] = meal_type_counts.get(meal_type, 0) + 1
-
-        # Most active feeders
-        feeder_counts = {}
-        for row in nutrition_data:
-            user_id = row["user_id"]
-            feeder_counts[user_id] = feeder_counts.get(user_id, 0) + 1
-
-        # Get feeder names
-        if feeder_counts:
-            feeder_ids = list(feeder_counts.keys())
-            feeder_query = "SELECT id, name FROM users WHERE id = ANY($1)"
-            feeder_names = await self.db.read(feeder_query, feeder_ids)
-            feeder_name_map = {f["id"]: f["name"] for f in feeder_names}
-
-            most_active_feeders = [
-                {"user_name": feeder_name_map.get(user_id, "Unknown"), "meal_count": count}
-                for user_id, count in sorted(feeder_counts.items(), key=lambda x: x[1], reverse=True)
-            ][
-                :5
-            ]  # Top 5
-        else:
-            most_active_feeders = []
-
-        # Most used foods
-        food_counts = {}
-        for row in nutrition_data:
-            food_id = row["food_id"]
-            food_counts[food_id] = food_counts.get(food_id, 0) + 1
-
-        if food_counts:
-            food_ids = list(food_counts.keys())
-            food_query = "SELECT id, CONCAT(brand, ' - ', product_name) as food_name FROM foods WHERE id = ANY($1)"
-            food_names = await self.db.read(food_query, food_ids)
-            food_name_map = {f["id"]: f["food_name"] for f in food_names}
-
-            most_used_foods = [
-                {"food_name": food_name_map.get(food_id, "Unknown"), "usage_count": count}
-                for food_id, count in sorted(food_counts.items(), key=lambda x: x[1], reverse=True)
-            ][
-                :5
-            ]  # Top 5
-        else:
-            most_used_foods = []
+        # 4. Top 5 foods via SQL GROUP BY + JOIN
+        food_sql = f"""
+        SELECT CONCAT(f.brand, ' - ', f.product_name) AS food_name, COUNT(*) AS usage_count
+        FROM meals m
+        JOIN pets p ON m.pet_id = p.id
+        JOIN foods f ON m.food_id = f.id
+        WHERE m.is_active = TRUE
+          AND DATE(m.timestamp) BETWEEN $1 AND $2
+          AND {scope_filter}
+        GROUP BY f.id, f.brand, f.product_name
+        ORDER BY usage_count DESC
+        LIMIT 5
+        """
+        food_rows = await self.db.read(food_sql, filters.date_from, filters.date_to, scope_param)
+        most_used_foods = [{"food_name": row["food_name"], "usage_count": int(row["usage_count"])} for row in food_rows]
 
         return MealStatistics(
             date_from=filters.date_from,
@@ -722,14 +729,14 @@ class MealService:
             total_days=total_days,
             total_meals=total_meals,
             total_calories=total_calories,
-            total_weight_g=total_weight,
+            total_weight_g=total_weight_g,
             average_meals_per_day=total_meals / total_days if total_days > 0 else 0,
             average_calories_per_day=total_calories / total_days if total_days > 0 else 0,
             average_protein_g_per_day=total_protein / total_days if total_days > 0 else 0,
             average_fat_g_per_day=total_fat / total_days if total_days > 0 else 0,
             average_moisture_g_per_day=total_moisture / total_days if total_days > 0 else 0,
             average_carbohydrate_g_per_day=total_carbs / total_days if total_days > 0 else 0,
-            meal_type_distribution=meal_type_counts,
+            meal_type_distribution=meal_type_distribution,
             most_active_feeders=most_active_feeders,
             most_used_foods=most_used_foods,
         )
