@@ -48,10 +48,16 @@ struct Meal: Codable, Identifiable {
         String(timestamp?.prefix(10) ?? "")
     }
 
-    /// Short time display
+    /// Short time display (full: "2026-04-12 14:30")
     var timeString: String {
         guard let ts = timestamp, ts.count >= 16 else { return "" }
         return String(ts.prefix(16)).replacingOccurrences(of: "T", with: " ")
+    }
+
+    /// 24-hour time only (e.g. "14:30")
+    var time24h: String {
+        guard let ts = timestamp, let tIdx = ts.firstIndex(of: "T") else { return "" }
+        return String(ts[ts.index(after: tIdx)...].prefix(5))
     }
 }
 

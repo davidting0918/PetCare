@@ -5,6 +5,28 @@ struct MealPageView: View {
     var dataStore: DataStore
     @State private var showCreateMeal = false
     @State private var selectedMealGroup: MealGroup?
+    @State private var weekOffset = 0 // 0 = current week, -1 = last week, etc.
+    @State private var weeklyMeals: [Meal] = []
+    @State private var isLoadingWeek = false
+
+    /// Monday..Sunday date range for the selected week
+    private var weekRange: (start: Date, end: Date) {
+        let cal = Calendar(identifier: .iso8601)
+        let today = cal.startOfDay(for: Date())
+        let weekday = cal.component(.weekday, from: today)
+        let mondayOffset = weekday == 1 ? -6 : -(weekday - 2)
+        let thisMonday = cal.date(byAdding: .day, value: mondayOffset, to: today)!
+        let targetMonday = cal.date(byAdding: .weekOfYear, value: weekOffset, to: thisMonday)!
+        let targetSunday = cal.date(byAdding: .day, value: 6, to: targetMonday)!
+        return (targetMonday, targetSunday)
+    }
+
+    private var weekNumber: Int {
+        let cal = Calendar(identifier: .iso8601)
+        return cal.component(.weekOfYear, from: weekRange.start)
+    }
+
+    private var isCurrentWeek: Bool { weekOffset == 0 }
 
     var body: some View {
         NavigationStack {
@@ -21,6 +43,7 @@ struct MealPageView: View {
                             if let gid = dataStore.currentGroupId {
                                 await dataStore.refreshFoods(groupId: gid)
                             }
+                            await loadWeekMeals()
                         }
 
                         if let pet = dataStore.selectedPet {
@@ -28,9 +51,26 @@ struct MealPageView: View {
                                 TodaySummaryCard(summary: summary, calorieTarget: pet.dailyCalorieTarget)
                             }
 
-                            WeeklyCalorieChart(meals: dataStore.meals, calorieTarget: pet.dailyCalorieTarget)
+                            // Week selector
+                            WeekSelector(
+                                weekNumber: weekNumber,
+                                weekRange: weekRange,
+                                isCurrentWeek: isCurrentWeek,
+                                onPrev: { weekOffset -= 1 },
+                                onNext: { if !isCurrentWeek { weekOffset += 1 } }
+                            )
 
-                            GroupedMealList(meals: dataStore.meals, onSelectGroup: { selectedMealGroup = $0 })
+                            WeeklyCalorieChart(
+                                meals: weeklyMeals,
+                                calorieTarget: pet.dailyCalorieTarget,
+                                weekStart: weekRange.start
+                            )
+
+                            WeeklyMealList(
+                                meals: weeklyMeals,
+                                isLoading: isLoadingWeek,
+                                onSelectGroup: { selectedMealGroup = $0 }
+                            )
 
                             Divider().background(Color.borderSubtle).padding(.horizontal)
 
@@ -69,6 +109,7 @@ struct MealPageView: View {
                         Task {
                             await dataStore.refreshMeals(petId: petId)
                             await dataStore.refreshTodaySummary(petId: petId)
+                            await loadWeekMeals()
                         }
                     }
                 }
@@ -80,7 +121,30 @@ struct MealPageView: View {
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
             }
+            .onChange(of: weekOffset) { _, _ in
+                Task { await loadWeekMeals() }
+            }
+            .task { await loadWeekMeals() }
         }
+    }
+
+    private func loadWeekMeals() async {
+        guard let petId = dataStore.currentPetId else { return }
+        isLoadingWeek = true
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd"
+        let dateFrom = fmt.string(from: weekRange.start)
+        let dateTo = fmt.string(from: weekRange.end)
+        do {
+            weeklyMeals = try await APIClient.shared.fetchMeals(
+                petId: petId, dateFrom: dateFrom, dateTo: dateTo, limit: 200
+            )
+        } catch {
+            #if DEBUG
+            print("loadWeekMeals failed: \(error)")
+            #endif
+        }
+        isLoadingWeek = false
     }
 }
 
@@ -126,11 +190,59 @@ struct TodaySummaryCard: View {
     }
 }
 
-// MARK: - Weekly Calorie Chart (Mon-Sun, stacked bars, target line, interactive)
+// MARK: - Week Selector
+
+struct WeekSelector: View {
+    let weekNumber: Int
+    let weekRange: (start: Date, end: Date)
+    let isCurrentWeek: Bool
+    var onPrev: () -> Void
+    var onNext: () -> Void
+
+    private var rangeLabel: String {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "M/d"
+        return "\(fmt.string(from: weekRange.start)) – \(fmt.string(from: weekRange.end))"
+    }
+
+    var body: some View {
+        HStack {
+            Button { onPrev() } label: {
+                Image(systemName: "chevron.left")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(Color.accentTeal)
+                    .frame(width: 44, height: 44)
+            }
+
+            Spacer()
+
+            VStack(spacing: 2) {
+                Text("Week \(weekNumber)")
+                    .font(.headline).foregroundStyle(Color.textPrimary)
+                Text(rangeLabel)
+                    .font(.caption).foregroundStyle(Color.textTertiary)
+            }
+
+            Spacer()
+
+            Button { onNext() } label: {
+                Image(systemName: "chevron.right")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(isCurrentWeek ? Color.textDisabled : Color.accentTeal)
+                    .frame(width: 44, height: 44)
+            }
+            .disabled(isCurrentWeek)
+        }
+        .padding(.horizontal)
+    }
+}
+
+// MARK: - Weekly Calorie Chart (Mon-Sun, stacked bars, target line)
 
 struct WeeklyCalorieChart: View {
     let meals: [Meal]
     let calorieTarget: Int?
+    let weekStart: Date // Monday of the displayed week
 
     private let mealTypes = ["breakfast", "lunch", "dinner", "snack", "other"]
 
@@ -143,11 +255,6 @@ struct WeeklyCalorieChart: View {
 
     var chartEntries: [ChartEntry] {
         let cal = Calendar(identifier: .iso8601)
-        let today = Date()
-        let weekday = cal.component(.weekday, from: today)
-        let mondayOffset = weekday == 1 ? -6 : -(weekday - 2)
-        let monday = cal.date(byAdding: .day, value: mondayOffset, to: today)!
-
         let dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
         let dateFmt = DateFormatter()
         dateFmt.dateFormat = "yyyy-MM-dd"
@@ -156,7 +263,7 @@ struct WeeklyCalorieChart: View {
 
         var entries: [ChartEntry] = []
         for i in 0..<7 {
-            let date = cal.date(byAdding: .day, value: i, to: monday)!
+            let date = cal.date(byAdding: .day, value: i, to: weekStart)!
             let dateStr = dateFmt.string(from: date)
             let label = "\(dayNames[i])\n\(shortFmt.string(from: date))"
 
@@ -175,8 +282,6 @@ struct WeeklyCalorieChart: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("This Week").font(.headline).foregroundStyle(Color.textPrimary)
-
             Chart {
                 ForEach(chartEntries) { entry in
                     BarMark(
@@ -227,7 +332,7 @@ struct WeeklyCalorieChart: View {
     }
 }
 
-// MARK: - Grouped Meal List (grouped by day + meal type)
+// MARK: - Weekly Meal List (grouped by day + meal type, filtered to selected week)
 
 struct MealGroup: Identifiable {
     let id: String // "2026-04-12_breakfast"
@@ -239,8 +344,9 @@ struct MealGroup: Identifiable {
     var foodNames: String { meals.map(\.displayFoodName).joined(separator: ", ") }
 }
 
-struct GroupedMealList: View {
+struct WeeklyMealList: View {
     let meals: [Meal]
+    let isLoading: Bool
     var onSelectGroup: (MealGroup) -> Void
 
     var groups: [MealGroup] {
@@ -261,32 +367,34 @@ struct GroupedMealList: View {
         }
     }
 
-    var displayGroups: [MealGroup] { Array(groups.prefix(10)) }
+    private var totalCalories: Double {
+        meals.compactMap(\.calories).reduce(0, +)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Recent Meals").font(.headline).foregroundStyle(Color.textPrimary)
+                Text("Weekly Meals").font(.headline).foregroundStyle(Color.textPrimary)
                 Spacer()
-                Text("\(meals.count) meals").font(.caption).foregroundStyle(Color.textTertiary)
+                if !meals.isEmpty {
+                    Text("\(meals.count) meals • \(Int(totalCalories)) kcal")
+                        .font(.caption).foregroundStyle(Color.textTertiary)
+                }
             }
             .padding(.horizontal)
 
-            if groups.isEmpty {
-                Text("No meals recorded yet")
+            if isLoading {
+                ProgressView()
+                    .frame(maxWidth: .infinity).padding()
+            } else if groups.isEmpty {
+                Text("No meals this week")
                     .foregroundStyle(Color.textTertiary)
                     .frame(maxWidth: .infinity).padding()
             } else {
-                ForEach(displayGroups) { group in
+                ForEach(groups) { group in
                     Button { onSelectGroup(group) } label: {
                         MealGroupRow(group: group)
                     }
-                }
-
-                if groups.count > 10 {
-                    Text("Showing 10 of \(groups.count) meal groups")
-                        .font(.caption).foregroundStyle(Color.textTertiary)
-                        .frame(maxWidth: .infinity).padding(.top, 4)
                 }
             }
         }
@@ -400,8 +508,8 @@ struct MealGroupDetailSheet: View {
                                         Text("\(String(format: "%.0f", amount)) \(sType)")
                                             .font(.caption).foregroundStyle(Color.textTertiary)
                                     }
-                                    if let ts = meal.timestamp {
-                                        Text(String(ts.suffix(8).prefix(5))) // HH:MM
+                                    if !meal.time24h.isEmpty {
+                                        Text(meal.time24h)
                                             .font(.caption).foregroundStyle(Color.textDisabled)
                                     }
                                     if let by = meal.fedByName {

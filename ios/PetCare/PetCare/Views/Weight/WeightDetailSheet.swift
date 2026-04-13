@@ -125,7 +125,7 @@ struct WeightDetailSheet: View {
         Task {
             do {
                 let request = UpdateWeightRequest(
-                    weightKg: weight,
+                    weight: weight,
                     timestamp: nil,
                     notes: notes.isEmpty ? nil : notes
                 )

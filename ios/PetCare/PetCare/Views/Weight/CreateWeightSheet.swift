@@ -43,7 +43,7 @@ struct CreateWeightSheet: View {
         isCreating = true
         Task {
             do {
-                let request = CreateWeightRequest(petId: petId, weightKg: weight, timestamp: nil, notes: notes.isEmpty ? nil : notes)
+                let request = CreateWeightRequest(petId: petId, weight: weight, timestamp: nil, notes: notes.isEmpty ? nil : notes)
                 _ = try await APIClient.shared.createWeight(request)
                 onCreated()
                 dismiss()
