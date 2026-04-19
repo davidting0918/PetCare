@@ -4,6 +4,19 @@ struct WeightPageView: View {
     var dataStore: DataStore
     @State private var showCreateWeight = false
     @State private var selectedRecord: WeightRecord?
+    @State private var startDate: Date = {
+        let cal = Calendar.current
+        return cal.date(from: cal.dateComponents([.year, .month], from: Date()))!
+    }()
+    @State private var endDate = Date()
+
+    private var filteredRecords: [WeightRecord] {
+        dataStore.weightRecords.filter { record in
+            guard let ts = record.timestamp, let date = Self.parseTimestamp(ts) else { return false }
+            let dayAfterEnd = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: endDate))!
+            return date >= Calendar.current.startOfDay(for: startDate) && date < dayAfterEnd
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -19,13 +32,17 @@ struct WeightPageView: View {
                         }
 
                         if dataStore.selectedPet != nil {
-                            if !dataStore.weightRecords.isEmpty {
-                                WeightChartCard(records: dataStore.weightRecords)
-                                WeightStatsRow(dataStore: dataStore)
+                            DateRangeSelector(startDate: $startDate, endDate: $endDate)
+
+                            if !filteredRecords.isEmpty {
+                                WeightChartCard(records: filteredRecords)
                             }
-                            WeightRecordsList(records: dataStore.weightRecords) { record in
+
+                            WeightRecordsList(records: filteredRecords) { record in
                                 selectedRecord = record
                             }
+
+                            Spacer().frame(height: 80)
                         } else {
                             Text("Select a pet to view weight records")
                                 .foregroundStyle(Color.textTertiary)
@@ -70,17 +87,12 @@ struct WeightPageView: View {
             }
         }
     }
-}
 
-struct WeightStatsRow: View {
-    let dataStore: DataStore
-
-    var body: some View {
-        HStack(spacing: 12) {
-            StatCard(title: "Records", value: "\(dataStore.weightTotal)", icon: "number", color: .accentBlue)
-            StatCard(title: "Average", value: dataStore.averageWeight.map { String(format: "%.1f kg", $0) } ?? "—", icon: "divide", color: .accentPurple)
-            StatCard(title: "Change", value: dataStore.weightChange.map { String(format: "%+.1f kg", $0) } ?? "—", icon: "arrow.up.arrow.down", color: .accentTeal)
-        }
-        .padding(.horizontal)
+    static func parseTimestamp(_ ts: String) -> Date? {
+        let fmt = ISO8601DateFormatter()
+        fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let d = fmt.date(from: ts) { return d }
+        fmt.formatOptions = [.withInternetDateTime]
+        return fmt.date(from: ts)
     }
 }

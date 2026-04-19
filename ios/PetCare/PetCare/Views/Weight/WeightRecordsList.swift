@@ -11,9 +11,14 @@ struct WeightRecordsList: View {
                 .padding(.horizontal)
 
             if records.isEmpty {
-                Text("No weight records yet")
-                    .foregroundStyle(Color.textTertiary)
-                    .frame(maxWidth: .infinity).padding()
+                VStack(spacing: 8) {
+                    Image(systemName: "scalemass")
+                        .font(.title).foregroundStyle(Color.textTertiary)
+                    Text("No weight records in this period")
+                        .font(.subheadline).foregroundStyle(Color.textTertiary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 32)
             } else {
                 ForEach(Array(records.enumerated()), id: \.element.id) { index, record in
                     Button { onSelect(record) } label: {

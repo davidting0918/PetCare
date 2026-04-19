@@ -235,7 +235,10 @@ final class DataStore {
     @MainActor
     func refreshTodaySummary(petId: String) async {
         do {
-            let fetched = try await APIClient.shared.fetchTodaySummary(petId: petId)
+            let fmt = DateFormatter()
+            fmt.dateFormat = "yyyy-MM-dd"
+            let localDate = fmt.string(from: Date())
+            let fetched = try await APIClient.shared.fetchTodaySummary(petId: petId, localDate: localDate)
             todaySummary = fetched
             CacheManager.save(fetched, forKey: CacheManager.todaySummaryKey(petId))
         } catch {
@@ -288,7 +291,10 @@ final class DataStore {
     @MainActor
     func refreshTodaySchedule(petId: String) async {
         do {
-            let fetched = try await APIClient.shared.fetchTodaySchedule(petId: petId)
+            let fmt = DateFormatter()
+            fmt.dateFormat = "yyyy-MM-dd"
+            let localDate = fmt.string(from: Date())
+            let fetched = try await APIClient.shared.fetchTodaySchedule(petId: petId, localDate: localDate)
             todaySchedule = fetched
             CacheManager.save(fetched, forKey: CacheManager.todayScheduleKey(petId))
         } catch {
