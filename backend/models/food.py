@@ -1,25 +1,29 @@
-from datetime import datetime as dt
+"""Food catalog — group-scoped (each group maintains its own foods list).
+
+Each `Food` row stores nutritional values quoted *per 100 g* of the product:
+calories (kcal), protein/fat/moisture/carbohydrate (percent by mass). The DB
+enforces `protein + fat + moisture + carbohydrate <= 105` (5 percentage-point
+tolerance for measurement noise). `unit_weight` is how many grams one "natural
+unit" of the product weighs (e.g. one can, one cup) — used by the meal layer
+to translate a "2 cups" log into grams.
+"""
+
+from datetime import datetime
 from enum import Enum
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
-food_table = "foods"
-food_photo_table = "food_photos"
 
-# ================== Table Definitions for PostgreSQL ==================
+food_table = "foods"
 
 
 class FoodType(str, Enum):
-    """Food preparation types"""
-
     WET_FOOD = "wet_food"
     DRY_FOOD = "dry_food"
+    OTHER = "other"
 
 
 class TargetPet(str, Enum):
-    """Target pet species for the food"""
-
     DOG = "dog"
     CAT = "cat"
     BIRD = "bird"
@@ -28,50 +32,39 @@ class TargetPet(str, Enum):
     OTHER = "other"
 
 
-# ================== Core Models ==================
+# ────── Stored row shape ──────
 
 
 class Food(BaseModel):
-    """
-    Food represents a food item in a group's shared food database.
-    Each group maintains its own independent food collection.
-    """
-
     id: str
-    creator_id: str
-    group_id: str  # ID of the group this food belongs to
-    brand: str = Field(..., min_length=1, max_length=100)
-    product_name: str = Field(..., min_length=1, max_length=100)
-    food_type: FoodType
-    target_pet: TargetPet
-    unit_weight: float = Field(..., gt=0, le=5000)  # Weight in grams of one unit (can, cup, etc.)
-
-    # Nutritional information (per 100g)
-    calories: float = Field(..., ge=0, le=1000)  # in 100g
-    protein: float = Field(..., ge=0, le=100)  # in percentage
-    fat: float = Field(..., ge=0, le=100)  # in percentage
-    moisture: float = Field(..., ge=0, le=100)  # in percentage
-    carbohydrate: float = Field(..., ge=0, le=100)  # in percentage
-
-    created_at: dt = Field(default_factory=dt.now)
-    updated_at: dt = Field(default_factory=dt.now)
-    is_active: bool = True
-    photo_url: Optional[str] = ""
-
-
-# ================== Request Models ==================
-
-
-class CreateFoodRequest(BaseModel):
-    """Request to create a new food item in group database"""
-
+    group_id: str
+    creator_id: str | None = None
     brand: str = Field(..., min_length=1, max_length=100)
     product_name: str = Field(..., min_length=1, max_length=100)
     food_type: FoodType
     target_pet: TargetPet
     unit_weight: float = Field(..., gt=0, le=5000)
+    calories: float = Field(..., ge=0, le=1000)
+    protein: float = Field(..., ge=0, le=100)
+    fat: float = Field(..., ge=0, le=100)
+    moisture: float = Field(..., ge=0, le=100)
+    carbohydrate: float = Field(..., ge=0, le=100)
+    photo_url: str | None = None
+    is_active: bool = True
+    created_at: datetime
+    updated_at: datetime
 
-    # Nutritional information (per 100g)
+
+# ────── Request DTOs ──────
+
+
+class CreateFoodRequest(BaseModel):
+    group_id: str
+    brand: str = Field(..., min_length=1, max_length=100)
+    product_name: str = Field(..., min_length=1, max_length=100)
+    food_type: FoodType
+    target_pet: TargetPet
+    unit_weight: float = Field(..., gt=0, le=5000)
     calories: float = Field(..., ge=0, le=1000)
     protein: float = Field(..., ge=0, le=100)
     fat: float = Field(..., ge=0, le=100)
@@ -80,27 +73,28 @@ class CreateFoodRequest(BaseModel):
 
 
 class UpdateFoodRequest(BaseModel):
-    """Request to update food information (partial update)"""
-
-    brand: Optional[str] = Field(None, min_length=1, max_length=100)
-    product_name: Optional[str] = Field(None, min_length=1, max_length=100)
-    food_type: Optional[FoodType] = None
-    target_pet: Optional[TargetPet] = None
-    unit_weight: Optional[float] = Field(None, gt=0, le=5000)
-
-    # Nutritional information (per 100g) - all optional
-    calories: Optional[float] = Field(None, ge=0, le=1000)
-    protein: Optional[float] = Field(None, ge=0, le=100)
-    fat: Optional[float] = Field(None, ge=0, le=100)
-    moisture: Optional[float] = Field(None, ge=0, le=100)
-    carbohydrate: Optional[float] = Field(None, ge=0, le=100)
+    food_id: str
+    brand: str | None = Field(None, min_length=1, max_length=100)
+    product_name: str | None = Field(None, min_length=1, max_length=100)
+    food_type: FoodType | None = None
+    target_pet: TargetPet | None = None
+    unit_weight: float | None = Field(None, gt=0, le=5000)
+    calories: float | None = Field(None, ge=0, le=1000)
+    protein: float | None = Field(None, ge=0, le=100)
+    fat: float | None = Field(None, ge=0, le=100)
+    moisture: float | None = Field(None, ge=0, le=100)
+    carbohydrate: float | None = Field(None, ge=0, le=100)
 
 
-# ================== Response Models ==================
+class DeleteFoodRequest(BaseModel):
+    food_id: str
 
 
-class FoodInfo(BaseModel):
-    """Basic food information for lists and selection interfaces"""
+# ────── Response DTOs ──────
+
+
+class FoodSummary(BaseModel):
+    """Lightweight row for list / search endpoints."""
 
     id: str
     brand: str
@@ -113,15 +107,15 @@ class FoodInfo(BaseModel):
     fat: float
     moisture: float
     carbohydrate: float
-    photo_url: Optional[str] = ""
-    created_at: dt
-    updated_at: dt
+    photo_url: str | None = None
     group_id: str
-    creator_id: str
+    creator_id: str | None = None
+    created_at: datetime
+    updated_at: datetime
 
 
 class FoodDetails(BaseModel):
-    """Comprehensive food information for detailed views"""
+    """Full food profile with calorie-per-unit convenience field."""
 
     id: str
     brand: str
@@ -129,37 +123,17 @@ class FoodDetails(BaseModel):
     food_type: FoodType
     target_pet: TargetPet
     unit_weight: float
-
-    # Complete nutritional breakdown
     calories: float
     protein: float
     fat: float
     moisture: float
     carbohydrate: float
-
-    # Meta information
-    created_at: dt
-    updated_at: dt
+    calories_per_unit: float
+    photo_url: str | None = None
     group_id: str
     group_name: str
-    photo_url: Optional[str] = ""
-    creator_id: str
-    creator_name: str
-
-    # Calculated convenience fields
-    calories_per_unit: float  # Calories in one unit based on unit weight
-
-
-class FoodSearchResult(BaseModel):
-    """Food search result with relevance context"""
-
-    id: str
-    brand: str
-    product_name: str
-    food_type: FoodType
-    target_pet: TargetPet
-    unit_weight: float
-    calories: float
-    photo_url: Optional[str] = ""
-    group_id: str
-    group_name: str
+    creator_id: str | None = None
+    creator_name: str | None = None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime

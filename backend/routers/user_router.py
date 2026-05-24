@@ -1,89 +1,38 @@
+"""User profile endpoints — GET/POST only, no path params."""
+
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, UploadFile
 
-from backend.models.user import CreateUserRequest, ResetPasswordRequest, UpdateUserInfoRequest, User
-from backend.services.auth_service import get_current_user, verify_api_key
-from backend.services.user_service import UserService
+from backend.models.user import UpdateProfileRequest, User, UserPublic
+from backend.services.auth_service import (
+    UserService,
+    get_current_user,
+    get_user_service,
+)
 
 router = APIRouter(prefix="/user", tags=["user"])
 
-user_service = UserService()
+
+@router.get("/me", response_model=UserPublic)
+async def get_me(user: Annotated[User, Depends(get_current_user)]) -> UserPublic:
+    return UserPublic.from_user(user)
 
 
-# Private endpoint - API key required
-@router.post("/create")
-async def create_user(request: CreateUserRequest, api_key: Annotated[dict, Depends(verify_api_key)]) -> dict:
-    """
-    Create user - private endpoint, API key required
-    api key only provide to frontend,
-    """
-    try:
-        user_info = await user_service.create_user(request, api_key)
-        return {"status": 1, "data": user_info.model_dump(), "message": "User registered successfully"}
-    except Exception as e:
-        raise e
+@router.post("/update", response_model=UserPublic)
+async def update_profile(
+    body: UpdateProfileRequest,
+    user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[UserService, Depends(get_user_service)],
+) -> UserPublic:
+    updated = await service.update_profile(user.id, body)
+    return UserPublic.from_user(updated)
 
 
-# Private endpoint - JWT token required
-@router.get("/me")
-async def get_current_user_info(current_user: Annotated[User, Depends(get_current_user)]) -> dict:
-    """
-    Get current user info - requires JWT authentication
-    Returns complete information of the authenticated user
-    """
-    try:
-        return {
-            "status": 1,
-            "data": current_user.model_dump(),
-            "message": f"Welcome, {current_user.name}!",
-        }
-    except Exception as e:
-        raise e
-
-
-@router.post("/update")
-async def update_user_info(
-    request: UpdateUserInfoRequest, current_user: Annotated[User, Depends(get_current_user)]
-) -> dict:
-    try:
-        user_info = await user_service.update_user_info(request, current_user.id)
-        return {"status": 1, "data": user_info.model_dump(), "message": "User info updated successfully"}
-    except Exception as e:
-        raise e
-
-
-@router.post("/reset_password")
-async def reset_password(
-    request: ResetPasswordRequest, current_user: Annotated[User, Depends(get_current_user)]
-) -> dict:
-    try:
-        user_info = await user_service.reset_password(request, current_user.id)
-        return {"status": 1, "data": user_info.model_dump(), "message": "Password reset successfully"}
-    except Exception as e:
-        raise e
-
-
-@router.post("/photo/upload", response_model=dict)
+@router.post("/photo/upload")
 async def upload_user_photo(
-    current_user: Annotated[User, Depends(get_current_user)], file: UploadFile = File(...)
+    user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[UserService, Depends(get_user_service)],
+    file: UploadFile = File(...),
 ) -> dict:
-    """
-    Upload or replace user's profile photo via Cloudinary.
-
-    Authorization: JWT token required
-
-    File Requirements:
-    - Image files only (JPEG, PNG, GIF, WebP)
-    - Maximum size: 10MB
-    - Single photo per user (replaces existing if present)
-
-    Returns:
-    - Photo information including the Cloudinary secure URL
-    - File metadata (size, type, upload timestamp)
-    """
-    try:
-        upload_info = await user_service.upload_user_photo(current_user.id, file)
-        return {"status": 1, "data": upload_info, "message": "Photo uploaded successfully"}
-    except Exception as e:
-        raise e
+    return await service.upload_user_photo(user.id, file)

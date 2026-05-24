@@ -1,0 +1,62 @@
+# Single-service compose: just the FastAPI backend. Postgres runs on the
+# EC2 host (NOT in compose) because it's shared management territory — we
+# don't want to rebuild / restart it on every backend deploy.
+#
+# Run on EC2 with:
+#
+#     docker compose up -d --build
+#
+# Expects a `.env.prod` file sitting next to this compose file on EC2 with
+# (at minimum):
+#   JWT_SECRET_KEY=<64-byte urlsafe random>
+#   POSTGRES_URI=postgresql://petcare:<pw>@host.docker.internal:5432/petcare
+#   GOOGLE_IOS_CLIENT_ID=...
+#   APPLE_BUNDLE_ID=com.dting.petcare
+#   CLOUDINARY_CLOUD_NAME=...
+#   CLOUDINARY_API_KEY=...
+#   CLOUDINARY_API_SECRET=...
+#   CORS_ORIGINS=*                              # iOS-only, no browser
+#   LOG_LEVEL=INFO
+#
+# Port note: bound to 127.0.0.1:8002 on the host so nginx (also on the host)
+# can proxy_pass to it. Adjust if you co-locate with other backends —
+# nabu sits on :8000, heracles on :8001 on the shared box.
+
+services:
+  backend:
+    build:
+      context: .
+      args:
+        # Forwarded to Dockerfile's `ARG GIT_SHA`. deploy.sh exports
+        # GIT_SHA=$(git rev-parse --short HEAD) before invoking compose.
+        GIT_SHA: ${GIT_SHA:-unknown}
+    image: petcare-backend:latest
+    container_name: petcare-backend
+    restart: unless-stopped
+
+    # Bind to loopback only — nginx on the host terminates TLS and proxies in.
+    ports:
+      - "127.0.0.1:8002:8000"
+
+    # `host.docker.internal` → the host's docker bridge gateway. The
+    # backend's POSTGRES_URI uses this hostname to reach Postgres running
+    # on the host (which is configured to also listen on 172.17.0.1).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    env_file:
+      - .env.prod
+
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+    # Cap log growth so the EC2 disk doesn't fill up over weeks.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"

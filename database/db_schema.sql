@@ -15,26 +15,28 @@ create type meal_type_enum as enum ('breakfast', 'lunch', 'dinner', 'snack');
 create type serving_type_enum as enum ('units', 'grams');
 
 
--- users table
+-- users table (OAuth-only: Google + Apple Sign-In).
+-- google_id / apple_id are sparse-unique (each provider can sign one user in only once;
+-- a user may have both linked if they sign in with both providers using the same email).
 CREATE TABLE users (
 	id varchar(8) NOT NULL,
 	google_id varchar(255) NULL,
+	apple_id varchar(255) NULL,
 	email varchar(255) NOT NULL,
 	"name" varchar(255) NOT NULL,
 	picture text NULL,
-	hashed_pwd varchar(255) NOT NULL,
 	personal_group_id varchar(8) NULL,
-	"source" varchar(50) DEFAULT 'unknow'::character varying NOT NULL,
+	"source" varchar(20) DEFAULT 'google'::character varying NOT NULL,
 	is_active bool DEFAULT true NULL,
-	is_verified bool DEFAULT true NULL,
 	created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
 	updated_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
 	CONSTRAINT users_email_key UNIQUE (email),
-	CONSTRAINT users_pkey PRIMARY KEY (id)
+	CONSTRAINT users_pkey PRIMARY KEY (id),
+	CONSTRAINT users_google_id_key UNIQUE (google_id),
+	CONSTRAINT users_apple_id_key UNIQUE (apple_id)
 );
 CREATE INDEX idx_users_created_at ON public.users USING btree (created_at);
 CREATE INDEX idx_users_email ON public.users USING btree (email);
-CREATE INDEX idx_users_google_id ON public.users USING btree (google_id);
 
 create trigger update_users_updated_at before
 update
@@ -243,25 +245,6 @@ create trigger update_refresh_tokens_updated_at before
 update
     on
     public.refresh_tokens for each row execute function update_updated_at_column();
-
-
--- api keys table
-CREATE TABLE api_keys (
-	id serial4 NOT NULL,
-	api_key varchar(255) NOT NULL,
-	api_secret varchar(255) NOT NULL,
-	"name" varchar(255) NOT NULL,
-	is_active bool DEFAULT true NULL,
-	created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
-	updated_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
-	CONSTRAINT api_keys_api_key_key UNIQUE (api_key),
-	CONSTRAINT api_keys_pkey PRIMARY KEY (id)
-);
-
-create trigger update_api_keys_updated_at before
-update
-    on
-    public.api_keys for each row execute function update_updated_at_column();
 
 
 -- weight records table

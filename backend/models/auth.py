@@ -1,58 +1,85 @@
-import os
-from datetime import datetime as dt
+"""Auth tokens and request/response DTOs."""
 
-from dotenv import load_dotenv
-from fastapi.security import HTTPBearer, OAuth2PasswordBearer
-from passlib.context import CryptContext
-from pydantic import BaseModel
+from datetime import datetime
 
-load_dotenv("backend/.env")
+from pydantic import BaseModel, EmailStr
 
-ACCESS_TOKEN_EXPIRE_MINUTES = 120
-REFRESH_TOKEN_EXPIRE_DAYS = 30
-ALGORITHM = "HS256"
-ACCESS_TOKEN_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+from backend.models.user import UserPublic
 
+
+# Stored-table name constants so service code can interpolate without scattering
+# string literals.
 access_token_table = "access_tokens"
 refresh_token_table = "refresh_tokens"
-api_key_table = "api_keys"
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/access_token")
-# API Key security scheme
-api_key_scheme = HTTPBearer()
 
 
-class GoogleAuthRequest(BaseModel):
-    token: str
+# ────── Stored token shapes (rows in access_tokens / refresh_tokens) ──────
 
 
-class GoogleUserInfo(BaseModel):
-    id: str
-    email: str
-    name: str
-    picture: str
-
-
-class AccessToken(BaseModel):
+class StoredAccessToken(BaseModel):
+    id: int
     token: str
     user_id: str
-    created_at: dt
-    expires_at: dt
+    expires_at: datetime
     is_active: bool = True
+    created_at: datetime
+    updated_at: datetime
 
 
-class EmailAuthRequest(BaseModel):
-    email: str
-    pwd: str
+class StoredRefreshToken(BaseModel):
+    id: int
+    token: str
+    user_id: str
+    access_token_id: int
+    expires_at: datetime
+    is_active: bool = True
+    created_at: datetime
+    updated_at: datetime
 
 
-class RefreshTokenRequest(BaseModel):
+# ────── Request / response DTOs ──────
+
+
+class GoogleLoginRequest(BaseModel):
+    """ID token returned by Google Sign-In on the iOS client."""
+
+    token: str
+
+
+class AppleFullName(BaseModel):
+    given_name: str | None = None
+    family_name: str | None = None
+
+    def joined(self) -> str | None:
+        parts = [p for p in (self.given_name, self.family_name) if p]
+        return " ".join(parts) if parts else None
+
+
+class AppleLoginRequest(BaseModel):
+    """Identity token returned by Sign in with Apple on the iOS client.
+
+    Apple sends `email` and `full_name` only on the first sign-in. The
+    iOS client must forward them in this request the first time; subsequent
+    sign-ins are matched by the JWT's `sub` against `users.apple_id`.
+    """
+
+    identity_token: str
+    email: EmailStr | None = None
+    full_name: AppleFullName | None = None
+
+
+class RefreshRequest(BaseModel):
     refresh_token: str
 
 
-class APIKey(BaseModel):
-    api_key: str
-    api_secret: str
-    name: str
-    created_at: int
-    is_active: bool = True
+class TokenPair(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    refresh_token: str
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    refresh_token: str
+    user: UserPublic

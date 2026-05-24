@@ -1,317 +1,255 @@
-import os
+"""JWT issue/verify + refresh-token rotation, on top of PostgreSQL.
+
+Token lifecycle:
+  - access_token  : signed JWT, short-lived (default 120m). Sent in
+                    `Authorization: Bearer <jwt>`. Verified by decoding +
+                    checking we still have an `is_active = TRUE` row in
+                    `access_tokens` for this user.
+  - refresh_token : opaque random string, longer-lived (default 30d).
+                    Stored in `refresh_tokens`. Single-use: refreshing
+                    deactivates the old row and issues a fresh pair.
+
+Logout = deactivate all refresh tokens AND all active access tokens (so the
+client is fully cut off, not just on next JWT expiry).
+"""
+
+import logging
 import secrets
-import uuid
-from datetime import datetime as dt
-from datetime import timedelta as td
-from datetime import timezone as tz
-from typing import Optional
+from datetime import datetime, timedelta, timezone
+from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials
+from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 
+from backend.core.config import settings
 from backend.core.db_manager import get_db
+from backend.core.postgres_database import PostgresAsyncClient
 from backend.models.auth import (
-    ACCESS_TOKEN_EXPIRE_MINUTES,
-    ACCESS_TOKEN_SECRET_KEY,
-    ALGORITHM,
-    REFRESH_TOKEN_EXPIRE_DAYS,
-    AccessToken,
+    AppleFullName,
+    LoginResponse,
+    TokenPair,
     access_token_table,
-    api_key_scheme,
-    api_key_table,
-    oauth2_scheme,
-    pwd_context,
     refresh_token_table,
 )
-from backend.models.group import CreateGroupRequest
-from backend.models.user import User, UserInfo, user_table
+from backend.models.user import User, UserPublic, user_table
+from backend.services.apple_auth_provider import AppleAuthProvider
 from backend.services.google_auth_provider import GoogleAuthProvider
 from backend.services.group_service import GroupService
+from backend.services.user_service import UserService
 
-# Database instance will be provided by global manager
+logger = logging.getLogger(__name__)
+
+# `tokenUrl` is unused (we don't run a password-grant flow) but FastAPI's
+# dependency needs it. The actual mechanism is plain Bearer-header parsing.
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token", auto_error=False)
 
 
 class AuthService:
-    def __init__(self):
-        # Database handled globally
-        self.google_provider = GoogleAuthProvider(
-            client_id=os.getenv("GOOGLE_CLIENT_ID"), client_secret=os.getenv("GOOGLE_CLIENT_SECRET")
-        )
-        self.secret_key = ACCESS_TOKEN_SECRET_KEY
-        self.algorithm = ALGORITHM
-        self.access_token_expire_minutes = ACCESS_TOKEN_EXPIRE_MINUTES
+    def __init__(
+        self,
+        db: PostgresAsyncClient,
+        users: UserService,
+        groups: GroupService,
+        google: GoogleAuthProvider,
+        apple: AppleAuthProvider,
+    ):
+        self._db = db
+        self._users = users
+        self._groups = groups
+        self._google = google
+        self._apple = apple
 
-        self.group_service = GroupService()
+    # ────── Login flows ──────
 
-    @property
-    def db(self):
-        """Get database client from global manager"""
-        return get_db()
+    async def login_with_google(self, id_token: str) -> LoginResponse:
+        info = await self._google.verify_token(id_token)
+        user = await self._users.upsert_google_user(info)
+        return await self._issue_login(user)
 
-    def get_password_hash(self, password: str) -> str:
-        return pwd_context.hash(password)
+    async def login_with_apple(
+        self,
+        identity_token: str,
+        email: str | None,
+        full_name: AppleFullName | None,
+    ) -> LoginResponse:
+        info = await self._apple.verify_token(identity_token, fallback_email=email)
+        default_name = full_name.joined() if full_name else None
+        user = await self._users.upsert_apple_user(info, default_name=default_name)
+        return await self._issue_login(user)
 
-    def create_access_token(self, user_id: str):
-        current_time = dt.now(tz.utc)
-        expire = current_time + td(minutes=self.access_token_expire_minutes)
-
-        to_encode = {
-            "sub": user_id,
-            "exp": expire,
-        }
-
-        encoded_jwt = jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm)
-        return AccessToken(
-            token=encoded_jwt,
-            user_id=user_id,
-            created_at=current_time,
-            expires_at=expire,
-            is_active=True,
-        )
-
-    async def find_valid_token(self, user_id: str) -> Optional[AccessToken]:
-        sql = f"""
-        select * from {access_token_table}
-        where user_id = '{user_id}' and expires_at > CURRENT_TIMESTAMP and is_active = True
-        """
-        token_dict = await self.db.read_one(sql)
-
-        if token_dict:
-            return AccessToken(**token_dict)
-        return None
-
-    async def get_or_create_token(self, user_id: str) -> dict:
-        existing_token = await self.find_valid_token(user_id)
-
-        if existing_token:
-            access_token_str = existing_token.token
-        else:
-            access_token = self.create_access_token(user_id=user_id)
-            await self.db.insert_one(access_token_table, access_token.model_dump())
-            access_token_str = access_token.token
-
-        # Look up access_token row id for refresh token FK
-        at_row = await self.db.read_one(
-            f"SELECT id FROM {access_token_table} WHERE token = '{access_token_str}' AND is_active = True"
-        )
-        access_token_id = at_row["id"] if at_row else 1
-
-        # Always create a fresh refresh token on login
-        refresh_token_str = secrets.token_urlsafe(64)
-        refresh_expires = dt.now(tz.utc) + td(days=REFRESH_TOKEN_EXPIRE_DAYS)
-        await self.db.insert_one(
-            refresh_token_table,
-            {
-                "token": refresh_token_str,
-                "user_id": user_id,
-                "access_token_id": access_token_id,
-                "expires_at": refresh_expires,
-                "is_active": True,
-            },
+    async def _issue_login(self, user: User) -> LoginResponse:
+        # Guarantee a personal group exists for this user — every PetCare
+        # account needs at least one group to host its pets, so we bootstrap
+        # one named after the user on first login. Idempotent: cheap SELECT
+        # every time, INSERT only once ever.
+        user = await self._ensure_personal_group(user)
+        pair = await self.issue_token_pair(user.id)
+        return LoginResponse(
+            access_token=pair.access_token,
+            token_type=pair.token_type,
+            refresh_token=pair.refresh_token,
+            user=UserPublic.from_user(user),
         )
 
-        return {
-            "access_token": access_token_str,
-            "token_type": "bearer",
-            "refresh_token": refresh_token_str,
-        }
-
-    async def authenticate_google_user(self, token: str) -> Optional[User]:
-        google_user_info = await self.google_provider.verify_token(token)
-
-        # Try to find user by email first, then by google_id
-        sql = f"""
-        select * from users u where u.email = '{google_user_info.email}'
-        """
-        user_dict = await self.db.read_one(sql)
-
-        if user_dict:
-            user = User(**user_dict)
-
-            if not user.google_id:
-                sql = f"""
-                Update users
-                set google_id = '{google_user_info.id}', picture = '{google_user_info.picture}'
-                where id = '{user.id}'
-                """
-                await self.db.execute(sql)
-                user.google_id = google_user_info.id
-                user.picture = google_user_info.picture
-
+    async def _ensure_personal_group(self, user: User) -> User:
+        if user.personal_group_id:
             return user
-        else:
-            user_id = str(uuid.uuid4())[:8]
-            new_user = User(
-                id=user_id,
-                google_id=google_user_info.id,
-                email=google_user_info.email,
-                hashed_pwd=self.get_password_hash(google_user_info.id),
-                picture=google_user_info.picture,
-                name=google_user_info.name,
-                created_at=dt.now(tz.utc),
-                updated_at=dt.now(tz.utc),
-                source="google",
-                is_active=True,
-            )
+        group_id = await self._groups.create_personal_group(
+            owner_id=user.id, owner_name=user.name
+        )
+        now = datetime.now(timezone.utc)
+        await self._db.execute(
+            f"UPDATE {user_table} SET personal_group_id = $1, updated_at = $2 WHERE id = $3",
+            group_id, now, user.id,
+        )
+        # Reload so the LoginResponse carries the populated personal_group_id.
+        refreshed = await self._users.get_by_id(user.id)
+        return refreshed or user
 
-            await self.db.insert_one(user_table, new_user.model_dump())
+    # ────── Token issuance ──────
 
-            personal_group = await self.group_service.create_group(CreateGroupRequest(name=new_user.name), user_id)
-            query = f"""
-            Update users set personal_group_id = '{personal_group.id}' where id = '{user_id}'
-            """
-            await self.db.execute(query)
-            return new_user
+    async def issue_token_pair(self, user_id: str) -> TokenPair:
+        now = datetime.now(timezone.utc)
+        access_jwt, access_expires = self._encode_access_jwt(user_id, now)
 
-    async def refresh_access_token(self, refresh_token_str: str) -> dict:
-        """Validate a refresh token and issue a new access + refresh token pair."""
-        sql = f"""
-        SELECT * FROM {refresh_token_table}
-        WHERE token = '{refresh_token_str}'
-          AND is_active = True
-          AND expires_at > CURRENT_TIMESTAMP
-        """
-        rt = await self.db.read_one(sql)
+        # Insert access token and grab its serial PK for the refresh-token FK.
+        access_row = await self._db.execute_returning(
+            f"""
+            INSERT INTO {access_token_table} (token, user_id, expires_at, is_active, created_at, updated_at)
+            VALUES ($1, $2, $3, TRUE, $4, $4)
+            RETURNING id
+            """,
+            access_jwt, user_id, access_expires, now,
+        )
+        if access_row is None:
+            raise RuntimeError("Failed to insert access_token row")
 
-        if not rt:
+        refresh = secrets.token_urlsafe(48)
+        refresh_expires = now + timedelta(days=settings.refresh_token_expire_days)
+        await self._db.execute(
+            f"""
+            INSERT INTO {refresh_token_table}
+              (token, user_id, access_token_id, expires_at, is_active, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, TRUE, $5, $5)
+            """,
+            refresh, user_id, access_row["id"], refresh_expires, now,
+        )
+
+        return TokenPair(access_token=access_jwt, refresh_token=refresh)
+
+    def _encode_access_jwt(self, user_id: str, now: datetime) -> tuple[str, datetime]:
+        expire = now + timedelta(minutes=settings.access_token_expire_minutes)
+        payload = {"sub": user_id, "exp": int(expire.timestamp()), "iat": int(now.timestamp())}
+        token = jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+        return token, expire
+
+    # ────── Refresh ──────
+
+    async def refresh_tokens(self, refresh_token: str) -> TokenPair:
+        now = datetime.now(timezone.utc)
+
+        # Atomically claim the refresh token: deactivate it iff it's still
+        # active and not expired. RETURNING tells us whether we got it.
+        row = await self._db.execute_returning(
+            f"""
+            UPDATE {refresh_token_table}
+            SET is_active = FALSE, updated_at = $1
+            WHERE token = $2 AND is_active = TRUE AND expires_at > $1
+            RETURNING user_id
+            """,
+            now, refresh_token,
+        )
+        if row is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid or expired refresh token",
             )
+        return await self.issue_token_pair(row["user_id"])
 
-        user_id = rt["user_id"]
+    # ────── Logout / revocation ──────
 
-        # Revoke the used refresh token
-        await self.db.execute(f"UPDATE {refresh_token_table} SET is_active = False WHERE id = {rt['id']}")
-
-        # Create new access token
-        access_token = self.create_access_token(user_id=user_id)
-        await self.db.insert_one(access_token_table, access_token.model_dump())
-
-        # Look up the new access token id
-        at_row = await self.db.read_one(
-            f"SELECT id FROM {access_token_table} WHERE token = '{access_token.token}' AND is_active = True"
+    async def revoke_all_for_user(self, user_id: str) -> None:
+        now = datetime.now(timezone.utc)
+        await self._db.execute(
+            f"UPDATE {refresh_token_table} SET is_active = FALSE, updated_at = $1 "
+            f"WHERE user_id = $2 AND is_active = TRUE",
+            now, user_id,
         )
-        new_at_id = at_row["id"] if at_row else 1
-
-        # Create new refresh token
-        new_refresh = secrets.token_urlsafe(64)
-        refresh_expires = dt.now(tz.utc) + td(days=REFRESH_TOKEN_EXPIRE_DAYS)
-        await self.db.insert_one(
-            refresh_token_table,
-            {
-                "token": new_refresh,
-                "user_id": user_id,
-                "access_token_id": new_at_id,
-                "expires_at": refresh_expires,
-                "is_active": True,
-            },
+        await self._db.execute(
+            f"UPDATE {access_token_table} SET is_active = FALSE, updated_at = $1 "
+            f"WHERE user_id = $2 AND is_active = TRUE",
+            now, user_id,
         )
 
-        return {
-            "access_token": access_token.token,
-            "token_type": "bearer",
-            "refresh_token": new_refresh,
-        }
+    # ────── Bearer-token verification (used by `get_current_user` dep) ──────
 
-    async def revoke_refresh_tokens(self, user_id: str) -> None:
-        """Revoke all active refresh tokens for a user (called on logout)."""
-        await self.db.execute(
-            f"UPDATE {refresh_token_table} SET is_active = False WHERE user_id = '{user_id}' AND is_active = True"
+    async def resolve_access_token(self, token: str) -> User:
+        try:
+            payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
+        except JWTError as e:
+            logger.debug("JWT decode failed: %s", e)
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
+            )
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Token missing subject"
+            )
+
+        # Confirm the token row is still active. This is what lets logout
+        # cut access immediately rather than wait for JWT expiry.
+        active = await self._db.read_one(
+            f"""
+            SELECT 1 FROM {access_token_table}
+            WHERE token = $1 AND user_id = $2 AND is_active = TRUE
+            """,
+            token, user_id,
         )
+        if active is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has been revoked"
+            )
 
-    def verify_password(self, password: str, hashed_pwd: str) -> bool:
-        return pwd_context.verify(password, hashed_pwd)
-
-    async def authenticate_user(self, name: str = None, email: str = None, password: str = None) -> Optional[User]:
-        sql = f"""
-        select * from {user_table} where name = '{name}' or email = '{email}'
-        """
-        user_dict = await self.db.read_one(sql)
-
-        if not user_dict:
-            return None
-
-        user = User(**user_dict)
-        if not self.verify_password(password, user.hashed_pwd):
-            return None
+        user = await self._users.get_by_id(user_id)
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="User no longer exists"
+            )
         return user
 
-    async def verify_user(self, user_id: str) -> bool:
-        return
+
+# ────── FastAPI dependency wiring ──────
 
 
-async def get_current_user(token: str = Depends(oauth2_scheme)) -> UserInfo:
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-
-    try:
-        payload = jwt.decode(token, ACCESS_TOKEN_SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: str = payload.get("sub")
-
-        if user_id is None:
-            raise credentials_exception
-
-    except JWTError:
-        raise credentials_exception
-
-    # Database connection pool is already initialized globally
-    sql = f"""
-    select * from {user_table} where id = '{user_id}'
-    """
-    user_dict = await get_db().read_one(sql)
-    if user_dict is None:
-        raise credentials_exception
-
-    return UserInfo(
-        id=user_dict["id"],
-        email=user_dict["email"],
-        name=user_dict["name"],
-        personal_group_id=user_dict["personal_group_id"],
-        created_at=user_dict["created_at"],
-        updated_at=user_dict["updated_at"],
-        source=user_dict["source"],
-        is_active=user_dict["is_active"],
-        is_verified=user_dict["is_verified"],
-        picture=user_dict["picture"],
+def _build_service() -> AuthService:
+    db = get_db()
+    return AuthService(
+        db=db,
+        users=UserService(db),
+        groups=GroupService(db),
+        google=GoogleAuthProvider(),
+        apple=AppleAuthProvider(),
     )
 
 
-async def verify_api_key(credentials: HTTPAuthorizationCredentials = Depends(api_key_scheme)) -> dict:
-    """
-    Dependency function to verify API key and secret from request headers
-    Expects Authorization header with Bearer token containing "key:secret"
-    """
-    if not credentials:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="API key required")
+def get_auth_service() -> AuthService:
+    return _build_service()
 
-    try:
-        # Extract key and secret from Bearer token (format: "key:secret")
-        token = credentials.credentials
-        if ":" not in token:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key format")
 
-        provided_key, provided_secret = token.split(":", 1)
+def get_user_service() -> UserService:
+    return UserService(get_db())
 
-        # Get API key from database
-        sql = f"select * from {api_key_table} where api_key = '{provided_key}'"
-        key = await get_db().read_one(sql)
 
-        if not key:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
-
-        # Verify secret matches if provided
-        if provided_secret and provided_secret != key["api_secret"]:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key or secret")
-
-        return {
-            "api_key": key["api_key"],
-            "name": key["name"],
-        }
-
-    except ValueError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key format")
+async def get_current_user(
+    token: Annotated[str | None, Depends(oauth2_scheme)],
+    service: Annotated[AuthService, Depends(get_auth_service)],
+) -> User:
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing bearer token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return await service.resolve_access_token(token)

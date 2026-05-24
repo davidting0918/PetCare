@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Secrets / local config — provide via --env-file or runtime env at deploy time
+.env
+backend/.env
+*.log
+
+# Repo metadata
+.git/
+.gitignore
+.github/
+
+# Out-of-scope subtrees (image only ships the backend)
+ios/
+petcare-ios/
+database/
+docs/
+README.md
+CLAUDE.md

@@ -1,321 +1,125 @@
+"""Thin async wrapper around an asyncpg connection pool.
+
+All query helpers take `$1, $2, ...` placeholders — never f-string interpolate
+user-supplied values. NUMERIC columns come back from asyncpg as `Decimal`;
+`_convert_decimals_to_floats` flattens those to `float` so Pydantic models
+serialize cleanly into the JSON shapes the iOS client expects.
+"""
+
 import logging
-import os
-import time
 from contextlib import asynccontextmanager
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import asyncpg
 from asyncpg import Pool
-from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
 
-# Load environment variables
-load_dotenv("backend/.env")
-
 
 class PostgresAsyncClient:
-    def __init__(self, environment: Optional[str] = None):
-        """
-        Initialize PostgreSQL async client with environment support
+    def __init__(self, dsn: str):
+        self._dsn = dsn
+        self._pool: Pool | None = None
 
-        Args:
-            environment (str): Environment name (test, staging, prod).
-                              If None, auto-detect from APP_ENV or PYTEST_RUNNING
-        """
-        if environment is None:
-            if os.getenv("PYTEST_RUNNING") == "1":
-                environment = "test"
-            else:
-                environment = os.getenv("APP_ENV", "prod")
-
-        self.environment = environment
-
-        # Get environment-specific connection string
-        if environment == "test":
-            self.connection_string = os.getenv("POSTGRES_TEST")
-        elif environment == "staging":
-            self.connection_string = os.getenv("POSTGRES_STAGING")
-        else:  # prod
-            self.connection_string = os.getenv("POSTGRES_PROD")
-
-        self._pool: Optional[Pool] = None
-        self._initializing = False  # Flag to prevent concurrent initialization
-
-    @classmethod
-    def get_instance(cls, environment: Optional[str] = None):
-        return cls(environment)
-
-    async def init_pool(self):
-        """Initialize connection pool (thread-safe)"""
-        if self._pool or self._initializing:
+    async def init_pool(self) -> None:
+        if self._pool is not None:
             return
+        self._pool = await asyncpg.create_pool(
+            self._dsn,
+            min_size=1,
+            max_size=20,
+            command_timeout=60,
+        )
 
-        self._initializing = True
-        try:
-            if not self._pool:  # Double-check after acquiring lock
-                self._pool = await asyncpg.create_pool(
-                    self.connection_string,
-                    min_size=1,
-                    max_size=50,
-                    command_timeout=60,
-                )
-        finally:
-            self._initializing = False
-
-    async def close(self):
-        """Close the database connection pool"""
-        if self._pool:
+    async def close(self) -> None:
+        if self._pool is not None:
             await self._pool.close()
             self._pool = None
 
     @asynccontextmanager
     async def get_connection(self):
-        """Get a database connection from the pool (auto-initializes if needed)"""
-        # Auto-initialize pool if not already done
-        if not self._pool and not self._initializing:
-            await self.init_pool()
+        if self._pool is None:
+            raise RuntimeError("Pool not initialized — call init_pool() first")
+        async with self._pool.acquire() as conn:
+            yield conn
 
-        # Wait for initialization if it's in progress
-        while self._initializing:
-            import asyncio
-
-            await asyncio.sleep(0.01)
-
-        if not self._pool:
-            raise RuntimeError("Failed to initialize database connection pool")
-
-        async with self._pool.acquire() as connection:
-            yield connection
-
-    # ================== Data Conversion Helpers ==================
+    # ───── conversion ─────
 
     def _convert_decimals_to_floats(self, obj: Any) -> Any:
-        """
-        Recursively convert all Decimal instances to float in nested data structures.
-
-        Args:
-            obj: The object to convert (dict, list, tuple, Decimal, or any other type)
-
-        Returns:
-            The object with all Decimal values converted to float
-        """
         if isinstance(obj, Decimal):
             return float(obj)
-        elif isinstance(obj, dict):
-            return {key: self._convert_decimals_to_floats(value) for key, value in obj.items()}
-        elif isinstance(obj, list):
-            return [self._convert_decimals_to_floats(item) for item in obj]
-        elif isinstance(obj, tuple):
-            return tuple(self._convert_decimals_to_floats(item) for item in obj)
-        else:
-            return obj
+        if isinstance(obj, dict):
+            return {k: self._convert_decimals_to_floats(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [self._convert_decimals_to_floats(v) for v in obj]
+        if isinstance(obj, tuple):
+            return tuple(self._convert_decimals_to_floats(v) for v in obj)
+        return obj
 
-    # ================== Timing Helper ==================
+    # ───── query helpers ─────
 
-    def _record_query_timing(self, operation: str, duration_ms: float) -> None:
-        try:
-            from backend.core.metrics import metrics_collector
+    async def read(self, query: str, *args: Any) -> list[dict]:
+        async with self.get_connection() as conn:
+            rows = await conn.fetch(query, *args)
+            return self._convert_decimals_to_floats([dict(r) for r in rows])
 
-            metrics_collector.record_db_query(operation, duration_ms)
-        except Exception:
-            pass
-
-    # ================== Simple Query Methods ==================
-
-    async def read(self, query: str, *args: Any) -> List[Dict[str, Any]]:
-        """
-        Execute a SELECT query and return results as list of dictionaries
-
-        Args:
-            query (str): SQL SELECT query with $1, $2, etc. placeholders
-            *args: Parameters for the query placeholders
-
-        Returns:
-            List[Dict[str, Any]]: Query results as list of dictionaries with Decimal values converted to float
-        """
-        start = time.perf_counter()
-        try:
-            async with self.get_connection() as conn:
-                rows = await conn.fetch(query, *args)
-                result = [dict(row) for row in rows]
-                return self._convert_decimals_to_floats(result)
-        except Exception as e:
-            raise e
-        finally:
-            self._record_query_timing("read", (time.perf_counter() - start) * 1000.0)
-
-    async def read_one(self, query: str, *args: Any) -> Optional[Dict[str, Any]]:
-        """
-        Execute a SELECT query and return first result as dictionary
-
-        Args:
-            query (str): SQL SELECT query with $1, $2, etc. placeholders
-            *args: Parameters for the query placeholders
-
-        Returns:
-            Optional[Dict[str, Any]]:
-                First query result as dictionary with Decimal values converted to float,
-                or None if no result
-        """
-        start = time.perf_counter()
-        try:
-            async with self.get_connection() as conn:
-                row = await conn.fetchrow(query, *args)
-                if row:
-                    result = dict(row)
-                    return self._convert_decimals_to_floats(result)
+    async def read_one(self, query: str, *args: Any) -> dict | None:
+        async with self.get_connection() as conn:
+            row = await conn.fetchrow(query, *args)
+            if row is None:
                 return None
+            return self._convert_decimals_to_floats(dict(row))
 
-        except Exception as e:
-            raise e
-        finally:
-            self._record_query_timing("read_one", (time.perf_counter() - start) * 1000.0)
+    async def insert_one(self, table: str, data: dict) -> Any:
+        cols = list(data.keys())
+        placeholders = [f"${i}" for i in range(1, len(cols) + 1)]
+        query = (
+            f"INSERT INTO {table} ({', '.join(cols)}) "
+            f"VALUES ({', '.join(placeholders)}) "
+            f"RETURNING *"
+        )
+        async with self.get_connection() as conn:
+            row = await conn.fetchrow(query, *data.values())
+            result = self._convert_decimals_to_floats(dict(row))
+            return result.get("id", result)
 
-    async def insert_one(self, table: str, data: Dict[str, Any]) -> Any:
-        """
-        Insert a single record into a table
-
-        Args:
-            table (str): Table name
-            data (Dict[str, Any]): Dictionary with column names as keys and values to insert
-
-        Returns:
-            Any: The ID of the inserted record (if table has 'id' column), or the full inserted record
-        """
-        start = time.perf_counter()
-        try:
-            # Convert timestamp fields automatically
-
-            columns = list(data.keys())
-            placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
-            values = list(data.values())
-
-            # Try to return 'id' if it exists, otherwise return all columns
-            query = f"""
-                INSERT INTO {table} ({', '.join(columns)})
-                VALUES ({', '.join(placeholders)})
-                RETURNING *
-            """
-
-            async with self.get_connection() as conn:
-                result = await conn.fetchrow(query, *values)
-                result_dict = dict(result)
-
-                # Convert Decimal values to float
-                result_dict = self._convert_decimals_to_floats(result_dict)
-
-                # Return just the id if it exists, otherwise return the full record
-                return result_dict.get("id", result_dict)
-
-        except Exception as e:
-            raise e
-        finally:
-            self._record_query_timing("insert_one", (time.perf_counter() - start) * 1000.0)
-
-    async def insert(self, table: str, data: List[Dict[str, Any]]) -> List[Any]:
-        """
-        Insert multiple records into a table
-
-        Args:
-            table (str): Table name
-            data (List[Dict[str, Any]]): List of dictionaries with column names as keys and values to insert
-
-        Returns:
-            List[Any]: List of inserted record IDs (if table has 'id' column), or list of full inserted records
-        """
-        start = time.perf_counter()
-        try:
-            if not data:
-                return []
-
-            # Convert timestamp fields for all records
-
-            # Use the first record to determine columns
-            columns = list(data[0].keys())
-
-            # Build the query with multiple value sets
-            placeholders_per_row = len(columns)
-            value_sets = []
-            all_values = []
-
-            for i, record in enumerate(data):
-                # Ensure all records have the same columns
-                if set(record.keys()) != set(columns):
-                    raise ValueError(
-                        f"All records must have the same columns. Expected: {columns}, Got: {list(record.keys())}"
-                    )
-
-                # Create placeholders for this row
-                row_placeholders = [f"${j + i * placeholders_per_row + 1}" for j in range(placeholders_per_row)]
-                value_sets.append(f"({', '.join(row_placeholders)})")
-
-                # Add values in the same order as columns
-                for col in columns:
-                    all_values.append(record[col])
-
-            query = f"""
-                INSERT INTO {table} ({', '.join(columns)})
-                VALUES {', '.join(value_sets)}
-                RETURNING *
-            """
-
-            async with self.get_connection() as conn:
-                results = await conn.fetch(query, *all_values)
-                result_dicts = [dict(row) for row in results]
-
-                # Convert Decimal values to float
-                result_dicts = self._convert_decimals_to_floats(result_dicts)
-
-                # Return just the ids if they exist, otherwise return the full records
-                if result_dicts and "id" in result_dicts[0]:
-                    return [record["id"] for record in result_dicts]
-                else:
-                    return result_dicts
-
-        except Exception as e:
-            raise e
-        finally:
-            self._record_query_timing("insert", (time.perf_counter() - start) * 1000.0)
+    async def insert(self, table: str, data: list[dict]) -> list:
+        if not data:
+            return []
+        cols = list(data[0].keys())
+        n = len(cols)
+        value_groups: list[str] = []
+        values: list[Any] = []
+        for i, record in enumerate(data):
+            if set(record.keys()) != set(cols):
+                raise ValueError(
+                    f"All records must share the same columns; "
+                    f"expected {cols}, got {list(record.keys())}"
+                )
+            placeholders = [f"${j + i * n + 1}" for j in range(n)]
+            value_groups.append(f"({', '.join(placeholders)})")
+            for c in cols:
+                values.append(record[c])
+        query = (
+            f"INSERT INTO {table} ({', '.join(cols)}) "
+            f"VALUES {', '.join(value_groups)} "
+            f"RETURNING *"
+        )
+        async with self.get_connection() as conn:
+            rows = await conn.fetch(query, *values)
+            results = self._convert_decimals_to_floats([dict(r) for r in rows])
+            if results and "id" in results[0]:
+                return [r["id"] for r in results]
+            return results
 
     async def execute(self, query: str, *args: Any) -> str:
-        """
-        Execute an INSERT, UPDATE, or DELETE query
+        async with self.get_connection() as conn:
+            return await conn.execute(query, *args)
 
-        Args:
-            query (str): SQL query with $1, $2, etc. placeholders
-            *args: Parameters for the query placeholders
-
-        Returns:
-            str: Result status from the database (e.g., "INSERT 0 1", "UPDATE 1", "DELETE 1")
-        """
-        start = time.perf_counter()
-        try:
-            async with self.get_connection() as conn:
-                result = await conn.execute(query, *args)
-                return result
-        finally:
-            self._record_query_timing("execute", (time.perf_counter() - start) * 1000.0)
-
-    async def execute_returning(self, query: str, *args: Any) -> Any:
-        """
-        Execute an INSERT, UPDATE, or DELETE query with RETURNING clause
-
-        Args:
-            query (str): SQL query with RETURNING clause and $1, $2, etc. placeholders
-            *args: Parameters for the query placeholders
-
-        Returns:
-            Any: The returned value from the RETURNING clause with Decimal values converted to float
-        """
-        start = time.perf_counter()
-        try:
-            async with self.get_connection() as conn:
-                result = await conn.fetchrow(query, *args)
-                if result:
-                    result_dict = dict(result)
-                    return self._convert_decimals_to_floats(result_dict)
+    async def execute_returning(self, query: str, *args: Any) -> dict | None:
+        async with self.get_connection() as conn:
+            row = await conn.fetchrow(query, *args)
+            if row is None:
                 return None
-        finally:
-            self._record_query_timing("execute_returning", (time.perf_counter() - start) * 1000.0)
+            return self._convert_decimals_to_floats(dict(row))

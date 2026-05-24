@@ -1,1 +1,0 @@
-export { useMedicine } from './useMedicine';

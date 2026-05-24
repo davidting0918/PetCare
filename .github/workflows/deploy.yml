@@ -1,0 +1,40 @@
+name: Deploy to EC2
+
+# Triggers a redeploy on every push to master that touches the backend.
+# iOS-only commits skip this workflow so we don't waste an Actions run.
+# Manual runs are also allowed via the "Run workflow" button on the Actions tab.
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'backend/**'
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - 'deploy.sh'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch:
+
+concurrency:
+  # Queue deploys; never run two at once. `cancel-in-progress: false` so we
+  # always wait for the previous deploy to finish before starting the next.
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: SSH into EC2 and run deploy.sh
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          script_stop: true            # abort on any failed line
+          command_timeout: 8m
+          script: |
+            cd ~/PetCare
+            bash deploy.sh

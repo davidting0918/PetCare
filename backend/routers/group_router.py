@@ -1,271 +1,121 @@
+"""Group / member / invitation endpoints — GET/POST only, no path params.
+
+Ids ride in the query string (GET) or JSON body (POST).
+"""
+
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
+from backend.core.db_manager import get_db
 from backend.models.group import (
     CreateGroupRequest,
     CreateInvitationRequest,
+    DeleteGroupRequest,
+    GroupPet,
+    GroupSummary,
+    InvitationCreated,
+    InvitationPreview,
     JoinGroupRequest,
+    MemberSummary,
     RemoveMemberRequest,
     UpdateMemberRoleRequest,
 )
-from backend.models.user import UserInfo
+from backend.models.user import User
 from backend.services.auth_service import get_current_user
 from backend.services.group_service import GroupService
 
-router = APIRouter(prefix="/groups", tags=["groups"])
-group_service = GroupService()
+router = APIRouter(prefix="/group", tags=["group"])
 
 
-# ================== Core Group Functions ==================
+def get_group_service() -> GroupService:
+    return GroupService(get_db())
 
 
-@router.post("/create", response_model=dict)
+@router.post("/create", response_model=GroupSummary)
 async def create_group(
-    request: CreateGroupRequest, current_user: Annotated[UserInfo, Depends(get_current_user)]
+    body: CreateGroupRequest,
+    user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[GroupService, Depends(get_group_service)],
+) -> GroupSummary:
+    return await service.create_group(body, user.id)
+
+
+@router.post("/delete")
+async def delete_group(
+    body: DeleteGroupRequest,
+    user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[GroupService, Depends(get_group_service)],
 ) -> dict:
-    """
-    Create a new group for family pet care collaboration.
-    The user creating the group automatically becomes a member.
-
-    Body:
-    - name: Group name (1-50 characters)
-
-    Returns:
-    - Group information with creator details
-    """
-    try:
-        group_info = await group_service.create_group(request, current_user.id)
-        return {"status": 1, "data": group_info.model_dump(), "message": "Group created successfully"}
-    except Exception as e:
-        raise e
+    return await service.delete_group(body.group_id, user.id)
 
 
-@router.post("/{group_id}/invite", response_model=dict)
-async def create_invitation(
-    group_id: str, request: CreateInvitationRequest, current_user: Annotated[UserInfo, Depends(get_current_user)]
-) -> dict:
-    """
-    Create an invitation code for someone to join the group.
-    Only CREATOR and MEMBER can create invitations.
-    VIEWER role cannot create invitations.
-
-    Body:
-    - role: Role to assign to the invited user (member or viewer)
-
-    Restrictions:
-    - Cannot create invitations for CREATOR role
-
-    Invitations expire after 7 days.
-
-    Returns:
-    - Invitation information and shareable invite code
-    """
-    try:
-        invitation_data = await group_service.create_invitation(group_id, current_user, request)
-        return {"status": 1, "data": invitation_data, "message": "Invitation created successfully"}
-    except Exception as e:
-        raise e
+@router.get("/my_groups", response_model=list[GroupSummary])
+async def my_groups(
+    user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[GroupService, Depends(get_group_service)],
+) -> list[GroupSummary]:
+    return await service.list_my_groups(user.id)
 
 
-@router.get("/invitation/{invite_code}", response_model=dict)
-async def get_invitation_info(invite_code: str, current_user: Annotated[UserInfo, Depends(get_current_user)]) -> dict:
-    """
-    Get invitation information by invite code without joining.
-    Used to preview invitation details before confirming join.
-
-    Path Parameters:
-    - invite_code: 6-character invitation code (uppercase letters)
-
-    Returns:
-    - Group name
-    - Inviter name
-    - Role that will be assigned (member or viewer)
-    - Expiration date
-    - Invitation ID
-
-    Raises:
-    - 404: Invalid or expired invitation code
-    - 400: User is already a member of this group
-    """
-    try:
-        invitation_info = await group_service.get_invitation_info(invite_code.upper(), current_user.id)
-        return {"status": 1, "data": invitation_info, "message": "Invitation found"}
-    except Exception as e:
-        raise e
+@router.get("/members", response_model=list[MemberSummary])
+async def list_members(
+    group_id: str,
+    user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[GroupService, Depends(get_group_service)],
+) -> list[MemberSummary]:
+    return await service.list_members(group_id, user.id)
 
 
-@router.post("/join", response_model=dict)
-async def join_group(request: JoinGroupRequest, current_user: Annotated[UserInfo, Depends(get_current_user)]) -> dict:
-    """
-    Join a group using an invitation code.
-    The invitation must be valid and not expired.
-    User cannot already be a member of the group.
-
-    Body:
-    - invite_code: Valid invitation code
-
-    Returns:
-    - Information about the joined group
-    """
-    try:
-        group_info = await group_service.join_group_by_code(request, current_user.id)
-        return {"status": 1, "data": group_info.model_dump(), "message": "Successfully joined group"}
-    except Exception as e:
-        raise e
-
-
-# ================== Helper Endpoints ==================
-
-
-@router.get("/my_groups", response_model=dict)
-async def get_my_groups(current_user: Annotated[UserInfo, Depends(get_current_user)]) -> dict:
-    """
-    Get all groups where the current user is a member.
-    Returns basic information about each group.
-
-    Returns:
-    - List of groups which the user has a role in
-    """
-    try:
-        groups = await group_service.get_user_groups(current_user.id)
-        return {"status": 1, "data": groups, "message": f"Found {len(groups)} groups"}
-    except Exception as e:
-        raise e
-
-
-@router.get("/{group_id}/members", response_model=dict)
-async def get_group_members(group_id: str, current_user: Annotated[UserInfo, Depends(get_current_user)]) -> dict:
-    """
-    Get all members of a specific group.
-    User must be a member of the group to view members.
-
-    Returns:
-    - List of group members with their user information
-    """
-    try:
-        members = await group_service.get_group_members(group_id, current_user.id)
-        return {
-            "status": 1,
-            "data": [member.model_dump() for member in members],
-            "message": f"Found {len(members)} members",
-        }
-    except Exception as e:
-        raise e
-
-
-# ================== Permission Management Functions ==================
-
-
-@router.post("/{group_id}/update_role", response_model=dict)
+@router.post("/member/update_role")
 async def update_member_role(
-    group_id: str, request: UpdateMemberRoleRequest, current_user: Annotated[UserInfo, Depends(get_current_user)]
+    body: UpdateMemberRoleRequest,
+    user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[GroupService, Depends(get_group_service)],
 ) -> dict:
-    """
-    Update a member's role in the group.
-    **Only group creators can perform this action.**
-
-    **Permission Requirements:**
-    - CREATOR: Can assign MEMBER, VIEWER roles to other members
-    - MEMBER/VIEWER: Cannot assign roles
-
-    **Restrictions:**
-    - Cannot assign CREATOR role (only one creator per group)
-    - Cannot change the creator's role
-
-    Body:
-    - user_id: Target user to update
-    - new_role: New role to assign (member, viewer)
-    """
-    try:
-        result = await group_service.update_member_role(group_id, request, current_user.id)
-        return {"status": 1, "data": result, "message": "Role updated successfully"}
-    except Exception as e:
-        raise e
+    return await service.update_member_role(body, user.id)
 
 
-@router.post("/{group_id}/remove", response_model=dict)
+@router.post("/member/remove")
 async def remove_member(
-    group_id: str, request: RemoveMemberRequest, current_user: Annotated[UserInfo, Depends(get_current_user)]
+    body: RemoveMemberRequest,
+    user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[GroupService, Depends(get_group_service)],
 ) -> dict:
-    """
-    Remove a member from the group.
-    **Only group creators can perform this action.**
-
-    **Permission Requirements:**
-    - CREATOR: Can remove MEMBER, VIEWER roles
-    - MEMBER/VIEWER: Cannot remove members
-
-    **Restrictions:**
-    - Cannot remove the group creator
-    """
-    try:
-        result = await group_service.remove_member(group_id, request, current_user.id)
-        return {"status": 1, "data": result, "message": "Member removed successfully"}
-    except Exception as e:
-        raise e
+    return await service.remove_member(body, user.id)
 
 
-@router.post("/delete/{group_id}", response_model=dict)
-async def delete_group(group_id: str, current_user: Annotated[UserInfo, Depends(get_current_user)]) -> dict:
-    """
-    Soft delete a group by setting is_active to False.
-    **Only group creators can perform this action.**
-
-    **Permission Requirements:**
-    - CREATOR: Can delete the group
-    - MEMBER/VIEWER: Cannot delete the group
-
-    **Behavior:**
-    - Performs soft deletion (sets is_active = False)
-    - Group data is preserved in database
-    - Group will no longer appear in active group listings
-
-    Returns:
-    - Confirmation of deletion with group details
-    """
-    try:
-        result = await group_service.delete_group(group_id, current_user.id)
-        return {"status": 1, "data": result, "message": "Group deleted successfully"}
-    except Exception as e:
-        raise e
+@router.post("/invitation/create", response_model=InvitationCreated)
+async def create_invitation(
+    body: CreateInvitationRequest,
+    user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[GroupService, Depends(get_group_service)],
+) -> InvitationCreated:
+    return await service.create_invitation(user.id, body)
 
 
-# ================== Group Pet Management ==================
+@router.get("/invitation/preview", response_model=InvitationPreview)
+async def preview_invitation(
+    invite_code: str,
+    user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[GroupService, Depends(get_group_service)],
+) -> InvitationPreview:
+    return await service.get_invitation_preview(invite_code, user.id)
 
 
-@router.get("/{group_id}/pets", response_model=dict)
-async def get_group_pets(group_id: str, current_user: Annotated[UserInfo, Depends(get_current_user)]) -> dict:
-    """
-    Retrieves all pets assigned to a specific group.
+@router.post("/join", response_model=GroupSummary)
+async def join_group(
+    body: JoinGroupRequest,
+    user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[GroupService, Depends(get_group_service)],
+) -> GroupSummary:
+    return await service.join_by_code(body, user.id)
 
-    Authorization: Group membership required (any role: creator, member, or viewer)
 
-    This endpoint enables group members to see all pets they can collaborate on
-    within their shared care environment. It's perfect for:
-    - Family members viewing all household pets
-    - Care teams seeing their assigned pets
-    - Group overview and coordination
-
-    The response includes:
-    - All pets currently assigned to the group
-    - Pet owner information for each pet
-    - User's permission level for each pet
-    - Essential pet information for collaboration
-
-    Permission context per pet:
-    - "owner": User owns the pet (full permissions)
-    - "creator": User created the group (management permissions)
-    - "member": User is group member (care recording permissions)
-    - "viewer": User is group viewer (read-only permissions)
-
-    Returns:
-    - List of pets in the group with owner and permission context
-    - Each pet shows basic info needed for group collaboration
-    - Permission indicators help UI show appropriate actions
-    """
-    try:
-        pets = await group_service.get_group_pets(group_id, current_user.id)
-        return {"status": 1, "data": pets, "message": f"Found {len(pets)} pets in group"}
-    except Exception as e:
-        raise e
+@router.get("/pets", response_model=list[GroupPet])
+async def list_group_pets(
+    group_id: str,
+    user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[GroupService, Depends(get_group_service)],
+) -> list[GroupPet]:
+    return await service.list_group_pets(group_id, user.id)

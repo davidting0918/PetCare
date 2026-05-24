@@ -1,18 +1,25 @@
-from datetime import datetime as dt
-from datetime import timezone as tz
+"""Meal (feeding) model + DTOs.
+
+Each meal row is an immutable snapshot of *what was eaten*. At log time we
+copy the food's per-100g macros, multiply by `actual_weight_g`, and store the
+absolute gram values on the meal row. Editing the source food later does NOT
+retroactively change historical meals.
+
+`serving_type` lets the client send either a count of natural units (cans,
+cups) or a direct gram weight; `actual_weight_g` is what we calculate and
+all macros are derived from it.
+"""
+
+from datetime import datetime
 from enum import Enum
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
-meal_table = "meals"
 
-# ================== Table Definitions for PostgreSQL ==================
+meal_table = "meals"
 
 
 class MealType(str, Enum):
-    """Classification of meal types for better organization"""
-
     BREAKFAST = "breakfast"
     LUNCH = "lunch"
     DINNER = "dinner"
@@ -20,215 +27,145 @@ class MealType(str, Enum):
 
 
 class ServingType(str, Enum):
-    """Types of serving input methods"""
-
-    UNITS = "units"  # Cans, pieces, cups, etc.
-    GRAMS = "grams"  # Direct weight input
+    UNITS = "units"  # natural units (cans, cups) — multiplied by food.unit_weight
+    GRAMS = "grams"  # direct gram weight
 
 
-# ================== Core Models ==================
+# ────── Stored row shape ──────
 
 
 class Meal(BaseModel):
-    """
-    Meal represents a feeding record for a pet within a group.
-    Each meal captures complete feeding context with automatic nutritional calculations.
-    """
-
     id: str
     pet_id: str
     food_id: str
-    user_id: str  # User ID who recorded the feeding
-    group_id: str  # Group where the feeding was recorded
-
-    # Feeding timing
-    timestamp: dt  # When the pet was actually fed
-    meal_type: Optional[MealType] = None  # Optional meal classification
-
-    # Serving information
-    serving_type: ServingType  # How the serving amount was input
-    serving_amount: float  # Amount as entered by user
-    actual_weight_g: float  # Calculated actual weight in grams
-
-    # Calculated nutritional information (based on actual weight)
-    calories: float  # Total calories for this feeding
-    protein_g: float  # Actual protein intake in grams
-    fat_g: float  # Actual fat intake in grams
-    moisture_g: float  # Actual moisture intake in grams
-    carbohydrate_g: float  # Actual carbohydrate intake in grams
-
-    # Metadata
-    created_at: dt = Field(default_factory=lambda: dt.now(tz.utc))
-    updated_at: dt = Field(default_factory=lambda: dt.now(tz.utc))
-    is_active: bool = True
-    notes: Optional[str] = Field(None, max_length=500)
-
-
-# ================== Request Models ==================
-
-
-class CreateMealRequest(BaseModel):
-    """Request to create a new meal record"""
-
-    pet_id: str = Field(..., description="ID of the pet being fed")
-    food_id: str = Field(..., description="ID of the food given to the pet")
-
-    # Feeding timing
-    fed_at: Optional[dt] = Field(default_factory=dt.now, description="When the pet was fed")
-    meal_type: Optional[MealType] = Field(None, description="Type of meal")
-
-    # Serving information
-    serving_type: ServingType = Field(..., description="Method of serving input")
-    serving_amount: float = Field(..., gt=0, le=10000, description="Amount served (units or grams)")
-
-    # Optional notes
-    notes: Optional[str] = Field(None, max_length=500, description="Additional feeding notes")
-
-
-class UpdateMealRequest(BaseModel):
-    """Request to update meal information (partial update)"""
-
-    food_id: Optional[str] = Field(None, description="Updated food ID")
-    fed_at: Optional[dt] = Field(None, description="Updated feeding time")
-    meal_type: Optional[MealType] = Field(None, description="Updated meal type")
-    serving_type: Optional[ServingType] = Field(None, description="Updated serving input method")
-    serving_amount: Optional[float] = Field(None, gt=0, le=10000, description="Updated serving amount")
-    notes: Optional[str] = Field(None, max_length=500, description="Updated notes")
-
-
-# ================== Response Models ==================
-
-
-class MealInfo(BaseModel):
-    """Basic meal information for list displays"""
-
-    id: str
-    pet_id: str
-    pet_name: str
-    food_id: str
-    food_name: str  # Brand + product name for display
-    user_id: str  # User ID
-    fed_by_name: str  # User display name
-    timestamp: dt
-    meal_type: Optional[MealType]
-
-    # Serving summary
+    user_id: str
+    group_id: str
+    timestamp: datetime
+    meal_type: MealType | None = None
     serving_type: ServingType
     serving_amount: float
     actual_weight_g: float
-
-    # Key nutritional info
     calories: float
+    protein_g: float
+    fat_g: float
+    moisture_g: float
+    carbohydrate_g: float
+    notes: str | None = None
+    is_active: bool = True
+    created_at: datetime
+    updated_at: datetime
 
-    # Metadata
-    created_at: dt
-    updated_at: dt
-    group_id: str
+
+# ────── Request DTOs ──────
 
 
-class MealDetails(BaseModel):
-    """Comprehensive meal information for detailed views"""
+class CreateMealRequest(BaseModel):
+    pet_id: str
+    food_id: str
+    serving_type: ServingType
+    serving_amount: float = Field(..., gt=0, le=10000)
+    timestamp: datetime | None = None  # defaults to "now" in service
+    meal_type: MealType | None = None
+    notes: str | None = Field(None, max_length=500)
 
-    # Basic information
+
+class UpdateMealRequest(BaseModel):
+    meal_id: str
+    food_id: str | None = None
+    timestamp: datetime | None = None
+    meal_type: MealType | None = None
+    serving_type: ServingType | None = None
+    serving_amount: float | None = Field(None, gt=0, le=10000)
+    notes: str | None = Field(None, max_length=500)
+
+
+class DeleteMealRequest(BaseModel):
+    meal_id: str
+
+
+# ────── Response DTOs ──────
+
+
+class MealSummary(BaseModel):
+    """Lightweight row for list endpoints."""
+
     id: str
     pet_id: str
     pet_name: str
     food_id: str
-    food_name: str
+    food_brand: str
+    food_product_name: str
+    user_id: str
+    fed_by_name: str
+    group_id: str
+    timestamp: datetime
+    meal_type: MealType | None = None
+    serving_type: ServingType
+    serving_amount: float
+    actual_weight_g: float
+    calories: float
+    created_at: datetime
+    updated_at: datetime
+
+
+class MealDetails(BaseModel):
+    id: str
+    pet_id: str
+    pet_name: str
+    food_id: str
     food_brand: str
     food_product_name: str
     user_id: str
     fed_by_name: str
     group_id: str
     group_name: str
-
-    # Feeding details
-    timestamp: dt
-    meal_type: Optional[MealType]
-
-    # Complete serving information
+    timestamp: datetime
+    meal_type: MealType | None = None
     serving_type: ServingType
-    serving_amount: float  # User input amount
-    actual_weight_g: float  # Calculated actual weight
-
-    # Complete nutritional breakdown
+    serving_amount: float
+    actual_weight_g: float
     calories: float
     protein_g: float
     fat_g: float
     moisture_g: float
     carbohydrate_g: float
+    notes: str | None = None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
 
-    # Metadata
-    created_at: dt
-    updated_at: dt
-    notes: Optional[str]
 
+class TodayMealsResponse(BaseModel):
+    """Today's totals + the meal rows themselves so the client can render in one shot."""
 
-class TodayMealSummary(BaseModel):
-    """Summary of today's feeding for a pet or group"""
-
-    date: str  # YYYY-MM-DD format
+    date: str  # YYYY-MM-DD (the day the totals are scoped to)
     total_meals: int
     total_calories: float
     total_weight_g: float
-
-    # Per meal type breakdown
     breakfast_count: int
     lunch_count: int
     dinner_count: int
     snack_count: int
-
-    # If for a specific pet
-    pet_id: Optional[str] = None
-    pet_name: Optional[str] = None
-    daily_calorie_target: Optional[int] = None
-    calorie_target_percentage: Optional[float] = None  # Actual vs target
-
-    # If for a group
-    group_id: Optional[str] = None
-    pets_fed_count: Optional[int] = None  # Number of different pets fed today
+    pet_id: str | None = None
+    pet_name: str | None = None
+    daily_calorie_target: int | None = None
+    calorie_target_percentage: float | None = None
+    group_id: str | None = None
+    pets_fed_count: int | None = None
+    meals: list[MealSummary]
 
 
 class MealStatistics(BaseModel):
-    """Statistical summary for feeding patterns and nutrition"""
-
-    # Time period
     date_from: str
     date_to: str
     total_days: int
-
-    # Basic statistics
     total_meals: int
     total_calories: float
     total_weight_g: float
     average_meals_per_day: float
     average_calories_per_day: float
-
-    # Nutritional averages per day
     average_protein_g_per_day: float
     average_fat_g_per_day: float
     average_moisture_g_per_day: float
     average_carbohydrate_g_per_day: float
-
-    # Meal type distribution
-    meal_type_distribution: dict  # {"breakfast": count, "lunch": count, etc.}
-
-    # Feeding patterns
-    most_active_feeders: list  # [{"user_name": str, "meal_count": int}]
-    most_used_foods: list  # [{"food_name": str, "usage_count": int}]
-
-    # Goal achievement (if applicable)
-    target_achievement: Optional[dict] = None  # {"days_on_target": int, "average_target_percentage": float}
-
-
-class MealQueryFilters(BaseModel):
-    """Helper model for query parameter validation"""
-
-    pet_id: Optional[str] = None
-    group_id: Optional[str] = None
-    user_id: Optional[str] = None
-    date_from: Optional[str] = None  # YYYY-MM-DD format
-    date_to: Optional[str] = None  # YYYY-MM-DD format
-    meal_type: Optional[MealType] = None
-    limit: Optional[int] = Field(50, ge=1, le=1000)
-    offset: Optional[int] = Field(0, ge=0)
+    meal_type_counts: dict[str, int]

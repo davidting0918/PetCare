@@ -1,414 +1,356 @@
+"""Weight tracking business logic.
+
+Permissions:
+  - create: CREATOR or MEMBER of the pet's group (viewers can read but not log)
+  - view / list:  any active member of the pet's group
+  - update / delete: only the recorder (`weight_records.user_id == actor`)
+
+Soft delete via `is_active`. The recorder restriction is intentional — even
+the group's CREATOR doesn't get to overwrite someone else's measurement,
+because the audit trail of who logged what matters in shared-care settings.
+"""
+
+import logging
 import math
-import uuid
+import secrets
+from datetime import datetime, timezone
+from typing import Any
 
 from fastapi import HTTPException, status
 
-from backend.core.db_manager import get_db
+from backend.core.postgres_database import PostgresAsyncClient
+from backend.models.group import GroupRole, group_member_table
+from backend.models.pet import pet_table
+from backend.models.user import user_table
 from backend.models.weight import (
-    CreateWeightRecordRequest,
-    SearchWeightRecordsRequest,
-    SearchWeightRecordsResponse,
-    UpdateWeightRecordRequest,
-    WeightRecordDetails,
-    WeightRecordInfo,
+    CreateWeightRequest,
+    OrderDirection,
+    UpdateWeightRequest,
+    WeightDetails,
+    WeightListResponse,
+    WeightOrderBy,
+    WeightSummary,
     weight_table,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class WeightService:
-    """
-    WeightService handles all weight record-related business logic following
-    the group-based permissions model.
+    def __init__(self, db: PostgresAsyncClient):
+        self._db = db
 
-    Key Principles:
-    - Group-Based Permissions: Access controlled through group membership roles
-    - Creator/Member Can Manage: Creators and members can create, update, and delete ANY weight records in their group
-    - Viewers Can View Only: Viewers can only view weight records, no modifications allowed
-    - Simplified Model: No individual ownership - group role determines all permissions
-    - Prefixed ID: Uses wt_{8-char-id} format for clear type identification
-    """
+    # ────── id generation ──────
 
-    @property
-    def db(self):
-        """Get database client from global manager"""
-        return get_db()
+    async def _generate_weight_id(self) -> str:
+        # Schema: varchar(11). 'wt_' + 8 hex = 11.
+        for _ in range(5):
+            candidate = "wt_" + secrets.token_hex(4)
+            existing = await self._db.read_one(
+                f"SELECT 1 FROM {weight_table} WHERE id = $1", candidate
+            )
+            if existing is None:
+                return candidate
+        raise RuntimeError("Failed to generate a unique weight id after 5 attempts")
 
-    # ================== Permission Helpers ==================
+    # ────── permission helpers ──────
 
-    async def _get_user_role(self, user_id: str, pet_id: str) -> str:
-        """Get user's role for a pet's group"""
-        sql = f"""
-        select
-            gm."role" as role
-        from
-            pets p
-        left join group_members gm using (group_id)
-        where
-            p.id = '{pet_id}'
-            and gm.user_id = '{user_id}'
-            and gm.is_active = TRUE
-            and p.is_active = TRUE
-        """
-        role = await self.db.read_one(sql)
-        return role["role"] if role else "none"
-
-    async def _has_edit_permission(self, pet_id: str, user_id: str) -> bool:
-        """
-        Check if user has EDIT permission (creator or member).
-        Used for: create, update, delete operations.
-        """
-        role = await self._get_user_role(user_id, pet_id)
-        return role in ["creator", "member"]
-
-    async def _has_view_permission(self, pet_id: str, user_id: str) -> bool:
-        """
-        Check if user has VIEW permission (creator, member, or viewer).
-        Used for: read and search operations.
-        """
-        role = await self._get_user_role(user_id, pet_id)
-        return role in ["creator", "member", "viewer"]
-
-    async def _get_weight_record_pet_id(self, weight_id: str) -> str:
-        """
-        Get pet_id from a weight record for permission checking.
-
-        Returns:
-            str: The pet_id associated with this weight record
-        """
-        sql = f"""
-        SELECT w.pet_id
-        FROM {weight_table} w
-        JOIN pets p ON w.pet_id = p.id
-        WHERE w.id = '{weight_id}' AND w.is_active = TRUE AND p.is_active = TRUE
-        """
-        record = await self.db.read_one(sql)
-        if not record:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Weight record not found")
-        return record["pet_id"]
-
-    async def _get_pet_group_context(self, pet_id: str) -> dict:
-        """
-        Get pet's group context for permission checking.
-
-        Returns:
-            Dict containing pet and group information
-        """
-        sql = f"""
-        SELECT
-            p.id as pet_id,
-            p.name as pet_name,
-            p.owner_id,
-            p.group_id,
-            g.name as group_name
-        FROM pets p
-        LEFT JOIN groups g ON p.group_id = g.id
-        WHERE p.id = '{pet_id}' AND p.is_active = TRUE AND g.is_active = TRUE
-        """
-        context = await self.db.read_one(sql)
-        if not context:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pet not found or not accessible")
-        return context
-
-    # ================== Pet Weight Sync ==================
-
-    async def _sync_pet_current_weight(self, pet_id: str) -> None:
-        """
-        Update pets.current_weight_kg to match the latest active weight record.
-        Sets to NULL if no active records exist.
-        """
-        sql = f"""
-        SELECT weight
-        FROM {weight_table}
-        WHERE pet_id = '{pet_id}' AND is_active = TRUE
-        ORDER BY timestamp DESC
-        LIMIT 1
-        """
-        latest = await self.db.read_one(sql)
-        new_weight = f"{float(latest['weight'])}" if latest else "NULL"
-
-        update_sql = f"""
-        UPDATE pets
-        SET current_weight_kg = {new_weight}
-        WHERE id = '{pet_id}'
-        """
-        await self.db.execute(update_sql)
-
-    # ================== ID Generation ==================
-
-    def _generate_weight_id(self) -> str:
-        """
-        Generate weight record ID with prefix.
-
-        Format: wt_{8-char-id}
-        Example: wt_abc12345
-        """
-        return f"wt_{uuid.uuid4().hex[:8]}"
-
-    # ================== CRUD Operations ==================
-
-    async def create_weight_record(
-        self, request: CreateWeightRecordRequest, user_id: str, user_name: str
-    ) -> WeightRecordDetails:
-        """
-        Create a new weight record for a pet.
-
-        Requires EDIT permission (creator or member).
-        """
-        if not await self._has_edit_permission(request.pet_id, user_id):
+    async def _get_pet_with_membership(self, pet_id: str, user_id: str) -> dict:
+        row = await self._db.read_one(
+            f"""
+            SELECT
+                p.id, p.name, p.pet_type, p.group_id, p.owner_id,
+                gm.role AS membership_role
+            FROM {pet_table} p
+            LEFT JOIN {group_member_table} gm
+              ON gm.group_id = p.group_id
+             AND gm.user_id = $2
+             AND gm.is_active = TRUE
+            WHERE p.id = $1 AND p.is_active = TRUE
+            """,
+            pet_id, user_id,
+        )
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pet not found")
+        if not row.get("membership_role"):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="You don't have permission to record weight measurements for this pet",
+                detail="You are not a member of this pet's group",
             )
+        return row
 
-        weight_id = self._generate_weight_id()
-        sql = f"""
-        INSERT INTO {weight_table} (id, pet_id, weight, user_id, timestamp, notes)
-        VALUES ('{weight_id}', '{request.pet_id}', {request.weight},
-        '{user_id}', '{request.timestamp}', '{request.notes}')
-        RETURNING *
-        """
-        created_record = await self.db.execute_returning(sql)
-        await self._sync_pet_current_weight(request.pet_id)
-        return WeightRecordInfo(**created_record, user_name=user_name)
-
-    async def get_weight_record(self, weight_id: str, user_id: str) -> WeightRecordDetails:
-        """
-        Get detailed information about a specific weight record.
-
-        Requires VIEW permission (creator, member, or viewer).
-        """
-        sql = f"""
-        SELECT
-            w.*,
-            p.name as pet_name,
-            p.pet_type,
-            p.group_id,
-            u.name as user_name
-        FROM weight_records w
-        JOIN pets p ON w.pet_id = p.id
-        JOIN users u ON w.user_id = u.id
-        WHERE w.id = '{weight_id}' AND w.is_active = TRUE AND p.is_active = TRUE
-        """
-        record = await self.db.read_one(sql)
-        if not record:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Weight record not found")
-
-        # Check view permission
-        if not await self._has_view_permission(record["pet_id"], user_id):
+    async def _require_can_log_for_pet(self, pet_id: str, user_id: str) -> dict:
+        row = await self._get_pet_with_membership(pet_id, user_id)
+        if GroupRole(row["membership_role"]) == GroupRole.VIEWER:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="You don't have permission to view this weight record"
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Viewers cannot log weights",
+            )
+        return row
+
+    async def _get_weight_or_404(self, weight_id: str) -> dict:
+        row = await self._db.read_one(
+            f"SELECT * FROM {weight_table} WHERE id = $1 AND is_active = TRUE",
+            weight_id,
+        )
+        if row is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Weight record not found"
+            )
+        return row
+
+    async def _require_recorder(self, weight: dict, user_id: str) -> None:
+        if weight["user_id"] != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only the user who recorded this weight can modify it",
             )
 
-        return WeightRecordDetails(
-            id=record["id"],
-            pet_id=record["pet_id"],
-            pet_name=record["pet_name"],
-            pet_type=record["pet_type"],
-            weight=float(record["weight"]),
-            user_id=record["user_id"],
-            user_name=record["user_name"],
-            timestamp=record["timestamp"],
-            notes=record["notes"],
-            created_at=record["created_at"],
-            updated_at=record["updated_at"],
-            is_active=record["is_active"],
+    # ────── writes ──────
+
+    async def create_weight(self, request: CreateWeightRequest, user_id: str) -> WeightDetails:
+        pet = await self._require_can_log_for_pet(request.pet_id, user_id)
+
+        weight_id = await self._generate_weight_id()
+        now = datetime.now(timezone.utc)
+        timestamp = request.timestamp or now
+        await self._db.insert_one(
+            weight_table,
+            {
+                "id": weight_id,
+                "pet_id": request.pet_id,
+                "user_id": user_id,
+                "weight": request.weight,
+                "timestamp": timestamp,
+                "notes": request.notes,
+                "is_active": True,
+                "created_at": now,
+                "updated_at": now,
+            },
         )
 
-    async def update_weight_record(
-        self, weight_id: str, request: UpdateWeightRecordRequest, user_id: str
-    ) -> WeightRecordDetails:
-        """
-        Update an existing weight record.
+        # Mirror the latest weight onto the pet so dashboards don't need a
+        # separate query. The original PetCare schema has `current_weight_kg`
+        # as a denormalized column on `pets`.
+        await self._db.execute(
+            f"UPDATE {pet_table} SET current_weight_kg = $1, updated_at = $2 WHERE id = $3",
+            request.weight, now, request.pet_id,
+        )
 
-        Requires EDIT permission (creator or member).
-        """
-        # Get pet_id from weight record and check edit permission
-        pet_id = await self._get_weight_record_pet_id(weight_id)
-        if not await self._has_edit_permission(pet_id, user_id):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only group creators and members can update weight records",
+        user_row = await self._db.read_one(
+            f"SELECT name FROM {user_table} WHERE id = $1", user_id
+        )
+        return WeightDetails(
+            id=weight_id,
+            pet_id=request.pet_id,
+            pet_name=pet["name"],
+            pet_type=pet["pet_type"],
+            weight=request.weight,
+            user_id=user_id,
+            user_name=user_row["name"] if user_row else "",
+            timestamp=timestamp,
+            notes=request.notes,
+            is_active=True,
+            created_at=now,
+            updated_at=now,
+        )
+
+    async def update_weight(
+        self, request: UpdateWeightRequest, user_id: str
+    ) -> WeightDetails:
+        existing = await self._get_weight_or_404(request.weight_id)
+        await self._require_recorder(existing, user_id)
+
+        payload = request.model_dump(exclude_unset=True, exclude={"weight_id"})
+        if not payload:
+            return await self.get_weight_details(request.weight_id, user_id)
+
+        set_clauses: list[str] = []
+        values: list[Any] = []
+        for i, (col, val) in enumerate(payload.items(), start=1):
+            set_clauses.append(f"{col} = ${i}")
+            values.append(val)
+        values.append(datetime.now(timezone.utc))
+        values.append(request.weight_id)
+        ts_placeholder = f"${len(values) - 1}"
+        id_placeholder = f"${len(values)}"
+
+        await self._db.execute(
+            f"""
+            UPDATE {weight_table}
+            SET {', '.join(set_clauses)}, updated_at = {ts_placeholder}
+            WHERE id = {id_placeholder} AND is_active = TRUE
+            """,
+            *values,
+        )
+
+        # If the weight changed and this row is the most recent for the pet,
+        # keep `pets.current_weight_kg` in sync.
+        if "weight" in payload:
+            latest = await self._db.read_one(
+                f"""
+                SELECT id FROM {weight_table}
+                WHERE pet_id = $1 AND is_active = TRUE
+                ORDER BY timestamp DESC, created_at DESC
+                LIMIT 1
+                """,
+                existing["pet_id"],
             )
-
-        # Build update query dynamically based on provided fields
-        update_fields = []
-        if request.weight is not None:
-            update_fields.append(f"weight = {request.weight:.2f}")
-
-        if request.timestamp is not None:
-            update_fields.append(f"timestamp = '{request.timestamp}'")
-
-        if request.notes is not None:
-            update_fields.append(f"notes = '{request.notes}'")
-
-        if not update_fields:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No fields to update")
-
-        sql = f"""
-        UPDATE weight_records
-        SET {', '.join(update_fields)}
-        WHERE id = '{weight_id}'
-        RETURNING *
-        """
-
-        updated_record = await self.db.execute_returning(sql)
-        if not updated_record:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update weight record"
-            )
-
-        # Sync pet weight after update
-        await self._sync_pet_current_weight(pet_id)
-
-        # Get full details for response
-        return await self.get_weight_record(weight_id, user_id)
-
-    async def delete_weight_record(self, weight_id: str, user_id: str) -> dict:
-        """
-        Soft delete a weight record.
-
-        Requires EDIT permission (creator or member).
-        """
-        # Get pet_id from weight record and check edit permission
-        pet_id = await self._get_weight_record_pet_id(weight_id)
-        if not await self._has_edit_permission(pet_id, user_id):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only group creators and members can delete weight records",
-            )
-
-        sql = f"""
-        UPDATE weight_records
-        SET is_active = FALSE
-        WHERE id = '{weight_id}'
-        RETURNING id
-        """
-        result = await self.db.execute_returning(sql)
-
-        if not result:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to delete weight record"
-            )
-
-        await self._sync_pet_current_weight(pet_id)
-
-        return {"id": weight_id, "deleted": True}
-
-    # ================== Search Operations ==================
-
-    async def search_weight_records(
-        self, request: SearchWeightRecordsRequest, user_id: str
-    ) -> SearchWeightRecordsResponse:
-        """
-        Search weight records with various filters and pagination.
-
-        Requires VIEW permission (creator, member, or viewer).
-        """
-        # Validate that at least one of weight_id or pet_id is provided
-        if not request.weight_id and not request.pet_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="At least one of 'weight_id' or 'pet_id' must be provided",
-            )
-
-        # Build WHERE clause
-        where_conditions = ["w.is_active = TRUE", "p.is_active = TRUE"]
-
-        # Filter by weight_id
-        if request.weight_id:
-            where_conditions.append(f"w.id = '{request.weight_id}'")
-
-            # If only weight_id is provided (no pet_id), we need to validate permission
-            # by first getting the pet_id from the weight record
-            if not request.pet_id:
-                pet_id = await self._get_weight_record_pet_id(request.weight_id)
-                if not await self._has_view_permission(pet_id, user_id):
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="You don't have permission to view this weight record",
-                    )
-
-        # Filter by pet_id
-        if request.pet_id:
-            # Check view permission
-            if not await self._has_view_permission(request.pet_id, user_id):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="You don't have permission to view weight records for this pet",
+            if latest and latest["id"] == request.weight_id:
+                await self._db.execute(
+                    f"UPDATE {pet_table} SET current_weight_kg = $1, updated_at = $2 WHERE id = $3",
+                    payload["weight"], datetime.now(timezone.utc), existing["pet_id"],
                 )
 
-            where_conditions.append(f"w.pet_id = '{request.pet_id}'")
+        return await self.get_weight_details(request.weight_id, user_id)
 
-        # Filter by user_id
-        if request.user_id:
-            where_conditions.append(f"w.user_id = '{request.user_id}'")
+    async def delete_weight(self, weight_id: str, user_id: str) -> dict:
+        existing = await self._get_weight_or_404(weight_id)
+        await self._require_recorder(existing, user_id)
 
-        # Filter by timestamp range
-        if request.start:
-            where_conditions.append(f"w.timestamp >= '{request.start}'")
+        now = datetime.now(timezone.utc)
+        await self._db.execute(
+            f"UPDATE {weight_table} SET is_active = FALSE, updated_at = $1 WHERE id = $2",
+            now, weight_id,
+        )
+        return {
+            "deleted_weight_id": weight_id,
+            "pet_id": existing["pet_id"],
+            "deleted_by": user_id,
+            "deleted_at": now,
+        }
 
-        if request.end:
-            where_conditions.append(f"w.timestamp <= '{request.end}'")
+    # ────── reads ──────
 
-        where_clause = " AND ".join(where_conditions)
+    async def get_weight_details(self, weight_id: str, user_id: str) -> WeightDetails:
+        existing = await self._get_weight_or_404(weight_id)
+        await self._get_pet_with_membership(existing["pet_id"], user_id)
 
-        # Get total count
-        count_sql = f"""
-        SELECT COUNT(*) as total
-        FROM {weight_table} w
-        JOIN pets p ON w.pet_id = p.id
-        LEFT JOIN users u ON w.user_id = u.id
-        WHERE {where_clause}
-        """
-        count_result = await self.db.read_one(count_sql)
-        total = count_result["total"] if count_result else 0
+        row = await self._db.read_one(
+            f"""
+            SELECT
+                w.*,
+                p.name AS pet_name,
+                p.pet_type AS pet_type,
+                u.name AS user_name
+            FROM {weight_table} w
+            JOIN {pet_table} p ON p.id = w.pet_id
+            LEFT JOIN {user_table} u ON u.id = w.user_id
+            WHERE w.id = $1 AND w.is_active = TRUE
+            """,
+            weight_id,
+        )
+        assert row is not None
+        return WeightDetails(
+            id=row["id"],
+            pet_id=row["pet_id"],
+            pet_name=row["pet_name"],
+            pet_type=row["pet_type"],
+            weight=row["weight"],
+            user_id=row["user_id"],
+            user_name=row.get("user_name") or "",
+            timestamp=row["timestamp"],
+            notes=row.get("notes"),
+            is_active=bool(row.get("is_active", True)),
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
 
-        # Calculate pagination
-        offset = (request.page - 1) * request.number
-        total_pages = math.ceil(total / request.number) if total > 0 else 0
-
-        # Build ORDER BY clause
-        order_field = request.order_by.value
-        order_dir = request.order_direction.value.upper()
-
-        # Get records
-        records_sql = f"""
-        SELECT
-            w.id,
-            w.pet_id,
-            w.weight,
-            w.user_id,
-            u.name as user_name,
-            w.timestamp,
-            w.notes,
-            w.created_at,
-            w.updated_at
-        FROM {weight_table} w
-        JOIN pets p ON w.pet_id = p.id
-        LEFT JOIN users u ON w.user_id = u.id
-        WHERE {where_clause}
-        ORDER BY w.{order_field} {order_dir}
-        LIMIT {request.number} OFFSET {offset}
-        """
-
-        records = await self.db.read(records_sql)
-
-        # Build response
-        weight_records = [
-            WeightRecordInfo(
-                id=record["id"],
-                pet_id=record["pet_id"],
-                weight=float(record["weight"]),
-                user_id=record["user_id"],
-                user_name=record["user_name"] or "Unknown User",
-                timestamp=record["timestamp"],
-                created_at=record["created_at"],
-                updated_at=record["updated_at"],
-                notes=record["notes"],
+    async def list_weights(
+        self,
+        user_id: str,
+        pet_id: str | None,
+        weight_id: str | None,
+        recorder_id: str | None,
+        start: datetime | None,
+        end: datetime | None,
+        order_by: WeightOrderBy,
+        order_direction: OrderDirection,
+        page: int,
+        number: int,
+    ) -> WeightListResponse:
+        if not pet_id and not weight_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Provide at least one of pet_id or weight_id",
             )
-            for record in records
-        ]
 
-        return SearchWeightRecordsResponse(
-            records=weight_records, total=total, page=request.page, number=request.number, total_pages=total_pages
+        if not pet_id and weight_id:
+            existing = await self._get_weight_or_404(weight_id)
+            pet_id = existing["pet_id"]
+
+        await self._get_pet_with_membership(pet_id, user_id)
+
+        conditions = ["w.is_active = TRUE", "w.pet_id = $1"]
+        values: list[Any] = [pet_id]
+        if weight_id:
+            values.append(weight_id)
+            conditions.append(f"w.id = ${len(values)}")
+        if recorder_id:
+            values.append(recorder_id)
+            conditions.append(f"w.user_id = ${len(values)}")
+        if start:
+            values.append(start)
+            conditions.append(f"w.timestamp >= ${len(values)}")
+        if end:
+            values.append(end)
+            conditions.append(f"w.timestamp <= ${len(values)}")
+
+        order_col = {
+            WeightOrderBy.TIMESTAMP: "w.timestamp",
+            WeightOrderBy.CREATED_AT: "w.created_at",
+            WeightOrderBy.UPDATED_AT: "w.updated_at",
+        }[order_by]
+        order_dir = "ASC" if order_direction == OrderDirection.ASC else "DESC"
+
+        offset = (page - 1) * number
+        values_with_pagination = values + [number, offset]
+        limit_placeholder = f"${len(values_with_pagination) - 1}"
+        offset_placeholder = f"${len(values_with_pagination)}"
+
+        rows = await self._db.read(
+            f"""
+            SELECT
+                w.*,
+                u.name AS user_name
+            FROM {weight_table} w
+            LEFT JOIN {user_table} u ON u.id = w.user_id
+            WHERE {' AND '.join(conditions)}
+            ORDER BY {order_col} {order_dir}
+            LIMIT {limit_placeholder} OFFSET {offset_placeholder}
+            """,
+            *values_with_pagination,
+        )
+
+        total_row = await self._db.read_one(
+            f"""
+            SELECT COUNT(*)::int AS total
+            FROM {weight_table} w
+            WHERE {' AND '.join(conditions)}
+            """,
+            *values,
+        )
+        total = int(total_row["total"]) if total_row else 0
+        total_pages = max(1, math.ceil(total / number)) if total else 0
+
+        records = [
+            WeightSummary(
+                id=r["id"],
+                pet_id=r["pet_id"],
+                weight=r["weight"],
+                user_id=r["user_id"],
+                user_name=r.get("user_name") or "",
+                timestamp=r["timestamp"],
+                notes=r.get("notes"),
+                created_at=r["created_at"],
+                updated_at=r["updated_at"],
+            )
+            for r in rows
+        ]
+        return WeightListResponse(
+            records=records,
+            total=total,
+            page=page,
+            number=number,
+            total_pages=total_pages,
         )

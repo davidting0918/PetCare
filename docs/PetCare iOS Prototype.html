@@ -1,0 +1,1624 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PetCare — iOS Prototype</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+  :root {
+    --bg: #0B0B16;
+    --surface: #16162A;
+    --surface-elev: #1E1E36;
+    --border: #25254A;
+    --border-strong: #3B3B6B;
+    --text-primary: #F1F1FA;
+    --text-secondary: #A8A8C4;
+    --text-muted: #6B6B8C;
+    --primary: #A855F7;
+    --primary-hover: #9333EA;
+    --primary-soft: rgba(168, 85, 247, 0.16);
+    --accent: #38BDF8;
+    --success: #34D399;
+    --warning: #FBBF24;
+    --danger: #F87171;
+    --chart-1: #A855F7;
+    --chart-2: #38BDF8;
+    --chart-3: #F472B6;
+    --chart-4: #818CF8;
+    --shadow: 0 0 0 1px rgba(255,255,255,0.04);
+    --is-dark: 1;
+  }
+  :root[data-theme="daylight"] {
+    --bg: #F4F6FB;
+    --surface: #FFFFFF;
+    --surface-elev: #FFFFFF;
+    --border: #E4E7EE;
+    --border-strong: #CBD0DA;
+    --text-primary: #0F172A;
+    --text-secondary: #475569;
+    --text-muted: #94A3B8;
+    --primary: #4F46E5;
+    --primary-hover: #4338CA;
+    --primary-soft: rgba(79, 70, 229, 0.10);
+    --accent: #64748B;
+    --success: #10B981;
+    --warning: #F59E0B;
+    --danger: #EF4444;
+    --chart-1: #4F46E5;
+    --chart-2: #06B6D4;
+    --chart-3: #8B5CF6;
+    --chart-4: #64748B;
+    --shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 16px rgba(15, 23, 42, 0.04);
+    --is-dark: 0;
+  }
+  :root[data-theme="nordic"] {
+    --bg: #ECEFF3;
+    --surface: #F6F8FA;
+    --surface-elev: #FFFFFF;
+    --border: #DDE3E8;
+    --border-strong: #B6BFC8;
+    --text-primary: #1F2933;
+    --text-secondary: #52606D;
+    --text-muted: #9AA5B1;
+    --primary: #3F7B8C;
+    --primary-hover: #335F6E;
+    --primary-soft: rgba(63, 123, 140, 0.12);
+    --accent: #7A8FA0;
+    --success: #4A8C75;
+    --warning: #B89248;
+    --danger: #B05B5B;
+    --chart-1: #3F7B8C;
+    --chart-2: #7A8FA0;
+    --chart-3: #5C8C7C;
+    --chart-4: #B6BFC8;
+    --shadow: 0 1px 2px rgba(31, 41, 51, 0.04), 0 6px 20px rgba(31, 41, 51, 0.05);
+    --is-dark: 0;
+  }
+  :root[data-theme="ocean"] {
+    --bg: #07182B;
+    --surface: #0F2238;
+    --surface-elev: #173049;
+    --border: #1E3A57;
+    --border-strong: #2C4F70;
+    --text-primary: #E8F1FA;
+    --text-secondary: #93AEC9;
+    --text-muted: #5D7691;
+    --primary: #22D3EE;
+    --primary-hover: #06B6D4;
+    --primary-soft: rgba(34, 211, 238, 0.12);
+    --accent: #BAE6FD;
+    --success: #2DD4BF;
+    --warning: #FDE68A;
+    --danger: #FB7185;
+    --chart-1: #22D3EE;
+    --chart-2: #38BDF8;
+    --chart-3: #2DD4BF;
+    --chart-4: #7DD3FC;
+    --shadow: 0 0 0 1px rgba(255,255,255,0.03);
+    --is-dark: 1;
+  }
+  :root[data-theme="graphite"] {
+    --bg: #0A0A0A;
+    --surface: #141414;
+    --surface-elev: #1C1C1C;
+    --border: #262626;
+    --border-strong: #383838;
+    --text-primary: #FAFAFA;
+    --text-secondary: #A3A3A3;
+    --text-muted: #6B6B6B;
+    --primary: #84CC16;
+    --primary-hover: #65A30D;
+    --primary-soft: rgba(132, 204, 22, 0.14);
+    --accent: #525252;
+    --success: #84CC16;
+    --warning: #D4D4D4;
+    --danger: #EF4444;
+    --chart-1: #84CC16;
+    --chart-2: #65A30D;
+    --chart-3: #525252;
+    --chart-4: #A3A3A3;
+    --shadow: 0 0 0 1px rgba(255,255,255,0.04);
+    --is-dark: 1;
+  }
+  :root[data-theme="mono"] {
+    --bg: #FFFFFF;
+    --surface: #FFFFFF;
+    --surface-elev: #FAFAFA;
+    --border: #EAEAEA;
+    --border-strong: #0A0A0A;
+    --text-primary: #0A0A0A;
+    --text-secondary: #525252;
+    --text-muted: #A3A3A3;
+    --primary: #3E5A75;
+    --primary-hover: #2D4660;
+    --primary-soft: rgba(62, 90, 117, 0.08);
+    --accent: #525252;
+    --success: #3E5A75;
+    --warning: #525252;
+    --danger: #0A0A0A;
+    --chart-1: #3E5A75;
+    --chart-2: #A3A3A3;
+    --chart-3: #525252;
+    --chart-4: #D4D4D4;
+    --shadow: 0 1px 0 #EAEAEA;
+    --is-dark: 0;
+  }
+
+  html, body { background:#0A0A0F; font-family:-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif; }
+  :root[data-theme="daylight"] body, :root[data-theme="nordic"] body, :root[data-theme="mono"] body { background:#E7EAF0; }
+  :root[data-theme="ocean"] body { background:#040E1C; }
+  :root[data-theme="graphite"] body { background:#050505; }
+
+  /* iPhone 15 Pro frame */
+  .iphone {
+    width: 390px; height: 844px;
+    border-radius: 48px;
+    background: var(--bg);
+    color: var(--text-primary);
+    box-shadow: 0 0 0 8px #1a1a1f, 0 0 0 9px #2a2a31, 0 30px 60px -20px rgba(0,0,0,0.55);
+    position: relative;
+    overflow: hidden;
+    flex-shrink: 0;
+    isolation: isolate;
+  }
+  .iphone-screen { width: 100%; height: 100%; overflow:hidden; display:flex; flex-direction:column; background: var(--bg); }
+  .notch {
+    position:absolute; top:11px; left:50%; transform:translateX(-50%);
+    width:120px; height:35px; background:#000; border-radius:24px; z-index:50;
+  }
+  .frame-label {
+    position:absolute; bottom:-30px; left:0; right:0;
+    text-align:center; font-size:11px; color:#7b7b8a;
+    letter-spacing:0.04em; text-transform:uppercase; font-weight:500;
+  }
+  .frame-num {
+    position:absolute; top:-26px; left:6px;
+    font-size:10px; color:#6a6a78; letter-spacing:0.08em; font-weight:600;
+  }
+
+  /* App surfaces (theme-tokenized) */
+  .surf { background: var(--surface); }
+  .surf-elev { background: var(--surface-elev); }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+  }
+  .card-elev {
+    background: var(--surface-elev);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+  }
+  .divider { border-color: var(--border); }
+  .btn {
+    border-radius: 12px;
+    padding: 14px 18px;
+    font-weight: 600;
+    font-size: 15px;
+    display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  }
+  .btn-primary { background: var(--primary); color: #fff; }
+  :root[data-theme="mono"] .btn-primary { color:#fff; }
+  :root[data-theme="ocean"] .btn-primary { color:#062330; }
+  :root[data-theme="graphite"] .btn-primary { color:#0A0A0A; }
+  .btn-ghost { background: transparent; color: var(--text-primary); border: 1px solid var(--border-strong); }
+  .input {
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    color: var(--text-primary);
+    padding: 12px 14px;
+    width: 100%;
+    font-size: 15px;
+  }
+  .input::placeholder { color: var(--text-muted); }
+  .chip {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 500;
+    display:inline-flex; align-items:center; gap:6px;
+  }
+  .chip.active { background: var(--primary-soft); color: var(--primary); border-color: transparent; }
+  .pill {
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  .t-primary { color: var(--text-primary); }
+  .t-secondary { color: var(--text-secondary); }
+  .t-muted { color: var(--text-muted); }
+  .bg-primary { background: var(--primary); }
+  .text-primary-color { color: var(--primary); }
+  .text-success { color: var(--success); }
+  .text-warning { color: var(--warning); }
+  .text-danger { color: var(--danger); }
+  .bg-soft { background: var(--primary-soft); }
+  .border-soft { border-color: var(--border); }
+  .border-strong { border-color: var(--border-strong); }
+
+  /* Status bar */
+  .status-bar {
+    height: 54px; padding: 18px 28px 0; display:flex; justify-content:space-between; align-items:center;
+    font-size: 15px; font-weight: 600; color: var(--text-primary);
+    flex-shrink: 0; z-index: 40;
+  }
+  .status-bar .right { display:flex; align-items:center; gap:6px; }
+  .status-bar svg { width:16px; height:16px; }
+
+  /* Tab bar */
+  .tab-bar {
+    position:absolute; bottom:0; left:0; right:0;
+    background: color-mix(in oklab, var(--surface) 92%, transparent);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid var(--border);
+    padding: 8px 16px 28px;
+    display: grid; grid-template-columns: repeat(5, 1fr);
+    z-index: 30;
+  }
+  .tab {
+    display:flex; flex-direction:column; align-items:center; gap:3px;
+    color: var(--text-muted); font-size: 10px; font-weight: 500;
+  }
+  .tab svg { width: 22px; height: 22px; }
+  .tab.active { color: var(--primary); }
+
+  /* Bottom sheet */
+  .sheet {
+    position:absolute; left:0; right:0; bottom:0;
+    background: var(--surface-elev);
+    border-top-left-radius: 24px; border-top-right-radius: 24px;
+    padding: 12px 20px 40px;
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -20px 40px rgba(0,0,0,0.18);
+    z-index: 35;
+  }
+  .sheet-handle { width:36px; height:4px; background:var(--border-strong); border-radius:4px; margin: 4px auto 16px; opacity: 0.6; }
+  .sheet-backdrop {
+    position:absolute; inset:0; background:rgba(0,0,0,0.5); z-index: 32;
+  }
+
+  /* Scroll strip */
+  .strip {
+    display:flex; gap: 72px;
+    padding: 80px 80px 80px;
+    overflow-x: auto; overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    align-items: flex-start;
+  }
+  .strip > div { scroll-snap-align: start; }
+  .strip::-webkit-scrollbar { height: 10px; }
+  .strip::-webkit-scrollbar-track { background: rgba(255,255,255,0.03); }
+  .strip::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 5px; }
+
+  /* Toolbar */
+  .toolbar {
+    position: sticky; top: 0; z-index: 100;
+    backdrop-filter: blur(16px);
+    background: rgba(10, 10, 15, 0.78);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    color: #E5E5EF;
+  }
+  .theme-btn {
+    padding: 7px 14px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #B8B8C7;
+    border: 1px solid rgba(255,255,255,0.10);
+    background: rgba(255,255,255,0.04);
+    display:inline-flex; align-items:center; gap:8px;
+    transition: all 0.15s ease;
+  }
+  .theme-btn:hover { color:#fff; border-color: rgba(255,255,255,0.20); }
+  .theme-btn.active { background:#fff; color:#0A0A0F; border-color:#fff; }
+  .theme-swatch {
+    width:14px; height:14px; border-radius:4px;
+    border: 1px solid rgba(255,255,255,0.15);
+    display:inline-block;
+    background: linear-gradient(135deg, var(--sw1) 0% 50%, var(--sw2) 50% 100%);
+  }
+
+  /* Pet photo placeholder */
+  .pet-img {
+    background: linear-gradient(135deg, var(--primary-soft), var(--surface-elev));
+    display:flex; align-items:center; justify-content:center;
+    overflow:hidden;
+    border: 1px solid var(--border);
+  }
+  .pet-img.emoji { font-size: 28px; }
+
+  /* progress ring */
+  .ring-track { stroke: var(--border); }
+  .ring-bar-1 { stroke: var(--chart-1); }
+  .ring-bar-2 { stroke: var(--chart-2); }
+
+  /* Mini sparkline area gradient */
+  .area-fill-1 { fill: var(--chart-1); opacity: 0.12; }
+
+  /* avatars */
+  .avatar {
+    width: 28px; height: 28px; border-radius: 999px;
+    background: var(--primary-soft); color: var(--primary);
+    display:inline-flex; align-items:center; justify-content:center;
+    font-size: 11px; font-weight: 700;
+    border: 2px solid var(--surface);
+  }
+  .avatar.lg { width: 56px; height: 56px; font-size: 18px; }
+  .avatar.xl { width: 80px; height: 80px; font-size: 28px; }
+
+  /* utility */
+  .h-stack { display:flex; align-items:center; }
+  .v-stack { display:flex; flex-direction:column; }
+  .grow { flex: 1; min-width: 0; }
+  .ico-btn { width: 36px; height: 36px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); display:inline-flex; align-items:center; justify-content:center; }
+  .ico-btn svg { width: 18px; height: 18px; color: var(--text-secondary); }
+
+  /* Hide ios safe-area handle */
+  .home-indicator {
+    position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+    width: 134px; height: 5px; border-radius: 5px;
+    background: var(--text-primary); opacity: 0.6;
+    z-index: 60;
+  }
+
+  .scroll-y { overflow-y: auto; overflow-x: hidden; }
+  .scroll-y::-webkit-scrollbar { width: 0; }
+
+  /* fab */
+  .fab {
+    position:absolute; right: 18px; bottom: 96px;
+    width: 56px; height: 56px; border-radius: 999px;
+    background: var(--primary); color:#fff;
+    display:inline-flex; align-items:center; justify-content:center;
+    box-shadow: 0 12px 28px -8px var(--primary);
+    z-index: 25;
+  }
+  :root[data-theme="ocean"] .fab { color:#062330; }
+  :root[data-theme="graphite"] .fab { color:#0A0A0A; }
+  .fab svg { width: 24px; height: 24px; }
+
+  /* Headline */
+  h1.title { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; color: var(--text-primary); }
+  h2.title { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; color: var(--text-primary); }
+  .caption { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+  .label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+
+  /* food type icon */
+  .type-icon {
+    width: 40px; height: 40px; border-radius: 12px;
+    background: var(--primary-soft); color: var(--primary);
+    display:inline-flex; align-items:center; justify-content:center;
+  }
+  .type-icon svg { width: 18px; height: 18px; }
+
+  /* progress segment */
+  .seg { height: 6px; border-radius: 999px; background: var(--border); overflow: hidden; }
+  .seg > i { display:block; height:100%; background: var(--primary); border-radius:999px; }
+
+  /* slider */
+  .slider-track { height: 6px; border-radius: 999px; background: var(--border); position: relative; }
+  .slider-fill { position:absolute; left:0; top:0; bottom:0; background: var(--primary); border-radius: 999px; }
+  .slider-thumb { position:absolute; top:50%; transform:translate(-50%,-50%); width:16px; height:16px; border-radius:999px; background: var(--surface-elev); border: 2px solid var(--primary); }
+</style>
+</head>
+<body>
+
+<!-- Toolbar -->
+<div class="toolbar">
+  <div class="max-w-[1600px] mx-auto px-8 py-4 flex items-center justify-between gap-6">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: linear-gradient(135deg,#A855F7,#38BDF8);">
+        <i data-lucide="paw-print" class="w-4 h-4 text-white"></i>
+      </div>
+      <div>
+        <div class="text-[15px] font-semibold tracking-tight">PetCare — iOS Prototype</div>
+        <div class="text-[11px]" style="color:#7b7b8a;">12 screens · 6 themes · iPhone 15 Pro</div>
+      </div>
+    </div>
+    <div class="flex items-center gap-2" id="themePicker">
+      <button class="theme-btn active" data-theme="midnight" style="--sw1:#A855F7;--sw2:#0B0B16;"><span class="theme-swatch"></span>Midnight</button>
+      <button class="theme-btn" data-theme="daylight" style="--sw1:#4F46E5;--sw2:#F4F6FB;"><span class="theme-swatch"></span>Daylight</button>
+      <button class="theme-btn" data-theme="nordic" style="--sw1:#3F7B8C;--sw2:#ECEFF3;"><span class="theme-swatch"></span>Nordic</button>
+      <button class="theme-btn" data-theme="ocean" style="--sw1:#22D3EE;--sw2:#07182B;"><span class="theme-swatch"></span>Ocean</button>
+      <button class="theme-btn" data-theme="graphite" style="--sw1:#84CC16;--sw2:#0A0A0A;"><span class="theme-swatch"></span>Graphite</button>
+      <button class="theme-btn" data-theme="mono" style="--sw1:#3E5A75;--sw2:#FFFFFF;"><span class="theme-swatch"></span>Mono</button>
+    </div>
+  </div>
+</div>
+
+<div class="strip" id="strip">
+  <!-- frames are injected from JS templates below -->
+</div>
+
+<!-- Reusable templates -->
+<template id="tpl-statusbar">
+  <div class="status-bar">
+    <span>9:41</span>
+    <div class="right">
+      <i data-lucide="signal"></i>
+      <i data-lucide="wifi"></i>
+      <i data-lucide="battery-full"></i>
+    </div>
+  </div>
+</template>
+
+<template id="tpl-tabbar">
+  <div class="tab-bar">
+    <a class="tab" data-tab="dashboard"><i data-lucide="layout-dashboard"></i><span>Dashboard</span></a>
+    <a class="tab" data-tab="pet"><i data-lucide="paw-print"></i><span>Pet</span></a>
+    <a class="tab" data-tab="meal"><i data-lucide="utensils"></i><span>Meal</span></a>
+    <a class="tab" data-tab="med"><i data-lucide="pill"></i><span>Medicine</span></a>
+    <a class="tab" data-tab="settings"><i data-lucide="settings"></i><span>Settings</span></a>
+  </div>
+</template>
+
+<script>
+/* ============================================================
+   PetCare iOS prototype — 12 screens, 6 themes
+   ============================================================ */
+
+const SCREENS = [
+  { id: 'login',     label: '01 · Login',          tab: null,         render: renderLogin },
+  { id: 'dashboard', label: '02 · Dashboard',      tab: 'dashboard',  render: renderDashboard },
+  { id: 'petlist',   label: '03 · Pet List',       tab: 'pet',        render: renderPetList },
+  { id: 'petdetail', label: '04 · Pet Detail',     tab: 'pet',        render: renderPetDetail },
+  { id: 'weight',    label: '05 · Weight',         tab: 'pet',        render: renderWeight },
+  { id: 'weightadd', label: '06 · Add Weight',     tab: 'pet',        render: renderAddWeight,  hasSheet: true },
+  { id: 'food',      label: '07 · Food Database',  tab: 'meal',       render: renderFood },
+  { id: 'foodadd',   label: '08 · Add Food',       tab: 'meal',       render: renderAddFood,    hasSheet: true },
+  { id: 'meal',      label: '09 · Meal Log',       tab: 'meal',       render: renderMeal },
+  { id: 'medicine',  label: '10 · Medicine',       tab: 'med',        render: renderMedicine },
+  { id: 'settings',  label: '11 · Settings',       tab: 'settings',   render: renderSettings },
+  { id: 'invite',    label: '12 · Invite Group',   tab: 'settings',   render: renderInvite,     hasSheet: true },
+];
+
+function statusBar() {
+  return `
+    <div class="status-bar">
+      <span>9:41</span>
+      <div class="right">
+        <i data-lucide="signal"></i>
+        <i data-lucide="wifi"></i>
+        <i data-lucide="battery-full"></i>
+      </div>
+    </div>
+  `;
+}
+
+function tabBar(active) {
+  const tabs = [
+    ['dashboard', 'layout-dashboard', 'Dashboard'],
+    ['pet',       'paw-print',        'Pet'],
+    ['meal',      'utensils',         'Meal'],
+    ['med',       'pill',             'Medicine'],
+    ['settings',  'settings',         'Settings'],
+  ];
+  return `
+    <div class="tab-bar">
+      ${tabs.map(([id, ic, lbl]) => `
+        <a class="tab ${active === id ? 'active' : ''}"><i data-lucide="${ic}"></i><span>${lbl}</span></a>
+      `).join('')}
+    </div>
+    <div class="home-indicator"></div>
+  `;
+}
+
+/* -- 01 Login ------------------------------------------------ */
+function renderLogin() {
+  return `
+    ${statusBar()}
+    <div class="flex-1 px-7 pt-10 pb-12 flex flex-col scroll-y">
+      <div class="flex items-center gap-3 mb-12">
+        <div class="w-11 h-11 rounded-2xl flex items-center justify-center" style="background: linear-gradient(135deg, var(--primary), var(--accent));">
+          <i data-lucide="paw-print" class="w-5 h-5 text-white"></i>
+        </div>
+        <div>
+          <div class="text-[17px] font-semibold t-primary">PetCare</div>
+          <div class="caption">A shared home for your animals</div>
+        </div>
+      </div>
+
+      <div class="mb-10">
+        <h1 class="title mb-2">Welcome back</h1>
+        <p class="t-secondary text-[15px]">Sign in to keep tracking Luna's meals, weight, and meds with your family.</p>
+      </div>
+
+      <div class="space-y-3 mb-6">
+        <button class="btn btn-ghost w-full">
+          <svg viewBox="0 0 48 48" class="w-4 h-4"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3a12 12 0 1 1-3.3-13l5.7-5.7A20 20 0 1 0 44 24c0-1.2-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8a12 12 0 0 1 19.1-4.5l5.7-5.7A20 20 0 0 0 6.3 14.7z"/><path fill="#4CAF50" d="M24 44a20 20 0 0 0 13.5-5.2l-6.2-5.3A12 12 0 0 1 12.8 29l-6.5 5A20 20 0 0 0 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3a12 12 0 0 1-4.1 5.5l6.2 5.3C40 35 44 30 44 24c0-1.2-.1-2.4-.4-3.5z"/></svg>
+          Continue with Google
+        </button>
+        <button class="btn btn-ghost w-full">
+          <i data-lucide="apple" class="w-4 h-4"></i>
+          Continue with Apple
+        </button>
+      </div>
+
+      <div class="flex items-center gap-4 mb-6">
+        <div class="flex-1 h-px" style="background:var(--border)"></div>
+        <span class="caption">or</span>
+        <div class="flex-1 h-px" style="background:var(--border)"></div>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <label class="label block mb-2">Email</label>
+          <input class="input" value="david@familyhome.co" />
+        </div>
+        <div>
+          <label class="label block mb-2">Password</label>
+          <input type="password" class="input" value="••••••••••" />
+        </div>
+        <button class="btn btn-primary w-full mt-2">
+          Sign in
+          <i data-lucide="arrow-right" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <div class="mt-auto pt-10 flex items-center justify-between">
+        <a class="text-[13px] t-secondary font-medium">Forgot password?</a>
+        <a class="text-[13px] font-semibold" style="color:var(--primary);">Create account</a>
+      </div>
+    </div>
+  `;
+}
+
+/* -- 02 Dashboard ------------------------------------------- */
+function renderDashboard() {
+  return `
+    ${statusBar()}
+    <div class="flex-1 scroll-y pb-28">
+      <div class="px-5 pt-2 pb-4">
+        <div class="flex items-center justify-between mb-5">
+          <div>
+            <div class="caption">Tuesday, May 19</div>
+            <h1 class="title mt-0.5">Good morning, David</h1>
+          </div>
+          <div class="ico-btn"><i data-lucide="bell"></i></div>
+        </div>
+
+        <div class="flex gap-2 overflow-x-auto -mx-5 px-5 pb-1">
+          ${petChip('Luna', '🐶', true)}
+          ${petChip('Mochi', '🐱', false)}
+          ${petChip('Biscuit', '🐶', false)}
+          <button class="chip"><i data-lucide="plus" class="w-3 h-3"></i>Add</button>
+        </div>
+      </div>
+
+      <div class="px-5 space-y-3">
+        <!-- Calorie ring + macros -->
+        <div class="card p-5">
+          <div class="flex items-start justify-between mb-1">
+            <div>
+              <div class="label">Calories today</div>
+              <div class="flex items-baseline gap-1.5 mt-1">
+                <span class="text-[28px] font-bold t-primary">412</span>
+                <span class="text-[14px] t-muted">/ 540 kcal</span>
+              </div>
+              <div class="text-[12px] text-success font-medium mt-0.5">On target · 128 kcal left</div>
+            </div>
+            ${ring(76, 412, 540)}
+          </div>
+          <div class="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-soft">
+            ${macro('Protein', '24g', 72)}
+            ${macro('Fat', '9g', 48)}
+            ${macro('Carbs', '18g', 36)}
+          </div>
+        </div>
+
+        <!-- Weight mini-chart -->
+        <div class="card p-5">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <div class="label">Weight trend · 30 days</div>
+              <div class="flex items-baseline gap-2 mt-1">
+                <span class="text-[22px] font-semibold t-primary">12.4 kg</span>
+                <span class="text-[12px] text-success font-medium h-stack gap-0.5"><i data-lucide="trending-down" class="w-3 h-3"></i>-0.3 kg</span>
+              </div>
+            </div>
+            <span class="chip">Target 12.0 kg</span>
+          </div>
+          ${sparkline()}
+        </div>
+
+        <!-- Upcoming meds -->
+        <div class="card p-5">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="title">Upcoming</h2>
+            <a class="text-[12px] font-semibold text-primary-color">View all</a>
+          </div>
+          <div class="space-y-3">
+            ${medRow('Apoquel', '5.4 mg · with food', 'In 2h', 'pill', 'warning')}
+            ${medRow('Bravecto', 'Monthly chew', 'Tomorrow', 'shield-check', 'success')}
+          </div>
+        </div>
+
+        <!-- Recent meals -->
+        <div class="card p-5">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="title">Recent meals</h2>
+            <a class="text-[12px] font-semibold text-primary-color">All meals</a>
+          </div>
+          <div class="space-y-3">
+            ${recentMeal('Acana Pacifica', 'Breakfast · 80g', '7:42 AM', 312)}
+            ${recentMeal('Carrot & Apple Bites', 'Snack · 1pc', 'Yesterday', 38)}
+          </div>
+        </div>
+      </div>
+    </div>
+    ${tabBar('dashboard')}
+  `;
+}
+
+function petChip(name, emoji, active) {
+  return `
+    <button class="chip ${active ? 'active' : ''}" style="white-space:nowrap; padding:6px 12px 6px 6px;">
+      <span class="w-6 h-6 rounded-full flex items-center justify-center text-[14px]" style="background: var(--surface-elev);">${emoji}</span>
+      ${name}
+    </button>
+  `;
+}
+
+function ring(pct, value, total) {
+  const c = 2 * Math.PI * 32;
+  const off = c * (1 - pct/100);
+  return `
+    <svg width="84" height="84" viewBox="0 0 80 80" class="-rotate-90">
+      <circle cx="40" cy="40" r="32" fill="none" class="ring-track" stroke-width="8"/>
+      <circle cx="40" cy="40" r="32" fill="none" class="ring-bar-1" stroke-width="8" stroke-linecap="round"
+              stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}"/>
+      <text x="40" y="38" text-anchor="middle" transform="rotate(90 40 40)" font-size="13" font-weight="700" fill="var(--text-primary)">${pct}%</text>
+    </svg>
+  `;
+}
+
+function macro(name, value, pct) {
+  return `
+    <div>
+      <div class="caption">${name}</div>
+      <div class="text-[15px] font-semibold t-primary mt-0.5">${value}</div>
+      <div class="seg mt-2"><i style="width:${pct}%"></i></div>
+    </div>
+  `;
+}
+
+function sparkline() {
+  // 30 points: weight trending from 12.7 to 12.4
+  const pts = [12.7,12.7,12.65,12.6,12.7,12.65,12.55,12.6,12.5,12.55,12.5,12.45,12.5,12.55,12.45,12.4,12.45,12.5,12.4,12.35,12.4,12.45,12.4,12.35,12.4,12.3,12.35,12.4,12.35,12.4];
+  const min = 12.2, max = 12.8;
+  const w = 320, h = 80;
+  const pad = 4;
+  const dx = (w - pad*2) / (pts.length - 1);
+  const path = pts.map((v, i) => {
+    const x = pad + i * dx;
+    const y = pad + (max - v) / (max - min) * (h - pad*2);
+    return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  const area = path + ` L${(w-pad).toFixed(1)},${h} L${pad},${h} Z`;
+  const targetY = pad + (max - 12.0) / (max - min) * (h - pad*2);
+  return `
+    <svg viewBox="0 0 ${w} ${h}" width="100%" preserveAspectRatio="none" style="height:80px; display:block;">
+      <path d="${area}" class="area-fill-1"/>
+      <line x1="0" y1="${targetY}" x2="${w}" y2="${targetY}" stroke="var(--text-muted)" stroke-dasharray="3 4" stroke-width="1" opacity="0.5"/>
+      <path d="${path}" fill="none" stroke="var(--chart-1)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      ${pts.map((v, i) => i === pts.length - 1 ? `<circle cx="${pad + i*dx}" cy="${pad + (max-v)/(max-min)*(h-pad*2)}" r="3" fill="var(--chart-1)"/>` : '').join('')}
+    </svg>
+  `;
+}
+
+function medRow(name, sub, when, icon, tone) {
+  return `
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl flex items-center justify-center bg-soft">
+        <i data-lucide="${icon}" class="w-4 h-4 text-primary-color"></i>
+      </div>
+      <div class="grow">
+        <div class="text-[15px] font-semibold t-primary">${name}</div>
+        <div class="text-[12px] t-secondary">${sub}</div>
+      </div>
+      <div class="text-[12px] font-semibold text-${tone}">${when}</div>
+    </div>
+  `;
+}
+
+function recentMeal(name, sub, when, kcal) {
+  return `
+    <div class="flex items-center gap-3">
+      <div class="pet-img rounded-xl" style="width:40px; height:40px;">🥩</div>
+      <div class="grow">
+        <div class="text-[15px] font-semibold t-primary">${name}</div>
+        <div class="text-[12px] t-secondary">${sub}</div>
+      </div>
+      <div class="text-right">
+        <div class="text-[14px] font-semibold t-primary">${kcal} kcal</div>
+        <div class="text-[11px] t-muted">${when}</div>
+      </div>
+    </div>
+  `;
+}
+
+/* -- 03 Pet List -------------------------------------------- */
+function renderPetList() {
+  const pets = [
+    { name: 'Luna',    breed: 'Golden Retriever',  weight: '12.4 kg', age: '3 yr', emoji: '🐶', owner: 'D', role: 'You' },
+    { name: 'Mochi',   breed: 'British Shorthair', weight: '4.8 kg',  age: '5 yr', emoji: '🐱', owner: 'S', role: 'Sara' },
+    { name: 'Biscuit', breed: 'Beagle',            weight: '9.2 kg',  age: '7 yr', emoji: '🐶', owner: 'D', role: 'You' },
+    { name: 'Tofu',    breed: 'Ragdoll',           weight: '5.3 kg',  age: '2 yr', emoji: '🐱', owner: 'M', role: 'Mom' },
+  ];
+  return `
+    ${statusBar()}
+    <div class="flex-1 scroll-y pb-28">
+      <div class="px-5 pt-2 pb-5 flex items-center justify-between">
+        <div>
+          <div class="caption">Family group · Henderson</div>
+          <h1 class="title mt-0.5">Your pets</h1>
+        </div>
+        <div class="ico-btn"><i data-lucide="search"></i></div>
+      </div>
+
+      <div class="px-5 flex gap-2 mb-4 overflow-x-auto">
+        <span class="chip active">All · 4</span>
+        <span class="chip">Dogs · 2</span>
+        <span class="chip">Cats · 2</span>
+        <span class="chip">Needs attention · 1</span>
+      </div>
+
+      <div class="px-5 space-y-3">
+        ${pets.map(p => `
+          <div class="card p-3 flex items-center gap-3">
+            <div class="pet-img emoji rounded-2xl" style="width:64px; height:64px;">${p.emoji}</div>
+            <div class="grow">
+              <div class="flex items-center gap-2">
+                <span class="text-[16px] font-semibold t-primary">${p.name}</span>
+                <span class="pill bg-soft text-primary-color">${p.role}</span>
+              </div>
+              <div class="text-[12px] t-secondary mt-0.5">${p.breed} · ${p.age}</div>
+              <div class="flex items-center gap-3 mt-2">
+                <span class="text-[12px] t-secondary h-stack gap-1"><i data-lucide="scale" class="w-3 h-3"></i>${p.weight}</span>
+                <span class="text-[12px] text-success h-stack gap-1"><i data-lucide="check-circle-2" class="w-3 h-3"></i>On target</span>
+              </div>
+            </div>
+            <i data-lucide="chevron-right" class="w-4 h-4 t-muted"></i>
+          </div>
+        `).join('')}
+
+        <button class="card p-4 w-full flex items-center justify-center gap-2 border-dashed" style="border-style:dashed; border-color:var(--border-strong); background: transparent;">
+          <i data-lucide="plus" class="w-4 h-4 text-primary-color"></i>
+          <span class="text-[14px] font-semibold text-primary-color">Add a pet</span>
+        </button>
+      </div>
+    </div>
+    ${tabBar('pet')}
+  `;
+}
+
+/* -- 04 Pet Detail ------------------------------------------ */
+function renderPetDetail() {
+  return `
+    ${statusBar()}
+    <div class="flex-1 scroll-y pb-28">
+      <div class="px-5 pt-2 flex items-center justify-between mb-4">
+        <button class="ico-btn"><i data-lucide="chevron-left"></i></button>
+        <div class="caption">Pet profile</div>
+        <button class="ico-btn"><i data-lucide="more-horizontal"></i></button>
+      </div>
+
+      <!-- hero -->
+      <div class="px-5">
+        <div class="pet-img rounded-3xl" style="height:200px; font-size: 80px;">🐶</div>
+        <div class="flex items-end justify-between mt-4">
+          <div>
+            <h1 class="title text-[26px]">Luna</h1>
+            <div class="text-[13px] t-secondary mt-0.5">Golden Retriever · Female · Born Apr 2022</div>
+          </div>
+          <button class="ico-btn"><i data-lucide="edit-3"></i></button>
+        </div>
+
+        <div class="grid grid-cols-4 gap-2 mt-4">
+          ${stat('Weight', '12.4', 'kg')}
+          ${stat('Age', '3.1', 'yr')}
+          ${stat('Daily', '540', 'kcal')}
+          ${stat('Target', '12.0', 'kg')}
+        </div>
+
+        <div class="flex gap-1 mt-5 p-1 rounded-xl" style="background:var(--surface-elev); border:1px solid var(--border);">
+          ${['Overview','Weight','Meals','Meds'].map((t,i) =>
+            `<button class="flex-1 py-2 text-[13px] font-semibold rounded-lg ${i===0 ? '' : 't-secondary'}" style="${i===0 ? 'background:var(--surface); color:var(--text-primary); box-shadow: var(--shadow);' : ''}">${t}</button>`
+          ).join('')}
+        </div>
+
+        <div class="space-y-3 mt-4">
+          <div class="card p-4">
+            <div class="label mb-2">Vital snapshot</div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <div class="caption">BCS (1-9)</div>
+                <div class="text-[16px] font-semibold t-primary mt-0.5">5 / Ideal</div>
+              </div>
+              <div>
+                <div class="caption">Spayed</div>
+                <div class="text-[16px] font-semibold t-primary mt-0.5">Yes · 2023</div>
+              </div>
+              <div>
+                <div class="caption">Microchip</div>
+                <div class="text-[16px] font-semibold t-primary mt-0.5 font-mono">···4429</div>
+              </div>
+              <div>
+                <div class="caption">Vet</div>
+                <div class="text-[16px] font-semibold t-primary mt-0.5">Dr. Park</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card p-4">
+            <div class="flex items-center justify-between mb-3">
+              <div class="label">Today's plan</div>
+              <span class="pill bg-soft text-primary-color">3 of 4 done</span>
+            </div>
+            ${planRow('Morning kibble', '7:42 AM', true)}
+            ${planRow('Walk · 30 min', '8:15 AM', true)}
+            ${planRow('Apoquel', '12:00 PM', false)}
+            ${planRow('Evening kibble', '6:30 PM', true)}
+          </div>
+        </div>
+      </div>
+    </div>
+    ${tabBar('pet')}
+  `;
+}
+
+function stat(label, value, unit) {
+  return `
+    <div class="card p-3 text-center">
+      <div class="caption">${label}</div>
+      <div class="text-[18px] font-semibold t-primary mt-0.5">${value}<span class="text-[11px] t-muted ml-0.5 font-medium">${unit}</span></div>
+    </div>
+  `;
+}
+
+function planRow(label, time, done) {
+  return `
+    <div class="flex items-center gap-3 py-2">
+      <div class="w-5 h-5 rounded-full flex items-center justify-center" style="background: ${done ? 'var(--primary)' : 'transparent'}; border: 1.5px solid ${done ? 'var(--primary)' : 'var(--border-strong)'};">
+        ${done ? '<i data-lucide="check" class="w-3 h-3 text-white"></i>' : ''}
+      </div>
+      <div class="grow text-[14px] font-medium t-primary" style="${done ? 'opacity:0.55; text-decoration:line-through;' : ''}">${label}</div>
+      <div class="text-[12px] t-muted">${time}</div>
+    </div>
+  `;
+}
+
+/* -- 05 Weight ---------------------------------------------- */
+function renderWeight() {
+  const records = [
+    { month: 'May 2026', items: [
+      ['May 19', '12.4 kg', '-0.1', 'down'],
+      ['May 12', '12.5 kg', '-0.1', 'down'],
+      ['May 05', '12.6 kg',  '0.0', 'flat'],
+    ]},
+    { month: 'Apr 2026', items: [
+      ['Apr 28', '12.6 kg', '-0.2', 'down'],
+      ['Apr 14', '12.8 kg', '+0.1', 'up'],
+    ]}
+  ];
+  return `
+    ${statusBar()}
+    <div class="flex-1 scroll-y pb-28 relative">
+      <div class="px-5 pt-2 flex items-center justify-between mb-4">
+        <button class="ico-btn"><i data-lucide="chevron-left"></i></button>
+        <div class="caption">Luna · Weight</div>
+        <button class="ico-btn"><i data-lucide="share-2"></i></button>
+      </div>
+
+      <div class="px-5">
+        <div class="flex items-baseline gap-3">
+          <h1 class="title text-[32px]">12.4 kg</h1>
+          <span class="text-[13px] text-success font-medium h-stack gap-0.5"><i data-lucide="trending-down" class="w-3 h-3"></i>-0.4 kg · 90d</span>
+        </div>
+        <div class="text-[13px] t-secondary">Target 12.0 kg · 0.4 kg to go</div>
+
+        <div class="flex gap-1 mt-4 p-1 rounded-xl" style="background:var(--surface-elev); border:1px solid var(--border);">
+          ${['7D','30D','90D','1Y','All'].map((t,i) =>
+            `<button class="flex-1 py-1.5 text-[12px] font-semibold rounded-lg ${i===2 ? '' : 't-secondary'}" style="${i===2 ? 'background:var(--surface); color:var(--text-primary); box-shadow: var(--shadow);' : ''}">${t}</button>`
+          ).join('')}
+        </div>
+
+        <div class="card p-4 mt-3">
+          ${bigChart()}
+          <div class="flex items-center justify-between mt-3 pt-3 border-t border-soft">
+            <div class="flex items-center gap-1.5 text-[11px] t-secondary"><span class="w-2 h-2 rounded-sm" style="background:var(--chart-1)"></span>Weight</div>
+            <div class="flex items-center gap-1.5 text-[11px] t-secondary"><span class="w-2 h-2 rounded-sm" style="background:var(--text-muted);opacity:0.6"></span>Target 12.0 kg</div>
+            <div class="flex items-center gap-1.5 text-[11px] t-secondary"><span class="w-2 h-2 rounded-sm" style="background:var(--chart-3)"></span>Healthy range</div>
+          </div>
+        </div>
+
+        <div class="mt-4 mb-2 flex items-center justify-between">
+          <div class="label">Records · 12 entries</div>
+          <a class="text-[12px] font-semibold text-primary-color">Export</a>
+        </div>
+        <div class="card divide-y" style="border-color:var(--border)">
+          ${records.map(group => `
+            <div class="px-4 py-2 text-[11px] font-semibold t-muted uppercase tracking-wider" style="background:var(--surface-elev);">${group.month}</div>
+            ${group.items.map(([d, w, delta, dir]) => `
+              <div class="flex items-center px-4 py-3 border-t border-soft" style="border-top:1px solid var(--border);">
+                <div class="grow">
+                  <div class="text-[14px] font-medium t-primary">${d}</div>
+                  <div class="caption">Logged by David</div>
+                </div>
+                <div class="text-[15px] font-semibold t-primary mr-3">${w}</div>
+                <span class="pill ${dir === 'down' ? 'text-success' : dir === 'up' ? 'text-danger' : 't-muted'}" style="background:var(--surface-elev);">${delta} kg</span>
+              </div>
+            `).join('')}
+          `).join('')}
+        </div>
+      </div>
+
+      <button class="fab"><i data-lucide="plus"></i></button>
+    </div>
+    ${tabBar('pet')}
+  `;
+}
+
+function bigChart() {
+  // 90 days, weight 13.0 -> 12.4
+  const N = 30;
+  const seed = [13.0,12.95,12.9,12.95,12.85,12.9,12.8,12.85,12.75,12.8,12.7,12.75,12.7,12.65,12.7,12.6,12.65,12.55,12.6,12.5,12.55,12.5,12.45,12.5,12.45,12.5,12.4,12.45,12.35,12.4];
+  const min = 11.8, max = 13.2;
+  const w = 320, h = 170;
+  const pad = 8, padR = 30;
+  const dx = (w - pad - padR) / (seed.length - 1);
+  const yOf = v => 10 + (max - v) / (max - min) * (h - 30);
+  const path = seed.map((v,i) => `${i===0?'M':'L'}${(pad+i*dx).toFixed(1)},${yOf(v).toFixed(1)}`).join(' ');
+  const area = path + ` L${(pad+(seed.length-1)*dx).toFixed(1)},${h-10} L${pad},${h-10} Z`;
+  const yTarget = yOf(12.0);
+  const yHigh = yOf(12.8), yLow = yOf(11.8);
+  return `
+    <svg viewBox="0 0 ${w+12} ${h+20}" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block;">
+      <!-- healthy band -->
+      <rect x="${pad}" y="${yHigh}" width="${w-pad-padR}" height="${(yLow-yHigh).toFixed(1)}" fill="var(--chart-3)" opacity="0.07"/>
+      <!-- gridlines + labels -->
+      ${[13.0, 12.5, 12.0].map(v => `
+        <line x1="${pad}" y1="${yOf(v)}" x2="${w-padR}" y2="${yOf(v)}" stroke="var(--border)" stroke-width="1" opacity="0.6"/>
+        <text x="${w-padR+4}" y="${yOf(v)+3}" font-size="9" fill="var(--text-muted)">${v.toFixed(1)}</text>
+      `).join('')}
+      <!-- target -->
+      <line x1="${pad}" y1="${yTarget}" x2="${w-padR}" y2="${yTarget}" stroke="var(--text-muted)" stroke-dasharray="3 4" stroke-width="1" opacity="0.6"/>
+      <!-- area + line -->
+      <path d="${area}" fill="var(--chart-1)" opacity="0.10"/>
+      <path d="${path}" fill="none" stroke="var(--chart-1)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      ${seed.map((v,i) => i % 5 === 0 || i === seed.length-1 ? `<circle cx="${pad+i*dx}" cy="${yOf(v)}" r="${i===seed.length-1?3.5:2.2}" fill="var(--chart-1)" stroke="var(--surface)" stroke-width="${i===seed.length-1?2:1}"/>` : '').join('')}
+      <!-- x labels -->
+      <text x="${pad}" y="${h+12}" font-size="9" fill="var(--text-muted)">Feb 18</text>
+      <text x="${pad+w/2-padR/2-20}" y="${h+12}" font-size="9" fill="var(--text-muted)">Mar 30</text>
+      <text x="${w-padR-30}" y="${h+12}" font-size="9" fill="var(--text-muted)">May 19</text>
+    </svg>
+  `;
+}
+
+/* -- 06 Add Weight (bottom sheet on dimmed weight page) ----- */
+function renderAddWeight() {
+  return `
+    ${statusBar()}
+    <div class="flex-1 scroll-y pb-28 relative" style="overflow:hidden;">
+      <div class="px-5 pt-2 flex items-center justify-between mb-4">
+        <button class="ico-btn"><i data-lucide="chevron-left"></i></button>
+        <div class="caption">Luna · Weight</div>
+        <button class="ico-btn"><i data-lucide="share-2"></i></button>
+      </div>
+      <div class="px-5">
+        <h1 class="title text-[32px]">12.4 kg</h1>
+        <div class="card p-4 mt-3">
+          ${bigChart()}
+        </div>
+      </div>
+    </div>
+    <div class="sheet-backdrop"></div>
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="flex items-center justify-between mb-1">
+        <h2 class="title">Log weight</h2>
+        <button class="text-[14px] font-semibold text-primary-color">Save</button>
+      </div>
+      <div class="caption mb-5">Luna · Golden Retriever</div>
+
+      <!-- big weight -->
+      <div class="text-center py-3">
+        <div class="flex items-baseline justify-center gap-1">
+          <span class="text-[48px] font-bold t-primary tracking-tight">12.3</span>
+          <span class="text-[18px] t-muted font-medium">kg</span>
+        </div>
+        <div class="text-[12px] text-success font-medium mt-1">-0.1 kg vs last entry</div>
+      </div>
+
+      <!-- kg picker -->
+      <div class="relative mt-3 mb-4" style="height:54px;">
+        <div class="absolute left-1/2 top-0 bottom-0 -translate-x-1/2 w-px" style="background:var(--primary)"></div>
+        <div class="flex gap-3 justify-around items-end h-full overflow-hidden">
+          ${[12.0,12.1,12.2,12.3,12.4,12.5,12.6].map((v,i) => `
+            <div class="flex-1 flex flex-col items-center gap-1.5">
+              <div style="width:1px; height:${i===3?28:14}px; background: ${i===3?'var(--primary)':'var(--border-strong)'};"></div>
+              <span class="text-[11px] ${i===3?'font-semibold text-primary-color':'t-muted'}">${v.toFixed(1)}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3 mb-4">
+        <div>
+          <label class="label block mb-2">Date</label>
+          <div class="input flex items-center justify-between"><span>Today, May 19</span><i data-lucide="calendar" class="w-4 h-4 t-muted"></i></div>
+        </div>
+        <div>
+          <label class="label block mb-2">Time</label>
+          <div class="input flex items-center justify-between"><span>7:42 AM</span><i data-lucide="clock" class="w-4 h-4 t-muted"></i></div>
+        </div>
+      </div>
+      <div>
+        <label class="label block mb-2">Notes</label>
+        <input class="input" placeholder="Optional · e.g. after morning walk" />
+      </div>
+
+      <button class="btn btn-primary w-full mt-5">Save record</button>
+    </div>
+  `;
+}
+
+/* -- 07 Food Database --------------------------------------- */
+function renderFood() {
+  const foods = [
+    ['Acana', 'Pacifica Formula', 'dry', 'dog', '365 kcal / 100g', '🐟'],
+    ['Royal Canin', 'Kitten Sterilized', 'dry', 'cat', '405 kcal / 100g', '🐈'],
+    ['Orijen', 'Six Fish Recipe', 'dry', 'dog', '385 kcal / 100g', '🐟'],
+    ['Hill\'s Science', 'Adult Light Chicken', 'wet', 'cat', '78 kcal / 100g', '🐔'],
+    ['Open Farm', 'Wild Salmon', 'wet', 'dog', '92 kcal / 100g', '🐟'],
+    ['Stella & Chewy', 'Freeze-Dried Beef', 'raw', 'dog', '540 kcal / 100g', '🥩'],
+  ];
+  return `
+    ${statusBar()}
+    <div class="flex-1 scroll-y pb-28 relative">
+      <div class="px-5 pt-2 pb-3 flex items-center justify-between">
+        <div>
+          <div class="caption">Catalog</div>
+          <h1 class="title mt-0.5">Foods</h1>
+        </div>
+        <div class="flex gap-2">
+          <div class="ico-btn"><i data-lucide="filter"></i></div>
+          <div class="ico-btn"><i data-lucide="bar-code"></i></div>
+        </div>
+      </div>
+
+      <div class="px-5">
+        <div class="input flex items-center gap-2">
+          <i data-lucide="search" class="w-4 h-4 t-muted"></i>
+          <span class="t-muted text-[14px]">Search brand, product, ingredient</span>
+        </div>
+        <div class="flex gap-2 mt-3 overflow-x-auto pb-1">
+          <span class="chip active">All · 124</span>
+          <span class="chip">Dry</span>
+          <span class="chip">Wet</span>
+          <span class="chip">Raw</span>
+          <span class="chip"><i data-lucide="paw-print" class="w-3 h-3"></i>Dog</span>
+          <span class="chip"><i data-lucide="cat" class="w-3 h-3"></i>Cat</span>
+        </div>
+
+        <div class="card mt-3 divide-y" style="border-color:var(--border)">
+          ${foods.map((f, i) => `
+            <div class="flex items-center gap-3 p-3 ${i>0 ? '' : ''}" style="${i>0 ? 'border-top:1px solid var(--border);' : ''}">
+              <div class="pet-img rounded-xl" style="width:48px; height:48px;">${f[5]}</div>
+              <div class="grow">
+                <div class="flex items-center gap-2">
+                  <span class="text-[12px] font-semibold t-muted uppercase tracking-wider">${f[0]}</span>
+                  <span class="pill" style="background:var(--surface-elev); color:var(--text-secondary); border:1px solid var(--border);">${f[2]}</span>
+                </div>
+                <div class="text-[14px] font-semibold t-primary mt-0.5">${f[1]}</div>
+                <div class="text-[11px] t-secondary mt-0.5">${f[4]} · ${f[3] === 'dog' ? 'For dogs' : 'For cats'}</div>
+              </div>
+              <button class="w-7 h-7 rounded-full flex items-center justify-center" style="background:var(--primary-soft); color:var(--primary);">
+                <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <button class="fab"><i data-lucide="plus"></i></button>
+    </div>
+    ${tabBar('meal')}
+  `;
+}
+
+/* -- 08 Add Food -------------------------------------------- */
+function renderAddFood() {
+  return `
+    ${statusBar()}
+    <div class="flex-1 scroll-y pb-28 relative" style="overflow:hidden;">
+      <div class="px-5 pt-2 flex items-center justify-between mb-4">
+        <button class="ico-btn"><i data-lucide="chevron-left"></i></button>
+        <div class="caption">Add to catalog</div>
+        <div style="width:36px"></div>
+      </div>
+      <div class="px-5">
+        <h1 class="title">Foods</h1>
+      </div>
+    </div>
+    <div class="sheet-backdrop"></div>
+    <div class="sheet" style="max-height: 80%; overflow:auto;">
+      <div class="sheet-handle"></div>
+      <div class="flex items-center justify-between mb-4">
+        <button class="text-[14px] font-medium t-secondary">Cancel</button>
+        <h2 class="title">New food</h2>
+        <button class="text-[14px] font-semibold text-primary-color">Save</button>
+      </div>
+
+      <div class="flex items-center gap-3 mb-5">
+        <div class="pet-img rounded-2xl flex flex-col items-center justify-center" style="width:72px; height:72px;">
+          <i data-lucide="camera" class="w-5 h-5 text-primary-color"></i>
+          <span class="text-[10px] font-semibold text-primary-color mt-1">Photo</span>
+        </div>
+        <div class="grow space-y-2">
+          <div>
+            <label class="label block mb-1">Brand</label>
+            <input class="input" value="Acana" style="padding:10px 12px;" />
+          </div>
+        </div>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <label class="label block mb-2">Product name</label>
+          <input class="input" value="Pacifica Formula" />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="label block mb-2">Type</label>
+            <div class="flex gap-1 p-1 rounded-xl" style="background:var(--surface); border:1px solid var(--border);">
+              ${['Dry','Wet','Raw'].map((t,i)=>
+                `<button class="flex-1 py-2 text-[12px] font-semibold rounded-lg ${i===0?'':'t-secondary'}" style="${i===0?'background:var(--primary); color:#fff;':''}">${t}</button>`
+              ).join('')}
+            </div>
+          </div>
+          <div>
+            <label class="label block mb-2">For</label>
+            <div class="flex gap-1 p-1 rounded-xl" style="background:var(--surface); border:1px solid var(--border);">
+              ${['Dog','Cat','Both'].map((t,i)=>
+                `<button class="flex-1 py-2 text-[12px] font-semibold rounded-lg ${i===0?'':'t-secondary'}" style="${i===0?'background:var(--primary); color:#fff;':''}">${t}</button>`
+              ).join('')}
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label class="label block mb-3">Macros · per 100g</label>
+          ${slider('Protein', 38, '38%')}
+          ${slider('Fat', 18, '18%')}
+          ${slider('Moisture', 12, '12%')}
+          ${slider('Carbs', 32, '32%')}
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="label block mb-2">Calories</label>
+            <div class="input">365 kcal / 100g</div>
+          </div>
+          <div>
+            <label class="label block mb-2">Bag size</label>
+            <div class="input">11.4 kg</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function slider(name, pct, val) {
+  return `
+    <div class="mb-3">
+      <div class="flex items-center justify-between mb-1.5">
+        <span class="text-[13px] font-medium t-secondary">${name}</span>
+        <span class="text-[13px] font-semibold t-primary">${val}</span>
+      </div>
+      <div class="slider-track">
+        <div class="slider-fill" style="width:${pct}%"></div>
+        <div class="slider-thumb" style="left:${pct}%"></div>
+      </div>
+    </div>
+  `;
+}
+
+/* -- 09 Meal Log -------------------------------------------- */
+function renderMeal() {
+  const meals = [
+    { slot: 'Breakfast', time: '7:42 AM', food: 'Acana Pacifica', sub: 'Dry · 80g', kcal: 292, emoji: '🥣', logged: 'David' },
+    { slot: 'Snack',     time: '10:15 AM', food: 'Carrot bite',   sub: 'Fresh · 1pc', kcal: 12,  emoji: '🥕', logged: 'Sara' },
+    { slot: 'Lunch',     time: '12:30 PM', food: 'Open Farm Salmon', sub: 'Wet · 110g', kcal: 101, emoji: '🐟', logged: 'David' },
+    { slot: 'Dinner',    time: '—',  food: 'Planned · Acana Pacifica', sub: 'Dry · 80g',  kcal: 292, emoji: '🥣', planned: true },
+  ];
+  return `
+    ${statusBar()}
+    <div class="flex-1 scroll-y pb-28 relative">
+      <div class="px-5 pt-2 flex items-center justify-between mb-3">
+        <div>
+          <div class="caption">Today · Luna</div>
+          <h1 class="title mt-0.5">Meals</h1>
+        </div>
+        <div class="ico-btn"><i data-lucide="calendar"></i></div>
+      </div>
+
+      <div class="px-5">
+        <div class="card p-4">
+          <div class="flex items-center justify-between mb-2">
+            <div>
+              <div class="label">Today's intake</div>
+              <div class="flex items-baseline gap-1.5 mt-1">
+                <span class="text-[24px] font-bold t-primary">405</span>
+                <span class="text-[13px] t-muted">/ 540 kcal</span>
+              </div>
+            </div>
+            <span class="pill bg-soft text-primary-color">75%</span>
+          </div>
+          <div class="seg"><i style="width:75%"></i></div>
+          <div class="flex items-center justify-between mt-3 text-[12px] t-secondary">
+            <span>3 logged · 1 planned</span>
+            <span>135 kcal remaining</span>
+          </div>
+        </div>
+
+        <div class="mt-5 mb-2 label">Timeline</div>
+        <div class="relative">
+          <div class="absolute left-[15px] top-2 bottom-2 w-px" style="background: var(--border);"></div>
+          <div class="space-y-3">
+            ${meals.map(m => `
+              <div class="flex items-start gap-3">
+                <div class="w-[32px] flex-shrink-0 flex justify-center pt-3">
+                  <div class="w-3 h-3 rounded-full" style="background: ${m.planned ? 'var(--surface)' : 'var(--primary)'}; border: 2px solid ${m.planned ? 'var(--border-strong)' : 'var(--primary)'};"></div>
+                </div>
+                <div class="card grow p-3 flex items-center gap-3 ${m.planned ? 'opacity-60' : ''}">
+                  <div class="pet-img rounded-xl" style="width:44px; height:44px;">${m.emoji}</div>
+                  <div class="grow">
+                    <div class="flex items-center gap-2">
+                      <span class="text-[12px] font-semibold t-muted uppercase tracking-wider">${m.slot}</span>
+                      <span class="text-[11px] t-muted">·</span>
+                      <span class="text-[12px] t-muted">${m.time}</span>
+                    </div>
+                    <div class="text-[14px] font-semibold t-primary mt-0.5">${m.food}</div>
+                    <div class="text-[11px] t-secondary mt-0.5">${m.sub}${m.logged ? ` · by ${m.logged}` : ''}</div>
+                  </div>
+                  <div class="text-[14px] font-semibold ${m.planned ? 't-muted' : 't-primary'}">${m.kcal}<span class="text-[10px] t-muted font-medium ml-0.5">kcal</span></div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+
+      <button class="fab"><i data-lucide="plus"></i></button>
+    </div>
+    ${tabBar('meal')}
+  `;
+}
+
+/* -- 10 Medicine -------------------------------------------- */
+function renderMedicine() {
+  const courses = [
+    { name: 'Apoquel', sub: 'Oclacitinib · Itch & allergy', dose: '5.4 mg · 1 tab', freq: '2× daily, with food', next: 'In 2h', remaining: '4 of 14 doses', warn: false, prog: 71 },
+    { name: 'Bravecto Chew', sub: 'Fluralaner · Flea & tick', dose: '500 mg chew', freq: 'Monthly', next: 'Tomorrow', remaining: '2 of 12 doses', warn: true, prog: 18 },
+    { name: 'Glucosamine', sub: 'Joint support supplement', dose: '500 mg', freq: 'Daily, evening', next: '6:30 PM', remaining: 'Ongoing', warn: false, prog: 50 },
+  ];
+  const logs = [
+    ['Apoquel', '5.4 mg', '7:42 AM', 'David', 'check-circle-2', 'success'],
+    ['Glucosamine', '500 mg', 'Yesterday 6:31 PM', 'Sara', 'check-circle-2', 'success'],
+    ['Bravecto Chew', '500 mg', '14 days ago', 'David', 'check-circle-2', 'success'],
+  ];
+  return `
+    ${statusBar()}
+    <div class="flex-1 scroll-y pb-28 relative">
+      <div class="px-5 pt-2 flex items-center justify-between mb-3">
+        <div>
+          <div class="caption">Luna · Meds</div>
+          <h1 class="title mt-0.5">Medicine</h1>
+        </div>
+        <div class="ico-btn"><i data-lucide="more-horizontal"></i></div>
+      </div>
+
+      <div class="px-5">
+        <div class="label mb-2">Active courses · 3</div>
+        <div class="space-y-3">
+          ${courses.map(c => `
+            <div class="card p-4">
+              <div class="flex items-start justify-between mb-2">
+                <div>
+                  <div class="text-[16px] font-semibold t-primary">${c.name}</div>
+                  <div class="text-[12px] t-secondary mt-0.5">${c.sub}</div>
+                </div>
+                <span class="pill ${c.warn ? 'text-warning' : 'text-primary-color'}" style="background: ${c.warn ? 'color-mix(in oklab, var(--warning) 14%, transparent)' : 'var(--primary-soft)'};">
+                  Next · ${c.next}
+                </span>
+              </div>
+              <div class="grid grid-cols-2 gap-3 my-3">
+                <div>
+                  <div class="caption">Dose</div>
+                  <div class="text-[13px] font-semibold t-primary mt-0.5">${c.dose}</div>
+                </div>
+                <div>
+                  <div class="caption">Schedule</div>
+                  <div class="text-[13px] font-semibold t-primary mt-0.5">${c.freq}</div>
+                </div>
+              </div>
+              <div class="seg"><i style="width:${c.prog}%"></i></div>
+              <div class="flex items-center justify-between mt-2">
+                <span class="text-[11px] t-muted">${c.remaining}</span>
+                <button class="text-[12px] font-semibold text-primary-color h-stack gap-1"><i data-lucide="check" class="w-3.5 h-3.5"></i>Mark given</button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+
+        <div class="mt-5 mb-2 flex items-center justify-between">
+          <div class="label">Recent administration</div>
+          <a class="text-[12px] font-semibold text-primary-color">All logs</a>
+        </div>
+        <div class="card divide-y" style="border-color:var(--border)">
+          ${logs.map((l, i) => `
+            <div class="flex items-center gap-3 p-3" style="${i>0?'border-top:1px solid var(--border);':''}">
+              <div class="w-9 h-9 rounded-xl flex items-center justify-center bg-soft">
+                <i data-lucide="${l[4]}" class="w-4 h-4 text-${l[5]}"></i>
+              </div>
+              <div class="grow">
+                <div class="text-[14px] font-semibold t-primary">${l[0]} · ${l[1]}</div>
+                <div class="text-[11px] t-secondary mt-0.5">by ${l[3]}</div>
+              </div>
+              <div class="text-[11px] t-muted">${l[2]}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <button class="fab"><i data-lucide="plus"></i></button>
+    </div>
+    ${tabBar('med')}
+  `;
+}
+
+/* -- 11 Settings -------------------------------------------- */
+function renderSettings() {
+  const members = [
+    ['DH', 'David Henderson', 'you@familyhome.co', 'Creator', 'primary'],
+    ['SH', 'Sara Henderson',  'sara@familyhome.co', 'Member', 'secondary'],
+    ['MH', 'Mom (Margaret)',  'm.h@gmail.com',     'Member', 'secondary'],
+    ['LH', 'Liam Henderson',  'liam@school.edu',   'Viewer', 'muted'],
+  ];
+  const themes = [
+    ['Midnight', '#A855F7', '#0B0B16', true],
+    ['Daylight', '#4F46E5', '#F4F6FB', false],
+    ['Nordic',   '#3F7B8C', '#ECEFF3', false],
+    ['Ocean',    '#22D3EE', '#07182B', false],
+    ['Graphite', '#84CC16', '#0A0A0A', false],
+    ['Mono',     '#3E5A75', '#FFFFFF', false],
+  ];
+  return `
+    ${statusBar()}
+    <div class="flex-1 scroll-y pb-28">
+      <div class="px-5 pt-2 pb-4">
+        <h1 class="title">Settings</h1>
+      </div>
+
+      <div class="px-5 space-y-3">
+        <!-- Profile -->
+        <div class="card p-4 flex items-center gap-3">
+          <div class="avatar lg" style="background: linear-gradient(135deg,var(--primary),var(--accent)); color:#fff;">DH</div>
+          <div class="grow">
+            <div class="text-[16px] font-semibold t-primary">David Henderson</div>
+            <div class="text-[12px] t-secondary">david@familyhome.co</div>
+            <div class="text-[11px] t-muted mt-0.5">Creator · 3 pets · 4 members</div>
+          </div>
+          <i data-lucide="chevron-right" class="w-4 h-4 t-muted"></i>
+        </div>
+
+        <!-- Groups -->
+        <div class="card overflow-hidden">
+          <div class="p-4 flex items-center justify-between" style="border-bottom:1px solid var(--border);">
+            <div>
+              <div class="label">Group</div>
+              <div class="text-[15px] font-semibold t-primary mt-0.5">Henderson Family</div>
+            </div>
+            <span class="pill bg-soft text-primary-color">Invite · 4F2K9X</span>
+          </div>
+          ${members.map((m, i) => `
+            <div class="p-3 flex items-center gap-3" style="${i>0?'border-top:1px solid var(--border);':''}">
+              <div class="avatar lg" style="width:36px; height:36px; font-size:12px; background: var(--surface-elev); color:var(--text-secondary);">${m[0]}</div>
+              <div class="grow">
+                <div class="text-[14px] font-semibold t-primary">${m[1]}</div>
+                <div class="text-[11px] t-secondary">${m[2]}</div>
+              </div>
+              <span class="pill text-${m[4]}" style="background:var(--surface-elev); border:1px solid var(--border);">${m[3]}</span>
+            </div>
+          `).join('')}
+          <div class="p-3 flex items-center justify-center gap-2 border-t" style="border-color:var(--border);">
+            <i data-lucide="user-plus" class="w-4 h-4 text-primary-color"></i>
+            <span class="text-[13px] font-semibold text-primary-color">Invite member</span>
+          </div>
+        </div>
+
+        <!-- Appearance -->
+        <div class="card p-4">
+          <div class="label mb-3">Appearance</div>
+          <div class="grid grid-cols-3 gap-2">
+            ${themes.map(t => `
+              <div class="rounded-xl p-2 ${t[3]?'':'border'}" style="border: 1.5px solid ${t[3]?'var(--primary)':'var(--border)'};">
+                <div class="rounded-lg h-12 mb-2 relative overflow-hidden" style="background:${t[2]};">
+                  <div class="absolute bottom-1 left-1 w-3 h-3 rounded-full" style="background:${t[1]};"></div>
+                  <div class="absolute bottom-1 left-5 w-6 h-1.5 rounded-full" style="background:${t[1]}; opacity: 0.4;"></div>
+                  <div class="absolute top-1 right-1 w-1.5 h-1.5 rounded-full" style="background:${t[1]};"></div>
+                </div>
+                <div class="text-[11px] font-semibold ${t[3]?'text-primary-color':'t-primary'} text-center">${t[0]}</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <!-- Account -->
+        <div class="card overflow-hidden">
+          ${settingsRow('bell',          'Notifications',     'On · 12 enabled')}
+          ${settingsRow('lock',          'Privacy & data',    'Auto-backup on iCloud')}
+          ${settingsRow('help-circle',   'Help & support',    null)}
+          ${settingsRow('log-out',       'Sign out',          null, 'secondary')}
+          ${settingsRow('trash-2',       'Delete account',    null, 'danger', false)}
+        </div>
+        <div class="text-center caption pt-2 pb-3">PetCare v3.2.1 · Build 2026.05.19</div>
+      </div>
+    </div>
+    ${tabBar('settings')}
+  `;
+}
+
+function settingsRow(icon, label, sub, tone='primary', divider=true) {
+  return `
+    <div class="p-3 flex items-center gap-3" style="${divider?'border-bottom:1px solid var(--border);':''}">
+      <div class="w-9 h-9 rounded-xl flex items-center justify-center" style="background: var(--surface-elev); border:1px solid var(--border);">
+        <i data-lucide="${icon}" class="w-4 h-4 ${tone==='danger'?'text-danger':'t-secondary'}"></i>
+      </div>
+      <div class="grow">
+        <div class="text-[14px] font-semibold ${tone==='danger'?'text-danger':'t-primary'}">${label}</div>
+        ${sub ? `<div class="text-[11px] t-secondary mt-0.5">${sub}</div>` : ''}
+      </div>
+      <i data-lucide="chevron-right" class="w-4 h-4 t-muted"></i>
+    </div>
+  `;
+}
+
+/* -- 12 Group invite sheet ---------------------------------- */
+function renderInvite() {
+  return `
+    ${statusBar()}
+    <div class="flex-1 scroll-y pb-28" style="overflow:hidden;">
+      <div class="px-5 pt-2 pb-4 flex items-center justify-between">
+        <button class="ico-btn"><i data-lucide="chevron-left"></i></button>
+        <div class="caption">Henderson Family · Group</div>
+        <div style="width:36px"></div>
+      </div>
+      <div class="px-5">
+        <h1 class="title">Settings</h1>
+        <div class="card mt-4 p-4 opacity-40">
+          <div class="label mb-1">Group</div>
+          <div class="text-[15px] font-semibold t-primary">Henderson Family</div>
+        </div>
+      </div>
+    </div>
+    <div class="sheet-backdrop"></div>
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="text-center pt-2">
+        <div class="caption">Invite to family group</div>
+        <h2 class="title mt-1 text-[22px]">Henderson Family</h2>
+      </div>
+
+      <!-- code -->
+      <div class="mt-5 mb-5 mx-auto max-w-[280px] card-elev p-5 text-center" style="border: 2px dashed var(--border-strong);">
+        <div class="label mb-2">Invite code</div>
+        <div class="text-[34px] font-bold tracking-[0.35em] t-primary font-mono">4F2K9X</div>
+        <div class="caption mt-3 flex items-center justify-center gap-1.5">
+          <i data-lucide="clock" class="w-3 h-3"></i>
+          Expires in 6d 14h
+        </div>
+      </div>
+
+      <!-- QR -->
+      <div class="mx-auto mb-5 rounded-2xl p-3" style="background:#fff; width:140px; height:140px;">
+        ${qrPlaceholder()}
+      </div>
+
+      <div class="grid grid-cols-3 gap-2 mb-4">
+        <button class="btn btn-ghost text-[13px] flex-col py-3"><i data-lucide="copy" class="w-4 h-4"></i>Copy</button>
+        <button class="btn btn-ghost text-[13px] flex-col py-3"><i data-lucide="share-2" class="w-4 h-4"></i>Share</button>
+        <button class="btn btn-ghost text-[13px] flex-col py-3"><i data-lucide="refresh-cw" class="w-4 h-4"></i>New code</button>
+      </div>
+
+      <div class="card-elev p-3 flex items-start gap-3" style="background: var(--primary-soft); border:1px solid transparent;">
+        <i data-lucide="info" class="w-4 h-4 text-primary-color mt-0.5 flex-shrink-0"></i>
+        <div class="text-[12px] t-secondary leading-relaxed">
+          Anyone with this code can join Henderson Family and view all pets. New members start as <span class="font-semibold t-primary">Members</span>; promote to Creator from group settings.
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function qrPlaceholder() {
+  // simple 11x11 deterministic QR-ish pattern
+  const grid = [
+    "11111110111111",
+    "10000010101010",
+    "10111010110110",
+    "10111010001010",
+    "10111010110110",
+    "10000010101010",
+    "11111110111111",
+    "00000001000000",
+    "11010101110101",
+    "01101110010110",
+    "10101011101010",
+    "01001110100101",
+    "11111110011011",
+    "10000010101110",
+  ];
+  let cells = '';
+  const size = 8;
+  grid.forEach((row, y) => {
+    [...row].forEach((c, x) => {
+      if (c === '1') cells += `<rect x="${x*size}" y="${y*size}" width="${size}" height="${size}" fill="#000"/>`;
+    });
+  });
+  return `<svg viewBox="0 0 ${grid[0].length*size} ${grid.length*size}" width="100%" height="100%">${cells}</svg>`;
+}
+
+/* ============================================================
+   Mount
+   ============================================================ */
+function buildStrip() {
+  const strip = document.getElementById('strip');
+  SCREENS.forEach((s, i) => {
+    const wrap = document.createElement('div');
+    wrap.style.position = 'relative';
+    wrap.setAttribute('data-screen-label', s.label);
+    wrap.innerHTML = `
+      <div class="frame-num">${String(i+1).padStart(2,'0')}</div>
+      <div class="iphone">
+        <div class="notch"></div>
+        <div class="iphone-screen">${s.render()}</div>
+      </div>
+      <div class="frame-label">${s.label.split('· ')[1]}</div>
+    `;
+    strip.appendChild(wrap);
+  });
+  if (window.lucide && window.lucide.createIcons) window.lucide.createIcons();
+}
+
+function setupThemes() {
+  const picker = document.getElementById('themePicker');
+  picker.addEventListener('click', e => {
+    const btn = e.target.closest('[data-theme]');
+    if (!btn) return;
+    picker.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.documentElement.setAttribute('data-theme', btn.dataset.theme);
+  });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  buildStrip();
+  setupThemes();
+});
+</script>
+
+</body>
+</html>

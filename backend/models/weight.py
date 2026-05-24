@@ -1,105 +1,86 @@
-from datetime import datetime as dt
-from datetime import timezone as tz
+"""Weight tracking model + DTOs.
+
+One row per measurement. Pets accumulate dozens to hundreds of these over a
+lifetime, so list endpoints page through them rather than returning everything.
+
+Ownership: the user who recorded it (`user_id`) is the only one allowed to
+edit or soft-delete the row. Any group member can view.
+"""
+
+from datetime import datetime
 from enum import Enum
-from typing import Optional
 
 from pydantic import BaseModel, Field
+
 
 weight_table = "weight_records"
 
 
-# ================== Core Models ==================
-
-
-class WeightRecord(BaseModel):
-    """
-    Core WeightRecord model representing a weight measurement for a pet.
-    Each record captures the weight at a specific point in time.
-    """
-
-    id: str  # Format: wt_{8-char-id}, e.g., "wt_abc12345"
-    pet_id: str
-    weight: float = Field(..., ge=0.1, le=200, description="Weight in kg")
-    user_id: str  # User who recorded this weight
-    timestamp: dt  # When the weight was measured
-    notes: Optional[str] = Field(None, max_length=500)
-    created_at: dt
-    updated_at: dt
-    is_active: bool = True
-
-
-# ================== Request Models ==================
-
-
-class CreateWeightRecordRequest(BaseModel):
-    """Request to create a new weight record"""
-
-    pet_id: str = Field(..., description="ID of the pet being weighed")
-    weight: float = Field(..., ge=0.1, le=200, description="Weight in kg")
-    timestamp: dt = Field(
-        default_factory=lambda: dt.now(tz.utc),
-        description="When the weight was measured (defaults to current time if not provided)",
-    )
-    notes: Optional[str] = Field(None, max_length=500, description="Additional notes about the measurement")
-
-
-class UpdateWeightRecordRequest(BaseModel):
-    """Request to update an existing weight record (partial update)"""
-
-    weight: Optional[float] = Field(None, ge=0.1, le=200, description="Updated weight in kg")
-    timestamp: Optional[dt] = Field(default_factory=lambda: dt.now(tz.utc), description="Updated measurement time")
-    notes: Optional[str] = Field(None, max_length=500, description="Updated notes")
-
-
-class OrderBy(str, Enum):
-    """Supported order by fields for weight record search"""
-
+class WeightOrderBy(str, Enum):
     TIMESTAMP = "timestamp"
     CREATED_AT = "created_at"
     UPDATED_AT = "updated_at"
 
 
 class OrderDirection(str, Enum):
-    """Sort order direction"""
-
     ASC = "asc"
     DESC = "desc"
 
 
-class SearchWeightRecordsRequest(BaseModel):
-    """Request to search weight records with various filters"""
-
-    weight_id: Optional[str] = Field(None, description="Filter by weight record ID (optional)")
-    pet_id: Optional[str] = Field(None, description="Filter by pet ID (optional)")
-    user_id: Optional[str] = Field(None, description="Filter by user who recorded the weight")
-    start: Optional[dt] = Field(None, description="Start of timestamp range (inclusive)")
-    end: Optional[dt] = Field(None, description="End of timestamp range (inclusive)")
-    order_by: OrderBy = Field(OrderBy.TIMESTAMP, description="Field to sort by")
-    order_direction: OrderDirection = Field(OrderDirection.DESC, description="Sort direction")
-    page: int = Field(1, ge=1, description="Page number (starts from 1)")
-    number: int = Field(50, ge=1, le=500, description="Number of records per page")
+# ────── Stored row shape ──────
 
 
-# ================== Response Models ==================
+class WeightRecord(BaseModel):
+    id: str  # 'wt_' + 8 hex
+    pet_id: str
+    user_id: str
+    weight: float = Field(..., ge=0.1, le=200)
+    timestamp: datetime
+    notes: str | None = Field(None, max_length=500)
+    is_active: bool = True
+    created_at: datetime
+    updated_at: datetime
 
 
-class WeightRecordInfo(BaseModel):
-    """Basic weight record information for list displays"""
+# ────── Request DTOs ──────
+
+
+class CreateWeightRequest(BaseModel):
+    pet_id: str
+    weight: float = Field(..., ge=0.1, le=200)
+    timestamp: datetime | None = None  # defaults to "now" in the service
+    notes: str | None = Field(None, max_length=500)
+
+
+class UpdateWeightRequest(BaseModel):
+    weight_id: str
+    weight: float | None = Field(None, ge=0.1, le=200)
+    timestamp: datetime | None = None
+    notes: str | None = Field(None, max_length=500)
+
+
+class DeleteWeightRequest(BaseModel):
+    weight_id: str
+
+
+# ────── Response DTOs ──────
+
+
+class WeightSummary(BaseModel):
+    """List-row shape. `user_name` is denormalized via JOIN for display."""
 
     id: str
     pet_id: str
     weight: float
     user_id: str
     user_name: str
-    timestamp: dt
-    created_at: dt
-    updated_at: dt
-    notes: Optional[str]
+    timestamp: datetime
+    notes: str | None = None
+    created_at: datetime
+    updated_at: datetime
 
 
-class WeightRecordDetails(BaseModel):
-    """Comprehensive weight record information for detailed views"""
-
+class WeightDetails(BaseModel):
     id: str
     pet_id: str
     pet_name: str
@@ -107,17 +88,15 @@ class WeightRecordDetails(BaseModel):
     weight: float
     user_id: str
     user_name: str
-    timestamp: dt
-    notes: Optional[str]
-    created_at: dt
-    updated_at: dt
+    timestamp: datetime
+    notes: str | None = None
     is_active: bool
+    created_at: datetime
+    updated_at: datetime
 
 
-class SearchWeightRecordsResponse(BaseModel):
-    """Response for weight record search with pagination info"""
-
-    records: list[WeightRecordInfo]
+class WeightListResponse(BaseModel):
+    records: list[WeightSummary]
     total: int
     page: int
     number: int

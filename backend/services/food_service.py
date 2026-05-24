@@ -1,535 +1,387 @@
-import base64
-import os
-from datetime import datetime as dt
-from datetime import timezone as tz
-from typing import List, Optional
+"""Food catalog business logic.
+
+Permissions:
+  - view / list / search: any active member of the group
+  - create: CREATOR or MEMBER of the group (viewers can't)
+  - update / delete / photo upload: the food's creator, OR the group CREATOR
+    (group creator gets veto rights on the catalog regardless of who added
+    a given row).
+
+Macro-sum guard: the DB enforces `protein + fat + moisture + carbohydrate <= 105`
+but we validate in Python first so the user gets a clean 400 instead of an
+opaque Postgres CHECK violation.
+"""
+
+import logging
+import secrets
+from datetime import datetime, timezone
+from typing import Any
 
 from fastapi import HTTPException, UploadFile, status
 
 from backend.core.cloudinary_client import upload_image
-from backend.core.db_manager import get_db
-from backend.models.food import (  # Tables; Models; Enums; Request Models; Response Models
+from backend.core.postgres_database import PostgresAsyncClient
+from backend.models.food import (
     CreateFoodRequest,
-    Food,
     FoodDetails,
-    FoodInfo,
-    FoodSearchResult,
+    FoodSummary,
     FoodType,
     TargetPet,
     UpdateFoodRequest,
     food_table,
 )
+from backend.models.group import GroupRole, group_member_table, group_table
+from backend.models.user import user_table
+
+logger = logging.getLogger(__name__)
+
+# Match the DB CHECK constraint exactly so we surface a clean error before
+# Postgres throws.
+MAX_MACRO_SUM = 105.0
 
 
 class FoodService:
-    """
-    FoodService handles all food-related business logic following the group-based
-    food database model specified in the API documentation.
+    def __init__(self, db: PostgresAsyncClient):
+        self._db = db
 
-    Key Principles:
-    - Group-Based Database: Each group maintains its own independent food collection
-    - Collaborative Management: Creator and Member roles can modify food database
-    - Shared Resource: Foods are available to all group members
-    - Permission-Based Access: Access controlled through group membership roles
-    """
+    # ────── id generation ──────
 
-    def __init__(self):
-        pass
+    async def _generate_food_id(self) -> str:
+        # Schema is varchar(30). 'fd_' prefix + hex tail.
+        for _ in range(5):
+            candidate = "fd_" + secrets.token_hex(13)  # 'fd_' + 26 hex = 29 chars
+            existing = await self._db.read_one(
+                f"SELECT 1 FROM {food_table} WHERE id = $1", candidate
+            )
+            if existing is None:
+                return candidate
+        raise RuntimeError("Failed to generate a unique food id after 5 attempts")
 
-    @property
-    def db(self):
-        """Get database client from global manager"""
-        return get_db()
+    # ────── permission helpers ──────
 
-    # ================== Permission Helpers ==================
+    async def _membership(self, group_id: str, user_id: str) -> dict | None:
+        return await self._db.read_one(
+            f"""
+            SELECT role FROM {group_member_table}
+            WHERE group_id = $1 AND user_id = $2 AND is_active = TRUE
+            """,
+            group_id, user_id,
+        )
 
-    async def _get_user_group_role(self, group_id: str, user_id: str) -> str:
-        """
-        Determine user's role in a specific group.
-
-        Args:
-            group_id: Target group ID
-            user_id: User to check role for
-
-        Returns:
-            str: User's role ("creator", "member", "none")
-
-        Raises:
-            HTTPException: If group not found or user not a member
-        """
-        sql = f"""
-        select
-            gm.role
-        from group_members gm
-        where gm.group_id = '{group_id}' and gm.user_id = '{user_id}' and gm.is_active = true
-        """
-        role = await self.db.read_one(sql)
-        if not role:
+    async def _require_group_role(
+        self, group_id: str, user_id: str, allowed: set[GroupRole]
+    ) -> dict:
+        membership = await self._membership(group_id, user_id)
+        if membership is None:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="You must be a member of this group to access its food database",
+                detail="You are not a member of this group",
             )
-        return role["role"]
+        if GroupRole(membership["role"]) not in allowed:
+            roles = ", ".join(sorted(r.value for r in allowed))
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"This action requires one of these roles: {roles}",
+            )
+        return membership
 
-    async def _get_user_food_role(self, user_id: str, food_id: str) -> str:
-        """Get food's current group"""
-        sql = f"""
-        select group_id from foods where id = '{food_id}' and is_active = true
-        """
-        food = await self.db.read_one(sql)
-        if not food:
+    async def _require_can_view(self, group_id: str, user_id: str) -> dict:
+        membership = await self._membership(group_id, user_id)
+        if membership is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not a member of this group",
+            )
+        return membership
+
+    async def _require_can_modify(self, food: dict, user_id: str) -> None:
+        if food.get("creator_id") == user_id:
+            return
+        membership = await self._membership(food["group_id"], user_id)
+        if membership and GroupRole(membership["role"]) == GroupRole.CREATOR:
+            return
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the food's creator or the group's CREATOR can modify it",
+        )
+
+    async def _get_food_or_404(self, food_id: str) -> dict:
+        row = await self._db.read_one(
+            f"SELECT * FROM {food_table} WHERE id = $1 AND is_active = TRUE",
+            food_id,
+        )
+        if row is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Food not found")
-        group_id = food["group_id"]
-        return await self._get_user_group_role(group_id, user_id)
+        return row
 
-    async def _can_view_food(self, user_id: str, food_id: str = None, group_id: str = None) -> bool:
-        """Check if user can view foods in the group (all roles can view)"""
+    # ────── macro sum guard ──────
 
-        if food_id:
-            role = await self._get_user_food_role(user_id, food_id)
-        if group_id:
-            role = await self._get_user_group_role(group_id, user_id)
+    @staticmethod
+    def _check_macro_sum(
+        protein: float | None,
+        fat: float | None,
+        moisture: float | None,
+        carbohydrate: float | None,
+        existing: dict | None = None,
+    ) -> None:
+        def pick(new, key):
+            if new is not None:
+                return new
+            return float(existing[key]) if existing else 0.0
 
-        return role in ["creator", "member", "viewer"]
-
-    async def _can_manage_food(self, user_id: str, food_id: str = None, group_id: str = None) -> bool:
-        """Check if user can modify foods in the group (creator and member only)"""
-        if food_id:
-            role = await self._get_user_food_role(user_id, food_id)
-        if group_id:
-            role = await self._get_user_group_role(group_id, user_id)
-
-        return role in ["creator", "member"]
-
-    # ================== Food CRUD Operations ==================
-
-    async def create_food(self, group_id: str, request: CreateFoodRequest, user) -> FoodDetails:
-        """
-        Create a new food item in the group's database.
-        Only creators and members can add foods to the group database.
-
-        Args:
-            group_id: Target group for the food database
-            request: Food creation details
-            user_id: User creating the food
-
-        Returns:
-            FoodDetails: Created food information
-        """
-        # Check permissions
-        if not await self._can_manage_food(user_id=user.id, group_id=group_id):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only group creators and members can add foods to the database",
-            )
-
-        # Validate nutritional percentages sum (allowing for some tolerance)
-        total_percentage = request.protein + request.fat + request.moisture + request.carbohydrate
-        if total_percentage > 105:  # Allow 5% tolerance for measurement variations
+        total = (
+            pick(protein, "protein")
+            + pick(fat, "fat")
+            + pick(moisture, "moisture")
+            + pick(carbohydrate, "carbohydrate")
+        )
+        if total > MAX_MACRO_SUM:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Nutritional percentages cannot exceed 100% (total: {:.1f}%)".format(total_percentage),
+                detail=f"Nutritional percentages sum to {total:.1f}% (max {MAX_MACRO_SUM:.0f}%)",
             )
 
-        # Generate food ID using a short, URL-safe base64 encoding of random bytes (8 chars)
-        food_id = base64.urlsafe_b64encode(os.urandom(16)).decode("utf-8").rstrip("=")
-
-        # Create food
-        food = Food(
-            id=food_id,
-            group_id=group_id,
-            creator_id=user.id,
-            brand=request.brand,
-            product_name=request.product_name,
-            food_type=request.food_type,
-            target_pet=request.target_pet,
-            unit_weight=request.unit_weight,
-            calories=request.calories,
-            protein=request.protein,
-            fat=request.fat,
-            moisture=request.moisture,
-            carbohydrate=request.carbohydrate,
-            created_at=dt.now(tz.utc),
-            updated_at=dt.now(tz.utc),
-            photo_url="",
-            is_active=True,
-        )
-
-        # Save to database
-        await self.db.insert_one(food_table, food.model_dump())
-
-        # Get group info for response
-        sql = f"""select * from groups where id = '{group_id}'"""
-        group_dict = await self.db.read_one(sql)
-        group_name = group_dict["name"] if group_dict else "Unknown Group"
-
-        # Calculate calories per unit for convenience
-        calories_per_unit = (request.calories * request.unit_weight) / 100
-
-        return FoodDetails(
-            id=food.id,
-            brand=food.brand,
-            product_name=food.product_name,
-            food_type=food.food_type,
-            target_pet=food.target_pet,
-            unit_weight=food.unit_weight,
-            calories=food.calories,
-            protein=food.protein,
-            fat=food.fat,
-            moisture=food.moisture,
-            carbohydrate=food.carbohydrate,
-            created_at=food.created_at,
-            updated_at=food.updated_at,
-            photo_url=food.photo_url,
-            group_id=food.group_id,
-            group_name=group_name,
-            creator_id=user.id,
-            creator_name=user.name,
-            calories_per_unit=calories_per_unit,
-        )
-
-    async def get_group_foods(
-        self, group_id: str, user_id: str, food_type: Optional[FoodType] = None, target_pet: Optional[TargetPet] = None
-    ) -> List[FoodInfo]:
-        """
-        Get all foods in a group's database with optional filtering.
-        All group members can view the food database.
-
-        Args:
-            group_id: Target group ID
-            user_id: User requesting the food list
-            food_type: Optional filter by food type
-            target_pet: Optional filter by target pet
-
-        Returns:
-            List[FoodInfo]: Foods in the group database
-        """
-        # Check permissions
-        if not await self._can_view_food(group_id=group_id, user_id=user_id):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You don't have permission to view this group's food database",
-            )
-
-        sql = f"""
-        select
-            f.*,
-            g.name as group_name
-        from foods f
-        join groups g on f.group_id = g.id
-        where
-            f.group_id = '{group_id}'
-            and f.is_active = true
-            and g.is_active = true
-            {f'and f.food_type = {food_type.value}' if food_type else ''}
-            {f'and f.target_pet = {target_pet.value}' if target_pet else ''}
-        """
-        food_records = await self.db.read(sql)
-
-        food_infos = [FoodInfo(**food_dict) for food_dict in food_records]
-
-        # Sort by brand and product name
-        food_infos.sort(key=lambda f: (f.brand.lower(), f.product_name.lower()))
-
-        return food_infos
+    # ────── reads ──────
 
     async def get_food_details(self, food_id: str, user_id: str) -> FoodDetails:
-        """
-        Get comprehensive food information.
-        All group members can view detailed food information.
+        food = await self._get_food_or_404(food_id)
+        await self._require_can_view(food["group_id"], user_id)
 
-        Args:
-            food_id: Food ID to get details for
-            user_id: User requesting the information
-
-        Returns:
-            FoodDetails: Comprehensive food information
-        """
-        if not await self._can_view_food(user_id=user_id, food_id=food_id):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You don't have permission to view this food",
+        group_row = await self._db.read_one(
+            f"SELECT name FROM {group_table} WHERE id = $1", food["group_id"]
+        )
+        creator_row = (
+            await self._db.read_one(
+                f"SELECT name FROM {user_table} WHERE id = $1", food["creator_id"]
             )
+            if food.get("creator_id")
+            else None
+        )
 
-        sql = f"""
-        select
-            f.*,
-            g.name as group_name,
-            u.name as creator_name
-        from foods f
-        join group_members gm using (group_id)
-        join groups g on (g.id = f.group_id)
-        join users u on (u.id = f.creator_id)
-        where
-            f.id = '{food_id}'
-            and f.is_active = true
-            and gm.user_id = '{user_id}'
-            and g.is_active = true
-        """
-        food_details = await self.db.read_one(sql)
-        if not food_details:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Food not found")
-
-        # Calculate calories per unit
-        calories_per_unit = (food_details["calories"] * food_details["unit_weight"]) / 100
-        food_details["calories_per_unit"] = calories_per_unit
-        return FoodDetails(**food_details)
-
-    async def update_food(self, food_id: str, request: UpdateFoodRequest, user_id: str) -> FoodDetails:
-        """
-        Update food information.
-        Only creators and members can modify foods in the group database.
-
-        Args:
-            food_id: Food to update
-            request: Update details
-            user_id: User requesting the update
-
-        Returns:
-            FoodDetails: Updated food information
-        """
-        # Check permissions and get food
-        if not await self._can_manage_food(user_id=user_id, food_id=food_id):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You don't have permission to modify this food",
-            )
-
-        # Prepare update data
-        update_data = {}
-
-        # Update only provided fields
-        if request.brand is not None:
-            update_data["brand"] = request.brand
-        if request.product_name is not None:
-            update_data["product_name"] = request.product_name
-        if request.food_type is not None:
-            update_data["food_type"] = request.food_type.value
-        if request.target_pet is not None:
-            update_data["target_pet"] = request.target_pet.value
-        if request.unit_weight is not None:
-            update_data["unit_weight"] = request.unit_weight
-        if request.calories is not None:
-            update_data["calories"] = request.calories
-        if request.protein is not None:
-            update_data["protein"] = request.protein
-        if request.fat is not None:
-            update_data["fat"] = request.fat
-        if request.moisture is not None:
-            update_data["moisture"] = request.moisture
-        if request.carbohydrate is not None:
-            update_data["carbohydrate"] = request.carbohydrate
-
-        # Update food in PostgreSQL
-        if update_data:  # Only update if there are changes
-            set_clauses = []
-            params = []
-            param_count = 0
-
-            for field, value in update_data.items():
-                param_count += 1
-                set_clauses.append(f"{field} = ${param_count}")
-                params.append(value)
-
-            param_count += 1
-            update_query = f"UPDATE foods SET {', '.join(set_clauses)} WHERE id = ${param_count}"
-            params.append(food_id)
-
-            await self.db.execute(update_query, *params)
-
-        # Return updated food details
-        return await self.get_food_details(food_id, user_id)
-
-    async def delete_food(self, food_id: str, user_id: str) -> dict:
-        """
-        Soft delete a food item from the group database.
-        Only creators and members can delete foods from the group database.
-
-        Args:
-            food_id: Food to delete
-            user_id: User requesting the deletion
-
-        Returns:
-            dict: Success confirmation
-        """
-        # Check permissions
-        if not await self._can_manage_food(user_id=user_id, food_id=food_id):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You don't have permission to delete this food",
-            )
-
-        sql = f"""
-        delete from foods where id = '{food_id}'
-        """
-        await self.db.execute(sql)
-
-        return {"message": "Food has been deleted from the group database"}
-
-    # ================== Search and Discovery ==================
+        calories_per_unit = round(food["calories"] * food["unit_weight"] / 100.0, 2)
+        return FoodDetails(
+            id=food["id"],
+            brand=food["brand"],
+            product_name=food["product_name"],
+            food_type=food["food_type"],
+            target_pet=food["target_pet"],
+            unit_weight=food["unit_weight"],
+            calories=food["calories"],
+            protein=food["protein"],
+            fat=food["fat"],
+            moisture=food["moisture"],
+            carbohydrate=food["carbohydrate"],
+            calories_per_unit=calories_per_unit,
+            photo_url=food.get("photo_url"),
+            group_id=food["group_id"],
+            group_name=group_row["name"] if group_row else "",
+            creator_id=food.get("creator_id"),
+            creator_name=creator_row["name"] if creator_row else None,
+            is_active=bool(food.get("is_active", True)),
+            created_at=food["created_at"],
+            updated_at=food["updated_at"],
+        )
 
     async def search_foods(
         self,
         group_id: str,
         user_id: str,
-        keyword: Optional[str] = None,
-        food_type: Optional[FoodType] = None,
-        target_pet: Optional[TargetPet] = None,
-    ) -> List[FoodSearchResult]:
-        """
-        Search or list foods within a group's database.
-        All group members can search/list the food database.
+        keyword: str | None,
+        food_type: FoodType | None,
+        target_pet: TargetPet | None,
+    ) -> list[FoodSummary]:
+        await self._require_can_view(group_id, user_id)
 
-        Args:
-            group_id: Target group ID
-            user_id: User performing the search/list
-            keyword: Optional search term for food names and brands. If None or empty, returns all foods.
-            food_type: Optional filter by food type
-            target_pet: Optional filter by target pet
-
-        Returns:
-            List[FoodSearchResult]: Matching or all foods
-        """
-        # Check permissions
-        if not await self._can_view_food(user_id=user_id, group_id=group_id):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You don't have permission to search this group's food database",
-            )
-
-        # Build PostgreSQL query with optional text search and filters
         conditions = ["group_id = $1", "is_active = TRUE"]
-        params = [group_id]
-        param_count = 1
+        values: list[Any] = [group_id]
+        if food_type is not None:
+            values.append(food_type.value)
+            conditions.append(f"food_type = ${len(values)}")
+        if target_pet is not None:
+            values.append(target_pet.value)
+            conditions.append(f"target_pet = ${len(values)}")
 
-        # Add text search condition only if keyword is provided and not empty
-        if keyword and keyword.strip():
-            param_count += 1
-            keyword_search = f"%{keyword.lower().strip()}%"
-            conditions.append(f"(LOWER(brand) LIKE ${param_count} OR LOWER(product_name) LIKE ${param_count})")
-            params.append(keyword_search)
+        keyword_idx: int | None = None
+        if keyword:
+            values.append(f"%{keyword}%")
+            keyword_idx = len(values)
+            conditions.append(f"(brand ILIKE ${keyword_idx} OR product_name ILIKE ${keyword_idx})")
 
-        if food_type:
-            param_count += 1
-            conditions.append(f"food_type = ${param_count}")
-            params.append(food_type.value)
-
-        if target_pet:
-            param_count += 1
-            conditions.append(f"target_pet = ${param_count}")
-            params.append(target_pet.value)
-
-        query = f"SELECT * FROM foods WHERE {' AND '.join(conditions)}"
-        food_records = await self.db.read(query, *params)
-
-        # Get group name for response
-        group_query = "SELECT name FROM groups WHERE id = $1"
-        group_dict = await self.db.read_one(group_query, group_id)
-        group_name = group_dict["name"] if group_dict else "Unknown Group"
-
-        search_results = []
-        for food_dict in food_records:
-            food = Food(**food_dict)
-
-            search_results.append(
-                FoodSearchResult(
-                    id=food.id,
-                    brand=food.brand,
-                    product_name=food.product_name,
-                    food_type=food.food_type,
-                    target_pet=food.target_pet,
-                    unit_weight=food.unit_weight,
-                    calories=food.calories,
-                    photo_url=food.photo_url,
-                    group_id=food.group_id,
-                    group_name=group_name,
-                )
+        # When keyword is set, prioritize brand matches in sort order so
+        # search-as-you-type feels relevant. Otherwise alphabetical.
+        if keyword_idx is not None:
+            order = (
+                f"ORDER BY "
+                f"  CASE WHEN brand ILIKE ${keyword_idx} THEN 0 ELSE 1 END, "
+                f"  brand ASC, product_name ASC"
             )
-
-        # Sort results
-        if keyword and keyword.strip():
-            # Sort by relevance (brand matches first, then product name matches)
-            def sort_key(result: FoodSearchResult):
-                keyword_lower = keyword.lower().strip()
-                brand_match = keyword_lower in result.brand.lower()
-                product_match = keyword_lower in result.product_name.lower()
-                return (not brand_match, not product_match, result.brand.lower(), result.product_name.lower())
-
-            search_results.sort(key=sort_key)
         else:
-            # Sort alphabetically by brand and product name
-            search_results.sort(key=lambda r: (r.brand.lower(), r.product_name.lower()))
+            order = "ORDER BY brand ASC, product_name ASC"
 
-        return search_results
-
-    # ================== Photo Management ==================
-
-    async def upload_food_photo(self, food_id: str, file: UploadFile, user_id: str) -> dict:
-        """
-        Upload or update a food photo via Cloudinary.
-        Only creators and members can upload photos.
-
-        Args:
-            food_id: Food to upload photo for
-            file: Photo file upload
-            user_id: User uploading the photo
-
-        Returns:
-            dict: Photo information including the Cloudinary secure URL
-        """
-        # Check permissions
-        if not await self._can_manage_food(user_id=user_id, food_id=food_id):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only group creators and members can upload food photos",
+        rows = await self._db.read(
+            f"""
+            SELECT * FROM {food_table}
+            WHERE {' AND '.join(conditions)}
+            {order}
+            """,
+            *values,
+        )
+        return [
+            FoodSummary(
+                id=r["id"],
+                brand=r["brand"],
+                product_name=r["product_name"],
+                food_type=r["food_type"],
+                target_pet=r["target_pet"],
+                unit_weight=r["unit_weight"],
+                calories=r["calories"],
+                protein=r["protein"],
+                fat=r["fat"],
+                moisture=r["moisture"],
+                carbohydrate=r["carbohydrate"],
+                photo_url=r.get("photo_url"),
+                group_id=r["group_id"],
+                creator_id=r.get("creator_id"),
+                created_at=r["created_at"],
+                updated_at=r["updated_at"],
             )
+            for r in rows
+        ]
 
-        # Validate file type
-        allowed_types = ["image/jpeg", "image/png", "image/gif", "image/webp"]
-        if not file.content_type or file.content_type not in allowed_types:
+    # ────── writes ──────
+
+    async def create_food(self, request: CreateFoodRequest, creator_id: str) -> FoodDetails:
+        await self._require_group_role(
+            request.group_id, creator_id, {GroupRole.CREATOR, GroupRole.MEMBER}
+        )
+        self._check_macro_sum(
+            request.protein, request.fat, request.moisture, request.carbohydrate
+        )
+
+        food_id = await self._generate_food_id()
+        now = datetime.now(timezone.utc)
+        await self._db.insert_one(
+            food_table,
+            {
+                "id": food_id,
+                "group_id": request.group_id,
+                "creator_id": creator_id,
+                "brand": request.brand,
+                "product_name": request.product_name,
+                "food_type": request.food_type.value,
+                "target_pet": request.target_pet.value,
+                "unit_weight": request.unit_weight,
+                "calories": request.calories,
+                "protein": request.protein,
+                "fat": request.fat,
+                "moisture": request.moisture,
+                "carbohydrate": request.carbohydrate,
+                "is_active": True,
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+        return await self.get_food_details(food_id, creator_id)
+
+    async def update_food(self, request: UpdateFoodRequest, user_id: str) -> FoodDetails:
+        food = await self._get_food_or_404(request.food_id)
+        await self._require_can_modify(food, user_id)
+
+        payload = request.model_dump(exclude_unset=True, exclude={"food_id"})
+        if not payload:
+            return await self.get_food_details(request.food_id, user_id)
+
+        self._check_macro_sum(
+            payload.get("protein"),
+            payload.get("fat"),
+            payload.get("moisture"),
+            payload.get("carbohydrate"),
+            existing=food,
+        )
+        for k, v in list(payload.items()):
+            if hasattr(v, "value"):
+                payload[k] = v.value
+
+        set_clauses: list[str] = []
+        values: list[Any] = []
+        for i, (col, val) in enumerate(payload.items(), start=1):
+            set_clauses.append(f"{col} = ${i}")
+            values.append(val)
+        values.append(datetime.now(timezone.utc))
+        values.append(request.food_id)
+        ts_placeholder = f"${len(values) - 1}"
+        id_placeholder = f"${len(values)}"
+
+        await self._db.execute(
+            f"""
+            UPDATE {food_table}
+            SET {', '.join(set_clauses)}, updated_at = {ts_placeholder}
+            WHERE id = {id_placeholder} AND is_active = TRUE
+            """,
+            *values,
+        )
+        return await self.get_food_details(request.food_id, user_id)
+
+    async def delete_food(self, food_id: str, user_id: str) -> dict:
+        food = await self._get_food_or_404(food_id)
+        await self._require_can_modify(food, user_id)
+
+        now = datetime.now(timezone.utc)
+        await self._db.execute(
+            f"UPDATE {food_table} SET is_active = FALSE, updated_at = $1 WHERE id = $2",
+            now, food_id,
+        )
+        return {
+            "deleted_food_id": food_id,
+            "brand": food["brand"],
+            "product_name": food["product_name"],
+            "deleted_by": user_id,
+            "deleted_at": now,
+        }
+
+    # ────── photo upload ──────
+
+    async def upload_food_photo(self, food_id: str, user_id: str, file: UploadFile) -> dict:
+        food = await self._get_food_or_404(food_id)
+        await self._require_can_modify(food, user_id)
+
+        allowed = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+        if file.content_type not in allowed:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid file type. Allowed types: {', '.join(allowed_types)}",
+                detail=f"Invalid file type. Allowed: {', '.join(sorted(allowed))}",
             )
 
-        # Read file content to validate size
         content = await file.read()
+        max_size = 5 * 1024 * 1024  # food photos are smaller than pet photos
         actual_size = len(content)
-
-        # Validate file has content
         if actual_size == 0:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="File is empty. Please upload a valid image file with content.",
+                status_code=status.HTTP_400_BAD_REQUEST, detail="File is empty"
             )
-
-        # Validate file size (max 5MB for food photos)
-        if actual_size > 5 * 1024 * 1024:
+        if actual_size > max_size:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"File size ({actual_size / 1024 / 1024:.2f}MB) exceeds maximum allowed size of 5MB",
+                detail=f"File too large. Max: {max_size // (1024 * 1024)} MB",
             )
 
-        # Upload to Cloudinary (overwrites previous asset under the same public_id)
-        upload_result = await upload_image(
+        result = await upload_image(
             content=content,
             folder="petcare/food_photos",
             public_id=food_id,
             content_type=file.content_type,
         )
-        photo_url = upload_result["secure_url"]
 
-        sql = f"""
-        UPDATE foods
-        SET photo_url = '{photo_url}'
-        WHERE id = '{food_id}'
-        """
-        await self.db.execute(sql)
-
+        now = datetime.now(timezone.utc)
+        await self._db.execute(
+            f"UPDATE {food_table} SET photo_url = $1, updated_at = $2 WHERE id = $3",
+            result["secure_url"], now, food_id,
+        )
         return {
-            "photo_url": photo_url,
-            "photo_name": upload_result["public_id"],
+            "photo_url": result["secure_url"],
+            "photo_name": result["public_id"],
             "photo_size": actual_size,
             "photo_type": file.content_type,
-            "photo_uploaded_at": int(dt.now(tz.utc).timestamp()),
+            "photo_uploaded_at": int(now.timestamp()),
         }
+

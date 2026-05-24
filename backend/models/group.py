@@ -1,226 +1,190 @@
-from datetime import datetime as dt
+"""Group sharing model — the PetCare-specific multi-user collaboration layer.
+
+A `Group` is a household / care-team boundary. Pets, foods, meals, weights,
+medications, and treatment courses are all `group_id`-scoped, so adding a user
+to a group lets them see and (depending on role) write to that group's records.
+
+Roles:
+  - CREATOR — the user who created the group. Manages membership + can delete
+    the group. Exactly one per group; cannot be reassigned.
+  - MEMBER  — full read/write to all group content; can invite other members.
+  - VIEWER  — read-only.
+
+Every user gets a `personal_group_id` auto-created on first login (see
+`AuthService._ensure_personal_group`). That group's `name` defaults to the
+user's name and they are its sole CREATOR.
+"""
+
+from datetime import datetime
 from enum import Enum
-from typing import Optional, Set
 
 from pydantic import BaseModel, Field
 
 
-class GroupRole(str, Enum):
-    """Enhanced group member roles with granular permissions"""
+# Table name constants (module-level so SQL strings can interpolate without
+# scattering string literals).
+group_table = "groups"
+group_member_table = "group_members"
+group_invitation_table = "group_invitations"
 
-    CREATOR = "creator"  # Group creator with full permissions (manage members, edit group, delete group)
-    MEMBER = "member"  # Can view and interact with group content, invite new members
-    VIEWER = "viewer"  # Read-only access to group content (cannot invite or modify)
+
+class GroupRole(str, Enum):
+    CREATOR = "creator"
+    MEMBER = "member"
+    VIEWER = "viewer"
 
 
 class InvitationStatus(str, Enum):
-    """Group invitation status"""
-
     PENDING = "pending"
     ACCEPTED = "accepted"
     EXPIRED = "expired"
 
 
-# ================== Core Models ==================
-
-
-class GroupMember(BaseModel):
-    """
-    Enhanced group membership model with granular permissions.
-    Uses (group_id, user_id) as natural composite primary key.
-    """
-
-    group_id: str  # Group this membership belongs to
-    user_id: str  # User who is a member
-    role: GroupRole = GroupRole.MEMBER  # Member's role in the group
-    created_at: dt
-    updated_at: dt
-    invited_by: Optional[str] = None  # User ID who invited this member
-    is_active: bool = True  # Whether membership is active
-
-    class Config:
-        # Create compound index for efficient queries
-        indexes = [
-            ("group_id", "user_id"),  # Composite primary key and fast lookup
-            ("user_id", "is_active"),  # Fast lookup of user's active memberships
-            ("group_id", "role"),  # Fast role-based queries
-        ]
+# ────── Stored row shapes ──────
 
 
 class Group(BaseModel):
-    """
-    Enhanced Group model using dedicated GroupMember relationships.
-    Members are now managed through the GroupMember collection for better flexibility.
-    """
-
     id: str
-    name: str = Field(..., min_length=1, max_length=50)
+    name: str
     creator_id: str
-    created_at: dt
-    updated_at: dt
     is_active: bool = True
+    created_at: datetime
+    updated_at: datetime
+
+
+class GroupMember(BaseModel):
+    id: int
+    group_id: str
+    user_id: str
+    role: GroupRole
+    invited_by: str | None = None
+    is_active: bool = True
+    created_at: datetime
+    updated_at: datetime
 
 
 class GroupInvitation(BaseModel):
-    """
-    Simplified invitation system for joining groups.
-    """
-
     id: str
     group_id: str
-    invited_by: str  # User ID who sent invitation
-    invite_code: str  # Unique code for joining
-    status: InvitationStatus = InvitationStatus.PENDING
+    invited_by: str
+    invite_code: str
+    status: InvitationStatus
     role: GroupRole
-    created_at: dt
-    expires_at: dt  # Invitations expire after 7 days
-    accepted_by: Optional[str] = None  # User ID who accepted
+    accepted_by: str | None = None
+    expires_at: datetime
+    created_at: datetime
+    updated_at: datetime
 
 
-# ================== Request Models ==================
+# ────── Request DTOs ──────
 
 
 class CreateGroupRequest(BaseModel):
-    """Request to create a new group"""
-
     name: str = Field(..., min_length=1, max_length=50)
 
 
-class JoinGroupRequest(BaseModel):
-    """Request to join a group using invite code"""
+class DeleteGroupRequest(BaseModel):
+    group_id: str
+
+
+class CreateInvitationRequest(BaseModel):
+    """Generate an invite code with the given default role."""
+
+    group_id: str
+    role: GroupRole = GroupRole.MEMBER
+
+
+class InvitationPreviewQuery(BaseModel):
+    """Used internally — the router exposes invite_code as a query string."""
 
     invite_code: str
 
 
-class UpdateMemberRoleRequest(BaseModel):
-    """Request to update a member's role in the group"""
+class JoinGroupRequest(BaseModel):
+    invite_code: str
 
+
+class UpdateMemberRoleRequest(BaseModel):
+    group_id: str
     user_id: str
     new_role: GroupRole
 
 
 class RemoveMemberRequest(BaseModel):
-    """Request to remove a member from the group"""
-
+    group_id: str
     user_id: str
 
 
-class CreateInvitationRequest(BaseModel):
-    """Request to create an invitation for a user to join the group"""
-
-    role: GroupRole
+# ────── Response DTOs ──────
 
 
-# ================== Response Models ==================
-
-
-class GroupInfo(BaseModel):
-    """Basic group information for members"""
+class GroupSummary(BaseModel):
+    """Lightweight summary returned by list endpoints — includes the current
+    user's role + cached member_count so clients don't need a second roundtrip.
+    """
 
     id: str
     name: str
     creator_id: str
-    created_at: dt
-    updated_at: dt
     member_count: int
-    is_creator: bool  # True if current user is the creator
-    is_active: bool
+    role: GroupRole  # current user's role in this group
+    is_personal: bool  # True iff this is the user's personal_group_id
+    created_at: datetime
+    updated_at: datetime
 
 
-class GroupMemberInfo(BaseModel):
-    """Enhanced group member information with user details and membership data"""
+class MemberSummary(BaseModel):
+    """Member shown in /group/members. Joined with `users` for display fields."""
 
-    group_id: str
-    group_name: str
     user_id: str
-    user_name: str
-    user_email: str
-    user_picture: Optional[str] = None  # User's profile picture URL
+    name: str
+    email: str
+    picture: str | None = None
     role: GroupRole
-    created_at: dt  # When the user joined the group
-    invited_by: Optional[str] = None  # Who invited this user (user_id)
-    invited_by_name: Optional[str] = None  # Name of the person who invited (for display)
-    is_active: bool = True
+    invited_by: str | None = None
+    invited_by_name: str | None = None
+    joined_at: datetime
 
 
-class InvitationInfo(BaseModel):
-    """Invitation information"""
+class InvitationPreview(BaseModel):
+    """Shown to the invitee BEFORE they accept."""
 
     id: str
+    group_id: str
     group_name: str
     invited_by_name: str
     invite_code: str
-    created_at: dt
-    expires_at: dt
     role: GroupRole
+    expires_at: datetime
+    created_at: datetime
 
 
-# ================== Permission Management ==================
+class InvitationCreated(BaseModel):
+    """Returned to the inviter after generating an invite code."""
+
+    id: str
+    group_id: str
+    group_name: str
+    invite_code: str
+    role: GroupRole
+    expires_at: datetime
+    share_message: str
 
 
-class GroupPermission:
-    """
-    Centralized permission management for group roles.
-    Defines what each role can and cannot do within a group.
-    """
+class GroupPet(BaseModel):
+    """Pet entry inside /group/pets — flattened owner info + permission tag."""
 
-    # Define permissions as sets for efficient lookup
-    CREATOR_PERMISSIONS = {
-        "view_group",
-        "edit_group",
-        "delete_group",
-        "view_members",
-        "invite_members",
-        "remove_members",
-        "change_member_roles",
-        "create_invitations",
-        "delete_invitations",
-        "manage_group_content",
-        "view_group_content",
-    }
-
-    MEMBER_PERMISSIONS = {
-        "view_group",
-        "view_members",
-        "invite_members",  # Can invite but cannot remove
-        "create_invitations",
-        "manage_group_content",
-        "view_group_content",
-    }
-
-    VIEWER_PERMISSIONS = {"view_group", "view_members", "view_group_content"}  # Can only view, cannot invite or manage
-
-    @classmethod
-    def get_permissions(cls, role: GroupRole) -> Set[str]:
-        """Get all permissions for a given role"""
-        permission_map = {
-            GroupRole.CREATOR: cls.CREATOR_PERMISSIONS,
-            GroupRole.MEMBER: cls.MEMBER_PERMISSIONS,
-            GroupRole.VIEWER: cls.VIEWER_PERMISSIONS,
-        }
-        return permission_map.get(role, set())
-
-    @classmethod
-    def can_perform(cls, role: GroupRole, permission: str) -> bool:
-        """Check if a role has a specific permission"""
-        return permission in cls.get_permissions(role)
-
-    @classmethod
-    def can_manage_member(cls, actor_role: GroupRole, target_role: GroupRole) -> bool:
-        """Check if actor can manage (remove/change role of) target member"""
-        # CREATOR can manage everyone except other CREATORs
-        if actor_role == GroupRole.CREATOR:
-            return target_role != GroupRole.CREATOR
-
-        # MEMBER and VIEWER cannot manage anyone
-        return False
-
-    @classmethod
-    def can_assign_role(cls, actor_role: GroupRole, target_role: GroupRole) -> bool:
-        """Check if actor can assign a specific role to members"""
-        # CREATOR can assign any role except CREATOR (only one creator per group)
-        if actor_role == GroupRole.CREATOR:
-            return target_role != GroupRole.CREATOR
-
-        # MEMBER and VIEWER cannot assign roles
-        return False
+    id: str
+    name: str
+    pet_type: str
+    breed: str | None = None
+    gender: str
+    current_weight_kg: float | None = None
+    target_weight_kg: float | None = None
+    daily_calorie_target: int | None = None
+    photo_url: str | None = None
+    owner_id: str
+    owner_name: str
+    user_permission: str  # one of: owner | creator | member | viewer
+    created_at: datetime
+    updated_at: datetime

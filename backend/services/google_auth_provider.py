@@ -1,69 +1,52 @@
-import logging
-import os
-import time
+"""Google Sign-In ID token verifier.
 
-import httpx
+The iOS client gets an ID token from the Google Sign-In SDK and posts it to
+`/auth/google/login`. We verify the signature against Google's certs and
+return a normalized GoogleUserInfo.
+"""
+
+import logging
+
+from fastapi import HTTPException, status
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 
-from backend.models.auth import GoogleUserInfo
+from backend.core.config import settings
+from backend.models.user import GoogleUserInfo
 
 logger = logging.getLogger(__name__)
 
 
 class GoogleAuthProvider:
-    def __init__(self, client_id: str, client_secret: str):
-        self.client_id = client_id
-        self.client_secret = client_secret
-        # Additional client IDs (e.g. iOS) that are allowed to authenticate
-        ios_client_id = os.getenv("GOOGLE_IOS_CLIENT_ID")
-        self.allowed_client_ids = [client_id]
-        if ios_client_id:
-            self.allowed_client_ids.append(ios_client_id)
+    def __init__(self, allowed_audiences: list[str] | None = None):
+        self._allowed_audiences = allowed_audiences or settings.google_allowed_audiences
 
-    def _record_external_timing(self, service: str, duration_ms: float) -> None:
-        try:
-            from backend.core.metrics import metrics_collector
-
-            metrics_collector.record_external_call(service, duration_ms)
-        except Exception:
-            pass
-
-    async def exchange_code_for_tokens(self, authorization_code: str, redirect_uri: str) -> dict:
-        """Exchange authorization code for access token and ID token"""
-        token_url = "https://oauth2.googleapis.com/token"
-
-        data = {
-            "client_id": self.client_id,
-            "client_secret": self.client_secret,
-            "code": authorization_code,
-            "grant_type": "authorization_code",
-            "redirect_uri": redirect_uri,
-        }
-
-        start = time.perf_counter()
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(token_url, data=data)
-                response.raise_for_status()
-                return response.json()
-        finally:
-            self._record_external_timing("google_oauth_exchange", (time.perf_counter() - start) * 1000.0)
+    @property
+    def is_configured(self) -> bool:
+        return bool(self._allowed_audiences)
 
     async def verify_token(self, token: str) -> GoogleUserInfo:
-        # Try each allowed client ID (web, iOS, etc.)
-        start = time.perf_counter()
-        last_error = None
-        try:
-            for cid in self.allowed_client_ids:
-                try:
-                    id_info = id_token.verify_oauth2_token(token, google_requests.Request(), cid)
-                    return GoogleUserInfo(
-                        id=id_info["sub"], email=id_info["email"], name=id_info["name"], picture=id_info["picture"]
-                    )
-                except Exception as e:
-                    last_error = e
-                    continue
-            raise last_error
-        finally:
-            self._record_external_timing("google_oauth_verify", (time.perf_counter() - start) * 1000.0)
+        if not self._allowed_audiences:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Google sign-in is not configured on this server",
+            )
+
+        last_error: Exception | None = None
+        for audience in self._allowed_audiences:
+            try:
+                claims = id_token.verify_oauth2_token(token, google_requests.Request(), audience)
+                return GoogleUserInfo(
+                    sub=claims["sub"],
+                    email=claims["email"],
+                    name=claims.get("name") or claims["email"].split("@")[0],
+                    picture=claims.get("picture"),
+                )
+            except Exception as e:
+                last_error = e
+                continue
+
+        logger.info("Google token verification failed for all audiences: %s", last_error)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Google ID token"
+        )

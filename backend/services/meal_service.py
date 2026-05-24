@@ -1,742 +1,634 @@
-import base64
-import os
-from datetime import datetime as dt
-from datetime import timezone as tz
-from typing import Dict, List, Tuple
+"""Meal logging business logic.
+
+The hard part is the macro snapshot: every meal row stores absolute gram
+values (calories, protein_g, fat_g, …) computed at log time from the food's
+per-100g percentages. The translation depends on `serving_type`:
+
+  - GRAMS  →  actual_weight_g = serving_amount
+  - UNITS  →  actual_weight_g = serving_amount * food.unit_weight
+
+Then for each macro field on the food: meal.<x>_g = food.<x> * actual_weight_g / 100.
+
+Permissions:
+  - create:  CREATOR or MEMBER of the pet's group (viewers can read but not log)
+  - view:    any member of the pet's group OR (for group_id-scoped queries)
+             any member of that group
+  - update / delete: the original recorder, OR the group CREATOR
+"""
+
+import logging
+import secrets
+from datetime import date, datetime, time, timedelta, timezone
+from typing import Any
 
 from fastapi import HTTPException, status
 
-from backend.core.db_manager import get_db
+from backend.core.postgres_database import PostgresAsyncClient
+from backend.models.food import food_table
+from backend.models.group import GroupRole, group_member_table, group_table
 from backend.models.meal import (
     CreateMealRequest,
-    Meal,
     MealDetails,
-    MealInfo,
-    MealQueryFilters,
     MealStatistics,
+    MealSummary,
+    MealType,
     ServingType,
-    TodayMealSummary,
+    TodayMealsResponse,
     UpdateMealRequest,
     meal_table,
 )
-from backend.models.user import UserInfo
+from backend.models.pet import pet_table
+from backend.models.user import user_table
+
+logger = logging.getLogger(__name__)
 
 
 class MealService:
-    """
-    MealService handles all meal-related business logic following the group-based
-    permissions model with independent meal endpoints using query parameters.
+    def __init__(self, db: PostgresAsyncClient):
+        self._db = db
 
-    Key Principles:
-    - Independent Operation: Meal endpoints operate independently using query parameters
-    - Group-Based Permissions: Access controlled through group membership roles
-    - Automatic Calculations: Nutritional values calculated from food database
-    - Collaborative Recording: All group members can contribute feeding records
-    """
+    # ────── id generation ──────
 
-    def __init__(self):
-        pass
+    async def _generate_meal_id(self) -> str:
+        for _ in range(5):
+            candidate = "ml_" + secrets.token_hex(4)  # 'ml_' + 8 hex = 11
+            existing = await self._db.read_one(
+                f"SELECT 1 FROM {meal_table} WHERE id = $1", candidate
+            )
+            if existing is None:
+                return candidate
+        raise RuntimeError("Failed to generate a unique meal id after 5 attempts")
 
-    @property
-    def db(self):
-        """Get database client from global manager"""
-        return get_db()
+    # ────── permission + lookup helpers ──────
 
-    # ================== Permission Helpers ==================
+    async def _get_pet(self, pet_id: str) -> dict:
+        row = await self._db.read_one(
+            f"SELECT id, name, group_id, daily_calorie_target FROM {pet_table} "
+            f"WHERE id = $1 AND is_active = TRUE",
+            pet_id,
+        )
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pet not found")
+        return row
 
-    async def _get_user_group_role(self, group_id: str, user_id: str) -> str:
-        """
-        Determine user's role in a specific group.
+    async def _membership(self, group_id: str, user_id: str) -> dict | None:
+        return await self._db.read_one(
+            f"""
+            SELECT role FROM {group_member_table}
+            WHERE group_id = $1 AND user_id = $2 AND is_active = TRUE
+            """,
+            group_id, user_id,
+        )
 
-        Returns:
-            str: User's role ("creator", "member", "viewer", "none")
-        """
-        sql = """
-        SELECT role FROM group_members
-        WHERE group_id = $1 AND user_id = $2 AND is_active = TRUE
-        """
-        role_result = await self.db.read_one(sql, group_id, user_id)
-        return role_result["role"] if role_result else "none"
-
-    async def _get_pet_group_context(self, pet_id: str) -> Dict[str, str]:
-        """
-        Get pet's group context for permission checking.
-
-        Returns:
-            Dict containing pet and group information
-        """
-        sql = """
-        SELECT
-            p.id as pet_id,
-            p.name as pet_name,
-            p.owner_id,
-            p.group_id,
-            g.name as group_name
-        FROM pets p
-        LEFT JOIN groups g ON p.group_id = g.id
-        WHERE p.id = $1 AND p.is_active = TRUE AND g.is_active = TRUE
-        """
-        context = await self.db.read_one(sql, pet_id)
-        if not context:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pet not found or not accessible")
-        return context
-
-    async def _validate_food_access(self, food_id: str, group_id: str) -> Dict[str, any]:
-        """
-        Validate that food exists and is accessible in the given group.
-
-        Returns:
-            Dict containing food information
-        """
-        sql = """
-        SELECT
-            id, brand, product_name, food_type, target_pet, unit_weight,
-            calories, protein, fat, moisture, carbohydrate
-        FROM foods
-        WHERE id = $1 AND group_id = $2 AND is_active = TRUE
-        """
-        food = await self.db.read_one(sql, food_id, group_id)
-        if not food:
+    async def _require_can_log(self, group_id: str, user_id: str) -> None:
+        membership = await self._membership(group_id, user_id)
+        if membership is None:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Food not found or not accessible in this group"
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not a member of this pet's group",
+            )
+        if GroupRole(membership["role"]) == GroupRole.VIEWER:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Viewers cannot log meals",
+            )
+
+    async def _require_can_view(self, group_id: str, user_id: str) -> None:
+        membership = await self._membership(group_id, user_id)
+        if membership is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not a member of this group",
+            )
+
+    async def _get_meal_or_404(self, meal_id: str) -> dict:
+        row = await self._db.read_one(
+            f"SELECT * FROM {meal_table} WHERE id = $1 AND is_active = TRUE",
+            meal_id,
+        )
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meal not found")
+        return row
+
+    async def _require_can_modify(self, meal: dict, user_id: str) -> None:
+        if meal["user_id"] == user_id:
+            return
+        membership = await self._membership(meal["group_id"], user_id)
+        if membership and GroupRole(membership["role"]) == GroupRole.CREATOR:
+            return
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the recorder or the group's CREATOR can modify this meal",
+        )
+
+    async def _get_food_in_group(self, food_id: str, group_id: str) -> dict:
+        food = await self._db.read_one(
+            f"SELECT * FROM {food_table} WHERE id = $1 AND is_active = TRUE",
+            food_id,
+        )
+        if food is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Food not found")
+        if food["group_id"] != group_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Food belongs to a different group than this pet",
             )
         return food
 
-    async def _can_record_meal(self, user_id: str, group_id: str) -> bool:
-        """Check if user can record meals in the group (creator and member only)"""
-        role = await self._get_user_group_role(group_id, user_id)
-        return role in ["creator", "member"]
+    # ────── macro snapshot ──────
 
-    async def _can_view_meals(self, user_id: str, group_id: str) -> bool:
-        """Check if user can view meals in the group (all roles can view)"""
-        role = await self._get_user_group_role(group_id, user_id)
-        return role in ["creator", "member", "viewer"]
-
-    async def _can_modify_meal(self, meal_id: str, user_id: str) -> Tuple[bool, Dict]:
-        """
-        Check if user can modify a specific meal record.
-
-        Returns:
-            Tuple of (can_modify: bool, meal_info: dict)
-        """
-        sql = """
-        SELECT m.*, p.group_id
-        FROM meals m
-        JOIN pets p ON m.pet_id = p.id
-        WHERE m.id = $1 AND m.is_active = TRUE
-        """
-        meal_info = await self.db.read_one(sql, meal_id)
-        if not meal_info:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meal record not found")
-
-        group_id = meal_info["group_id"]
-        user_role = await self._get_user_group_role(group_id, user_id)
-
-        # Creator can modify any record, members can only modify their own
-        can_modify = user_role == "creator" or (user_role == "member" and meal_info["user_id"] == user_id)
-
-        return can_modify, meal_info
-
-    # ================== Nutritional Calculation Helpers ==================
-
-    def _calculate_actual_weight(
-        self, serving_type: ServingType, serving_amount: float, food_unit_weight: float
-    ) -> float:
-        """
-        Calculate actual weight in grams based on serving input.
-
-        Args:
-            serving_type: Type of serving input (units or grams)
-            serving_amount: Amount as entered by user
-            food_unit_weight: Weight per unit from food database
-
-        Returns:
-            float: Actual weight in grams
-        """
+    @staticmethod
+    def _snapshot_macros(
+        food: dict, serving_type: ServingType, serving_amount: float
+    ) -> dict[str, float]:
         if serving_type == ServingType.GRAMS:
-            return serving_amount
-        else:  # ServingType.UNITS
-            return serving_amount * food_unit_weight
+            actual_weight_g = float(serving_amount)
+        else:  # UNITS
+            actual_weight_g = float(serving_amount) * float(food["unit_weight"])
 
-    def _calculate_nutrition_values(self, actual_weight_g: float, food_data: Dict) -> Dict[str, float]:
-        """
-        Calculate nutritional values based on actual weight and food nutrition per 100g.
-
-        Args:
-            actual_weight_g: Actual weight consumed in grams
-            food_data: Food nutritional data per 100g
-
-        Returns:
-            Dict containing calculated nutritional values
-        """
-        # Calculate multiplier for actual weight vs 100g base
-        multiplier = actual_weight_g / 100.0
-
+        ratio = actual_weight_g / 100.0
         return {
-            "calories": food_data["calories"] * multiplier,
-            "protein_g": food_data["protein"] * multiplier,
-            "fat_g": food_data["fat"] * multiplier,
-            "moisture_g": food_data["moisture"] * multiplier,
-            "carbohydrate_g": food_data["carbohydrate"] * multiplier,
+            "actual_weight_g": round(actual_weight_g, 2),
+            "calories": round(float(food["calories"]) * ratio, 2),
+            "protein_g": round(float(food["protein"]) * ratio, 2),
+            "fat_g": round(float(food["fat"]) * ratio, 2),
+            "moisture_g": round(float(food["moisture"]) * ratio, 2),
+            "carbohydrate_g": round(float(food["carbohydrate"]) * ratio, 2),
         }
 
-    # ================== CRUD Operations ==================
+    # ────── writes ──────
 
-    async def create_meal(self, request: CreateMealRequest, user: UserInfo) -> MealDetails:
-        """
-        Create a new meal record with automatic nutritional calculations.
+    async def create_meal(self, request: CreateMealRequest, user_id: str) -> MealDetails:
+        pet = await self._get_pet(request.pet_id)
+        await self._require_can_log(pet["group_id"], user_id)
+        food = await self._get_food_in_group(request.food_id, pet["group_id"])
 
-        Args:
-            request: Meal creation details
-            user: User creating the meal record
+        snapshot = self._snapshot_macros(food, request.serving_type, request.serving_amount)
+        meal_id = await self._generate_meal_id()
+        now = datetime.now(timezone.utc)
+        timestamp = request.timestamp or now
 
-        Returns:
-            MealDetails: Created meal information with full details
-        """
-        # Get pet context and validate access
-        pet_context = await self._get_pet_group_context(request.pet_id)
-        group_id = pet_context["group_id"]
-
-        # Check if user can record meals in this group
-        if not await self._can_record_meal(user.id, group_id):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You don't have permission to record meals for pets in this group",
-            )
-
-        # Validate food access
-        food_data = await self._validate_food_access(request.food_id, group_id)
-
-        # Calculate actual weight and nutritional values
-        actual_weight = self._calculate_actual_weight(
-            request.serving_type, request.serving_amount, food_data["unit_weight"]
+        await self._db.insert_one(
+            meal_table,
+            {
+                "id": meal_id,
+                "pet_id": request.pet_id,
+                "food_id": request.food_id,
+                "user_id": user_id,
+                "group_id": pet["group_id"],
+                "timestamp": timestamp,
+                "meal_type": request.meal_type.value if request.meal_type else None,
+                "serving_type": request.serving_type.value,
+                "serving_amount": request.serving_amount,
+                "actual_weight_g": snapshot["actual_weight_g"],
+                "calories": snapshot["calories"],
+                "protein_g": snapshot["protein_g"],
+                "fat_g": snapshot["fat_g"],
+                "moisture_g": snapshot["moisture_g"],
+                "carbohydrate_g": snapshot["carbohydrate_g"],
+                "notes": request.notes,
+                "is_active": True,
+                "created_at": now,
+                "updated_at": now,
+            },
         )
-
-        nutrition_values = self._calculate_nutrition_values(actual_weight, food_data)
-
-        # Generate meal ID with ml_ prefix
-        meal_id = "ml_" + base64.urlsafe_b64encode(os.urandom(6)).decode("utf-8").rstrip("=")
-        current_time = dt.now(tz.utc)
-
-        # Create meal record
-        meal = Meal(
-            id=meal_id,
-            pet_id=request.pet_id,
-            food_id=request.food_id,
-            user_id=user.id,
-            group_id=group_id,
-            timestamp=request.fed_at,
-            meal_type=request.meal_type,
-            serving_type=request.serving_type,
-            serving_amount=request.serving_amount,
-            actual_weight_g=actual_weight,
-            calories=nutrition_values["calories"],
-            protein_g=nutrition_values["protein_g"],
-            fat_g=nutrition_values["fat_g"],
-            moisture_g=nutrition_values["moisture_g"],
-            carbohydrate_g=nutrition_values["carbohydrate_g"],
-            created_at=current_time,
-            updated_at=current_time,
-            notes=request.notes,
-        )
-
-        # Save to database (using string formatting like weight_service to avoid timezone issues)
-        sql = f"""
-        INSERT INTO {meal_table} (
-            id, pet_id, food_id, user_id, group_id, timestamp, meal_type,
-            serving_type, serving_amount, actual_weight_g,
-            calories, protein_g, fat_g, moisture_g, carbohydrate_g,
-            created_at, updated_at, notes, is_active
-        )
-        VALUES (
-            '{meal.id}', '{meal.pet_id}', '{meal.food_id}', '{meal.user_id}', '{meal.group_id}',
-            '{meal.timestamp}', {f"'{meal.meal_type.value}'" if meal.meal_type else 'NULL'},
-            '{meal.serving_type.value}', {meal.serving_amount}, {meal.actual_weight_g},
-            {meal.calories}, {meal.protein_g}, {meal.fat_g}, {meal.moisture_g}, {meal.carbohydrate_g},
-            '{meal.created_at}', '{meal.updated_at}', {f"'{meal.notes}'" if meal.notes else 'NULL'}, {meal.is_active}
-        )
-        RETURNING *
-        """
-        await self.db.execute_returning(sql)
-
-        # Return detailed meal information
-        return await self.get_meal_details(meal_id, user.id)
-
-    async def get_meals(self, filters: MealQueryFilters, user_id: str) -> List[MealInfo]:
-        """
-        Get meal records with comprehensive filtering support.
-
-        Args:
-            filters: Query filters
-            user_id: User requesting the meals
-
-        Returns:
-            List[MealInfo]: Filtered meal records
-        """
-        # Validate permissions based on query scope
-        if filters.pet_id:
-            pet_context = await self._get_pet_group_context(filters.pet_id)
-            group_id = pet_context["group_id"]
-            if not await self._can_view_meals(user_id, group_id):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN, detail="You don't have permission to view meals for this pet"
-                )
-        elif filters.group_id:
-            if not await self._can_view_meals(user_id, filters.group_id):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="You don't have permission to view meals for this group",
-                )
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Either pet_id or group_id must be provided"
-            )
-
-        # Build dynamic query
-        conditions = ["m.is_active = TRUE"]
-        params = []
-        param_count = 0
-
-        if filters.pet_id:
-            param_count += 1
-            conditions.append(f"m.pet_id = ${param_count}")
-            params.append(filters.pet_id)
-        elif filters.group_id:
-            param_count += 1
-            conditions.append(f"p.group_id = ${param_count}")
-            params.append(filters.group_id)
-
-        if filters.user_id:
-            param_count += 1
-            conditions.append(f"m.user_id = ${param_count}")
-            params.append(filters.user_id)
-
-        if filters.date_from:
-            conditions.append(f"DATE(m.timestamp) >= '{filters.date_from}'")
-
-        if filters.date_to:
-            conditions.append(f"DATE(m.timestamp) <= '{filters.date_to}'")
-
-        if filters.meal_type:
-            param_count += 1
-            conditions.append(f"m.meal_type = ${param_count}")
-            params.append(filters.meal_type.value)
-
-        # Add limit and offset
-        param_count += 1
-        limit_param = f"${param_count}"
-        params.append(filters.limit)
-
-        param_count += 1
-        offset_param = f"${param_count}"
-        params.append(filters.offset)
-
-        query = f"""
-        SELECT
-            m.*,
-            p.name as pet_name,
-            CONCAT(f.brand, ' - ', f.product_name) as food_name,
-            u.name as fed_by_name
-        FROM meals m
-        JOIN pets p ON m.pet_id = p.id
-        JOIN foods f ON m.food_id = f.id
-        JOIN users u ON m.user_id = u.id
-        WHERE {' AND '.join(conditions)}
-        ORDER BY m.timestamp DESC
-        LIMIT {limit_param} OFFSET {offset_param}
-        """
-
-        meal_records = await self.db.read(query, *params)
-
-        return [MealInfo(**record) for record in meal_records]
-
-    async def get_meal_details(self, meal_id: str, user_id: str) -> MealDetails:
-        """
-        Get comprehensive meal information.
-
-        Args:
-            meal_id: ID of the meal to retrieve
-            user_id: User requesting the information
-
-        Returns:
-            MealDetails: Complete meal information
-        """
-        query = """
-        SELECT
-            m.*,
-            p.name as pet_name,
-            f.brand as food_brand,
-            f.product_name as food_product_name,
-            CONCAT(f.brand, ' - ', f.product_name) as food_name,
-            u.name as fed_by_name,
-            g.name as group_name
-        FROM meals m
-        JOIN pets p ON m.pet_id = p.id
-        JOIN foods f ON m.food_id = f.id
-        JOIN users u ON m.user_id = u.id
-        JOIN groups g ON p.group_id = g.id
-        WHERE m.id = $1 AND m.is_active = TRUE
-        """
-
-        meal_data = await self.db.read_one(query, meal_id)
-        if not meal_data:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meal record not found")
-
-        # Check permissions
-        group_id = meal_data["group_id"]
-        if not await self._can_view_meals(user_id, group_id):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="You don't have permission to view this meal record"
-            )
-
-        return MealDetails(**meal_data)
-
-    async def update_meal(self, meal_id: str, request: UpdateMealRequest, user_id: str) -> MealDetails:
-        """
-        Update meal record with nutritional recalculation if needed.
-
-        Args:
-            meal_id: ID of the meal to update
-            request: Update details
-            user_id: User requesting the update
-
-        Returns:
-            MealDetails: Updated meal information
-        """
-        # Check permissions and get current meal
-        can_modify, current_meal = await self._can_modify_meal(meal_id, user_id)
-        if not can_modify:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="You don't have permission to modify this meal record"
-            )
-
-        # Prepare update data
-        update_data = {"updated_at": dt.now(tz.utc)}
-        needs_recalculation = False
-
-        # Check which fields are being updated
-        if request.food_id is not None and request.food_id != current_meal["food_id"]:
-            # Validate new food access
-            await self._validate_food_access(request.food_id, current_meal["group_id"])
-            update_data["food_id"] = request.food_id
-            needs_recalculation = True
-
-        if request.serving_type is not None:
-            update_data["serving_type"] = request.serving_type.value
-            needs_recalculation = True
-
-        if request.serving_amount is not None:
-            update_data["serving_amount"] = request.serving_amount
-            needs_recalculation = True
-
-        if request.fed_at is not None:
-            update_data["timestamp"] = request.fed_at
-
-        if request.meal_type is not None:
-            update_data["meal_type"] = request.meal_type.value
-
-        if request.notes is not None:
-            update_data["notes"] = request.notes
-
-        # Recalculate nutritional values if needed
-        if needs_recalculation:
-            # Get food data (use new food_id if changed, otherwise current)
-            food_id = update_data.get("food_id", current_meal["food_id"])
-            food_data = await self._validate_food_access(food_id, current_meal["group_id"])
-
-            # Use new values if provided, otherwise current values
-            serving_type = ServingType(update_data.get("serving_type", current_meal["serving_type"]))
-            serving_amount = update_data.get("serving_amount", current_meal["serving_amount"])
-
-            # Recalculate
-            actual_weight = self._calculate_actual_weight(serving_type, serving_amount, food_data["unit_weight"])
-            nutrition_values = self._calculate_nutrition_values(actual_weight, food_data)
-
-            update_data.update(
-                {
-                    "actual_weight_g": actual_weight,
-                    "calories": nutrition_values["calories"],
-                    "protein_g": nutrition_values["protein_g"],
-                    "fat_g": nutrition_values["fat_g"],
-                    "moisture_g": nutrition_values["moisture_g"],
-                    "carbohydrate_g": nutrition_values["carbohydrate_g"],
-                }
-            )
-
-        # Execute update
-        if update_data:
-            set_clauses = []
-            params = []
-            param_count = 0
-
-            for field, value in update_data.items():
-                param_count += 1
-                set_clauses.append(f"{field} = ${param_count}")
-                params.append(value)
-
-            param_count += 1
-            update_query = f"UPDATE meals SET {', '.join(set_clauses)} WHERE id = ${param_count}"
-            params.append(meal_id)
-
-            await self.db.execute(update_query, *params)
-
-        # Return updated details
         return await self.get_meal_details(meal_id, user_id)
 
-    async def delete_meal(self, meal_id: str, user_id: str) -> Dict[str, str]:
-        """
-        Soft delete a meal record.
+    async def update_meal(self, request: UpdateMealRequest, user_id: str) -> MealDetails:
+        meal = await self._get_meal_or_404(request.meal_id)
+        await self._require_can_modify(meal, user_id)
 
-        Args:
-            meal_id: ID of the meal to delete
-            user_id: User requesting the deletion
+        # Determine new food/serving — fall back to existing values when the
+        # client didn't send a change. If anything affecting the macro snapshot
+        # changed, recompute and overwrite the stored gram values.
+        new_food_id = request.food_id or meal["food_id"]
+        new_serving_type = (
+            ServingType(request.serving_type.value)
+            if request.serving_type
+            else ServingType(meal["serving_type"])
+        )
+        new_serving_amount = (
+            float(request.serving_amount)
+            if request.serving_amount is not None
+            else float(meal["serving_amount"])
+        )
 
-        Returns:
-            dict: Success confirmation
-        """
-        # Check permissions
-        can_modify, meal_info = await self._can_modify_meal(meal_id, user_id)
-        if not can_modify:
+        snapshot: dict[str, float] | None = None
+        macro_changed = (
+            request.food_id is not None
+            or request.serving_type is not None
+            or request.serving_amount is not None
+        )
+        if macro_changed:
+            food = await self._get_food_in_group(new_food_id, meal["group_id"])
+            snapshot = self._snapshot_macros(food, new_serving_type, new_serving_amount)
+
+        payload: dict[str, Any] = {}
+        if request.food_id is not None:
+            payload["food_id"] = new_food_id
+        if request.timestamp is not None:
+            payload["timestamp"] = request.timestamp
+        if request.meal_type is not None:
+            payload["meal_type"] = request.meal_type.value
+        if request.serving_type is not None:
+            payload["serving_type"] = new_serving_type.value
+        if request.serving_amount is not None:
+            payload["serving_amount"] = new_serving_amount
+        if request.notes is not None:
+            payload["notes"] = request.notes
+        if snapshot is not None:
+            payload.update(snapshot)
+
+        if not payload:
+            return await self.get_meal_details(request.meal_id, user_id)
+
+        set_clauses: list[str] = []
+        values: list[Any] = []
+        for i, (col, val) in enumerate(payload.items(), start=1):
+            set_clauses.append(f"{col} = ${i}")
+            values.append(val)
+        values.append(datetime.now(timezone.utc))
+        values.append(request.meal_id)
+        ts_placeholder = f"${len(values) - 1}"
+        id_placeholder = f"${len(values)}"
+
+        await self._db.execute(
+            f"""
+            UPDATE {meal_table}
+            SET {', '.join(set_clauses)}, updated_at = {ts_placeholder}
+            WHERE id = {id_placeholder} AND is_active = TRUE
+            """,
+            *values,
+        )
+        return await self.get_meal_details(request.meal_id, user_id)
+
+    async def delete_meal(self, meal_id: str, user_id: str) -> dict:
+        meal = await self._get_meal_or_404(meal_id)
+        await self._require_can_modify(meal, user_id)
+
+        now = datetime.now(timezone.utc)
+        await self._db.execute(
+            f"UPDATE {meal_table} SET is_active = FALSE, updated_at = $1 WHERE id = $2",
+            now, meal_id,
+        )
+        return {
+            "deleted_meal_id": meal_id,
+            "pet_id": meal["pet_id"],
+            "deleted_by": user_id,
+            "deleted_at": now,
+        }
+
+    # ────── reads ──────
+
+    async def get_meal_details(self, meal_id: str, user_id: str) -> MealDetails:
+        meal = await self._get_meal_or_404(meal_id)
+        await self._require_can_view(meal["group_id"], user_id)
+
+        row = await self._db.read_one(
+            f"""
+            SELECT
+                m.*,
+                p.name AS pet_name,
+                f.brand AS food_brand,
+                f.product_name AS food_product_name,
+                u.name AS fed_by_name,
+                g.name AS group_name
+            FROM {meal_table} m
+            JOIN {pet_table} p ON p.id = m.pet_id
+            JOIN {food_table} f ON f.id = m.food_id
+            LEFT JOIN {user_table} u ON u.id = m.user_id
+            JOIN {group_table} g ON g.id = m.group_id
+            WHERE m.id = $1
+            """,
+            meal_id,
+        )
+        assert row is not None
+        return MealDetails(
+            id=row["id"],
+            pet_id=row["pet_id"],
+            pet_name=row["pet_name"],
+            food_id=row["food_id"],
+            food_brand=row["food_brand"],
+            food_product_name=row["food_product_name"],
+            user_id=row["user_id"],
+            fed_by_name=row.get("fed_by_name") or "",
+            group_id=row["group_id"],
+            group_name=row["group_name"],
+            timestamp=row["timestamp"],
+            meal_type=row.get("meal_type"),
+            serving_type=row["serving_type"],
+            serving_amount=row["serving_amount"],
+            actual_weight_g=row["actual_weight_g"],
+            calories=row["calories"],
+            protein_g=row["protein_g"],
+            fat_g=row["fat_g"],
+            moisture_g=row["moisture_g"],
+            carbohydrate_g=row["carbohydrate_g"],
+            notes=row.get("notes"),
+            is_active=bool(row.get("is_active", True)),
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
+
+    async def list_meals(
+        self,
+        user_id: str,
+        pet_id: str | None,
+        group_id: str | None,
+        fed_by: str | None,
+        date_from: str | None,
+        date_to: str | None,
+        meal_type: MealType | None,
+        limit: int,
+        offset: int,
+    ) -> list[MealSummary]:
+        if not pet_id and not group_id:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="You don't have permission to delete this meal record"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Provide pet_id or group_id",
             )
 
-        # Soft delete
-        await self.db.execute("UPDATE meals SET is_active = FALSE WHERE id = $1", meal_id)
+        # Resolve and authorize the group scope.
+        if not group_id:
+            pet = await self._get_pet(pet_id)
+            group_id = pet["group_id"]
+        await self._require_can_view(group_id, user_id)
 
-        return {"message": "Meal record has been deleted successfully"}
+        conditions = ["m.is_active = TRUE", "m.group_id = $1"]
+        values: list[Any] = [group_id]
+        if pet_id:
+            values.append(pet_id)
+            conditions.append(f"m.pet_id = ${len(values)}")
+        if fed_by:
+            values.append(fed_by)
+            conditions.append(f"m.user_id = ${len(values)}")
+        if date_from:
+            values.append(_parse_date_start(date_from))
+            conditions.append(f"m.timestamp >= ${len(values)}")
+        if date_to:
+            values.append(_parse_date_end(date_to))
+            conditions.append(f"m.timestamp <= ${len(values)}")
+        if meal_type:
+            values.append(meal_type.value)
+            conditions.append(f"m.meal_type = ${len(values)}")
 
-    # ================== Specialized Query Operations ==================
+        values_with_pagination = values + [limit, offset]
+        limit_placeholder = f"${len(values_with_pagination) - 1}"
+        offset_placeholder = f"${len(values_with_pagination)}"
+
+        rows = await self._db.read(
+            f"""
+            SELECT
+                m.*,
+                p.name AS pet_name,
+                f.brand AS food_brand,
+                f.product_name AS food_product_name,
+                u.name AS fed_by_name
+            FROM {meal_table} m
+            JOIN {pet_table} p ON p.id = m.pet_id
+            JOIN {food_table} f ON f.id = m.food_id
+            LEFT JOIN {user_table} u ON u.id = m.user_id
+            WHERE {' AND '.join(conditions)}
+            ORDER BY m.timestamp DESC, m.created_at DESC
+            LIMIT {limit_placeholder} OFFSET {offset_placeholder}
+            """,
+            *values_with_pagination,
+        )
+        return [self._row_to_summary(r) for r in rows]
+
+    @staticmethod
+    def _row_to_summary(r: dict) -> MealSummary:
+        return MealSummary(
+            id=r["id"],
+            pet_id=r["pet_id"],
+            pet_name=r["pet_name"],
+            food_id=r["food_id"],
+            food_brand=r["food_brand"],
+            food_product_name=r["food_product_name"],
+            user_id=r["user_id"],
+            fed_by_name=r.get("fed_by_name") or "",
+            group_id=r["group_id"],
+            timestamp=r["timestamp"],
+            meal_type=r.get("meal_type"),
+            serving_type=r["serving_type"],
+            serving_amount=r["serving_amount"],
+            actual_weight_g=r["actual_weight_g"],
+            calories=r["calories"],
+            created_at=r["created_at"],
+            updated_at=r["updated_at"],
+        )
+
+    # ────── today ──────
 
     async def get_today_meals(
-        self, filters: MealQueryFilters, user_id: str, local_date: str = None
-    ) -> TodayMealSummary:
-        """
-        Get today's meals with summary statistics.
+        self,
+        user_id: str,
+        pet_id: str | None,
+        group_id: str | None,
+        fed_by: str | None,
+        meal_type: MealType | None,
+        local_date: str | None,
+    ) -> TodayMealsResponse:
+        if not pet_id and not group_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Provide pet_id or group_id",
+            )
 
-        Args:
-            filters: Query filters (pet_id or group_id required)
-            user_id: User requesting the information
-            local_date: Client's local date in YYYY-MM-DD format. If provided,
-                        this overrides the server's UTC date for determining "today".
-
-        Returns:
-            TodayMealSummary: Today's feeding summary
-        """
+        # Default "today" to the server's UTC day if the client didn't tell us
+        # its calendar day. iOS should always send local_date so we don't roll
+        # over too early/late for users in other timezones.
         if local_date:
             try:
-                dt.strptime(local_date, "%Y-%m-%d")
+                d = date.fromisoformat(local_date)
             except ValueError:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="local_date must be in YYYY-MM-DD format",
                 )
-            today = local_date
         else:
-            today = dt.now(tz.utc).strftime("%Y-%m-%d")
+            d = datetime.now(timezone.utc).date()
+        day_start = datetime.combine(d, time.min, tzinfo=timezone.utc)
+        day_end = day_start + timedelta(days=1)
 
-        # Set date filters to today
-        today_filters = MealQueryFilters(**filters.model_dump())
-        today_filters.date_from = today
-        today_filters.date_to = today
-        today_filters.limit = 1000  # Get all today's meals
-        today_filters.offset = 0
+        # Pull the day's meals via the existing list helper but with a tight
+        # date range, then filter in Python for the exact half-open interval.
+        meals = await self.list_meals(
+            user_id=user_id,
+            pet_id=pet_id,
+            group_id=group_id,
+            fed_by=fed_by,
+            date_from=d.isoformat(),
+            date_to=d.isoformat(),
+            meal_type=meal_type,
+            limit=1000,
+            offset=0,
+        )
+        meals = [m for m in meals if day_start <= m.timestamp < day_end]
 
-        # Get today's meals
-        meals = await self.get_meals(today_filters, user_id)
-
-        # Calculate summary statistics
         total_meals = len(meals)
-        total_calories = sum(meal.calories for meal in meals)
-        total_weight = sum(meal.actual_weight_g for meal in meals)
+        total_calories = sum(m.calories for m in meals)
+        total_weight_g = sum(m.actual_weight_g for m in meals)
+        counts = {t.value: 0 for t in MealType}
+        for m in meals:
+            if m.meal_type:
+                counts[m.meal_type.value] = counts.get(m.meal_type.value, 0) + 1
 
-        # Count by meal type
-        meal_type_counts = {"breakfast": 0, "lunch": 0, "dinner": 0, "snack": 0}
-        for meal in meals:
-            if meal.meal_type:
-                meal_type_counts[meal.meal_type.value] += 1
+        pet_name: str | None = None
+        daily_calorie_target: int | None = None
+        target_pct: float | None = None
+        pets_fed: int | None = None
+        if pet_id:
+            pet = await self._get_pet(pet_id)
+            pet_name = pet["name"]
+            daily_calorie_target = pet.get("daily_calorie_target")
+            if daily_calorie_target:
+                target_pct = round(total_calories / float(daily_calorie_target) * 100.0, 2)
+        if group_id and not pet_id:
+            pets_fed = len({m.pet_id for m in meals})
 
-        summary = TodayMealSummary(
-            date=today,
+        return TodayMealsResponse(
+            date=d.isoformat(),
             total_meals=total_meals,
-            total_calories=total_calories,
-            total_weight_g=total_weight,
-            breakfast_count=meal_type_counts["breakfast"],
-            lunch_count=meal_type_counts["lunch"],
-            dinner_count=meal_type_counts["dinner"],
-            snack_count=meal_type_counts["snack"],
+            total_calories=round(total_calories, 2),
+            total_weight_g=round(total_weight_g, 2),
+            breakfast_count=counts[MealType.BREAKFAST.value],
+            lunch_count=counts[MealType.LUNCH.value],
+            dinner_count=counts[MealType.DINNER.value],
+            snack_count=counts[MealType.SNACK.value],
+            pet_id=pet_id,
+            pet_name=pet_name,
+            daily_calorie_target=daily_calorie_target,
+            calorie_target_percentage=target_pct,
+            group_id=group_id,
+            pets_fed_count=pets_fed,
+            meals=meals,
         )
 
-        # Add pet-specific information if filtering by pet
-        if filters.pet_id:
-            pet_context = await self._get_pet_group_context(filters.pet_id)
+    # ────── summary (statistics over date range) ──────
 
-            # Get pet's calorie target
-            pet_query = "SELECT daily_calorie_target FROM pets WHERE id = $1"
-            pet_data = await self.db.read_one(pet_query, filters.pet_id)
-
-            summary.pet_id = filters.pet_id
-            summary.pet_name = pet_context["pet_name"]
-            summary.daily_calorie_target = pet_data.get("daily_calorie_target") if pet_data else None
-
-            if summary.daily_calorie_target and summary.daily_calorie_target > 0:
-                summary.calorie_target_percentage = (total_calories / summary.daily_calorie_target) * 100
-
-        # Add group-specific information if filtering by group
-        elif filters.group_id:
-            unique_pets = set(meal.pet_id for meal in meals)
-            summary.group_id = filters.group_id
-            summary.pets_fed_count = len(unique_pets)
-
-        return summary
-
-    async def get_meal_statistics(self, filters: MealQueryFilters, user_id: str) -> MealStatistics:
-        """
-        Generate comprehensive meal statistics for a time period using SQL aggregation.
-        """
-        # Require date range for statistics
-        if not filters.date_from or not filters.date_to:
+    async def get_statistics(
+        self,
+        user_id: str,
+        pet_id: str | None,
+        group_id: str | None,
+        date_from: str,
+        date_to: str,
+        fed_by: str | None,
+        meal_type: MealType | None,
+    ) -> MealStatistics:
+        if not pet_id and not group_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Date range (date_from and date_to) is required for statistics",
+                detail="Provide pet_id or group_id",
             )
 
-        # Validate permissions
-        if filters.pet_id:
-            pet_context = await self._get_pet_group_context(filters.pet_id)
-            group_id = pet_context["group_id"]
-            if not await self._can_view_meals(user_id, group_id):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="You don't have permission to view meals for this pet",
-                )
-        elif filters.group_id:
-            if not await self._can_view_meals(user_id, filters.group_id):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="You don't have permission to view meals for this group",
-                )
-        else:
+        try:
+            d_from = date.fromisoformat(date_from)
+            d_to = date.fromisoformat(date_to)
+        except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Either pet_id or group_id must be provided",
+                detail="date_from / date_to must be in YYYY-MM-DD format",
             )
-
-        # Calculate date range
-        from_date = dt.strptime(filters.date_from, "%Y-%m-%d")
-        to_date = dt.strptime(filters.date_to, "%Y-%m-%d")
-        total_days = (to_date - from_date).days + 1
-
-        # Build scope filter
-        scope_filter = "m.pet_id = $3" if filters.pet_id else "p.group_id = $3"
-        scope_param = filters.pet_id if filters.pet_id else filters.group_id
-
-        # 1. Aggregate totals in SQL
-        agg_sql = f"""
-        SELECT
-            COUNT(*) AS total_meals,
-            COALESCE(SUM(m.calories), 0) AS total_calories,
-            COALESCE(SUM(m.actual_weight_g), 0) AS total_weight_g,
-            COALESCE(SUM(m.protein_g), 0) AS total_protein,
-            COALESCE(SUM(m.fat_g), 0) AS total_fat,
-            COALESCE(SUM(m.moisture_g), 0) AS total_moisture,
-            COALESCE(SUM(m.carbohydrate_g), 0) AS total_carbs
-        FROM meals m
-        JOIN pets p ON m.pet_id = p.id
-        WHERE m.is_active = TRUE
-          AND DATE(m.timestamp) BETWEEN $1 AND $2
-          AND {scope_filter}
-        """
-        agg = await self.db.read_one(agg_sql, filters.date_from, filters.date_to, scope_param)
-
-        total_meals = int(agg["total_meals"])
-        if total_meals == 0:
-            return MealStatistics(
-                date_from=filters.date_from,
-                date_to=filters.date_to,
-                total_days=0,
-                total_meals=0,
-                total_calories=0,
-                total_weight_g=0,
-                average_meals_per_day=0,
-                average_calories_per_day=0,
-                average_protein_g_per_day=0,
-                average_fat_g_per_day=0,
-                average_moisture_g_per_day=0,
-                average_carbohydrate_g_per_day=0,
-                meal_type_distribution={},
-                most_active_feeders=[],
-                most_used_foods=[],
+        if d_from > d_to:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="date_from must be <= date_to",
             )
+        total_days = (d_to - d_from).days + 1
 
-        total_calories = float(agg["total_calories"])
-        total_weight_g = float(agg["total_weight_g"])
-        total_protein = float(agg["total_protein"])
-        total_fat = float(agg["total_fat"])
-        total_moisture = float(agg["total_moisture"])
-        total_carbs = float(agg["total_carbs"])
+        if not group_id:
+            pet = await self._get_pet(pet_id)
+            group_id = pet["group_id"]
+        await self._require_can_view(group_id, user_id)
 
-        # 2. Meal type distribution via SQL GROUP BY
-        type_sql = f"""
-        SELECT COALESCE(m.meal_type::text, 'unspecified') AS meal_type, COUNT(*) AS cnt
-        FROM meals m
-        JOIN pets p ON m.pet_id = p.id
-        WHERE m.is_active = TRUE
-          AND DATE(m.timestamp) BETWEEN $1 AND $2
-          AND {scope_filter}
-        GROUP BY meal_type
-        """
-        type_rows = await self.db.read(type_sql, filters.date_from, filters.date_to, scope_param)
-        meal_type_distribution = {row["meal_type"]: int(row["cnt"]) for row in type_rows}
+        conditions = ["m.is_active = TRUE", "m.group_id = $1"]
+        values: list[Any] = [group_id]
+        if pet_id:
+            values.append(pet_id)
+            conditions.append(f"m.pet_id = ${len(values)}")
+        if fed_by:
+            values.append(fed_by)
+            conditions.append(f"m.user_id = ${len(values)}")
+        if meal_type:
+            values.append(meal_type.value)
+            conditions.append(f"m.meal_type = ${len(values)}")
+        values.append(_parse_date_start(date_from))
+        conditions.append(f"m.timestamp >= ${len(values)}")
+        values.append(_parse_date_end(date_to))
+        conditions.append(f"m.timestamp <= ${len(values)}")
 
-        # 3. Top 5 feeders via SQL GROUP BY + JOIN
-        feeder_sql = f"""
-        SELECT u.name AS user_name, COUNT(*) AS meal_count
-        FROM meals m
-        JOIN pets p ON m.pet_id = p.id
-        JOIN users u ON m.user_id = u.id
-        WHERE m.is_active = TRUE
-          AND DATE(m.timestamp) BETWEEN $1 AND $2
-          AND {scope_filter}
-        GROUP BY u.id, u.name
-        ORDER BY meal_count DESC
-        LIMIT 5
-        """
-        feeder_rows = await self.db.read(feeder_sql, filters.date_from, filters.date_to, scope_param)
-        most_active_feeders = [
-            {"user_name": row["user_name"], "meal_count": int(row["meal_count"])} for row in feeder_rows
-        ]
+        agg = (
+            await self._db.read_one(
+                f"""
+                SELECT
+                    COUNT(*)::int AS total_meals,
+                    COALESCE(SUM(m.calories), 0)::float AS total_calories,
+                    COALESCE(SUM(m.actual_weight_g), 0)::float AS total_weight_g,
+                    COALESCE(SUM(m.protein_g), 0)::float AS total_protein_g,
+                    COALESCE(SUM(m.fat_g), 0)::float AS total_fat_g,
+                    COALESCE(SUM(m.moisture_g), 0)::float AS total_moisture_g,
+                    COALESCE(SUM(m.carbohydrate_g), 0)::float AS total_carbohydrate_g
+                FROM {meal_table} m
+                WHERE {' AND '.join(conditions)}
+                """,
+                *values,
+            )
+            or {}
+        )
 
-        # 4. Top 5 foods via SQL GROUP BY + JOIN
-        food_sql = f"""
-        SELECT CONCAT(f.brand, ' - ', f.product_name) AS food_name, COUNT(*) AS usage_count
-        FROM meals m
-        JOIN pets p ON m.pet_id = p.id
-        JOIN foods f ON m.food_id = f.id
-        WHERE m.is_active = TRUE
-          AND DATE(m.timestamp) BETWEEN $1 AND $2
-          AND {scope_filter}
-        GROUP BY f.id, f.brand, f.product_name
-        ORDER BY usage_count DESC
-        LIMIT 5
-        """
-        food_rows = await self.db.read(food_sql, filters.date_from, filters.date_to, scope_param)
-        most_used_foods = [{"food_name": row["food_name"], "usage_count": int(row["usage_count"])} for row in food_rows]
+        type_rows = await self._db.read(
+            f"""
+            SELECT m.meal_type, COUNT(*)::int AS count
+            FROM {meal_table} m
+            WHERE {' AND '.join(conditions)}
+            GROUP BY m.meal_type
+            """,
+            *values,
+        )
+        meal_type_counts = {t.value: 0 for t in MealType}
+        for r in type_rows:
+            if r["meal_type"]:
+                meal_type_counts[r["meal_type"]] = int(r["count"])
+
+        def avg(total: float) -> float:
+            return round(total / total_days, 2) if total_days > 0 else 0.0
 
         return MealStatistics(
-            date_from=filters.date_from,
-            date_to=filters.date_to,
+            date_from=date_from,
+            date_to=date_to,
             total_days=total_days,
-            total_meals=total_meals,
-            total_calories=total_calories,
-            total_weight_g=total_weight_g,
-            average_meals_per_day=total_meals / total_days if total_days > 0 else 0,
-            average_calories_per_day=total_calories / total_days if total_days > 0 else 0,
-            average_protein_g_per_day=total_protein / total_days if total_days > 0 else 0,
-            average_fat_g_per_day=total_fat / total_days if total_days > 0 else 0,
-            average_moisture_g_per_day=total_moisture / total_days if total_days > 0 else 0,
-            average_carbohydrate_g_per_day=total_carbs / total_days if total_days > 0 else 0,
-            meal_type_distribution=meal_type_distribution,
-            most_active_feeders=most_active_feeders,
-            most_used_foods=most_used_foods,
+            total_meals=int(agg.get("total_meals", 0)),
+            total_calories=round(float(agg.get("total_calories", 0.0)), 2),
+            total_weight_g=round(float(agg.get("total_weight_g", 0.0)), 2),
+            average_meals_per_day=avg(float(agg.get("total_meals", 0))),
+            average_calories_per_day=avg(float(agg.get("total_calories", 0.0))),
+            average_protein_g_per_day=avg(float(agg.get("total_protein_g", 0.0))),
+            average_fat_g_per_day=avg(float(agg.get("total_fat_g", 0.0))),
+            average_moisture_g_per_day=avg(float(agg.get("total_moisture_g", 0.0))),
+            average_carbohydrate_g_per_day=avg(float(agg.get("total_carbohydrate_g", 0.0))),
+            meal_type_counts=meal_type_counts,
         )
+
+
+def _parse_date_start(date_str: str) -> datetime:
+    try:
+        d = date.fromisoformat(date_str)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid date '{date_str}' — use YYYY-MM-DD",
+        )
+    return datetime.combine(d, time.min, tzinfo=timezone.utc)
+
+
+def _parse_date_end(date_str: str) -> datetime:
+    try:
+        d = date.fromisoformat(date_str)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid date '{date_str}' — use YYYY-MM-DD",
+        )
+    return datetime.combine(d, time.max, tzinfo=timezone.utc)

@@ -1,90 +1,54 @@
+"""Auth endpoints — OAuth-only (Apple + Google), GET/POST only, no path params."""
+
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordRequestForm
+from fastapi import APIRouter, Depends
 
-from backend.models.auth import EmailAuthRequest, GoogleAuthRequest, RefreshTokenRequest
-from backend.services.auth_service import AuthService
+from backend.models.auth import (
+    AppleLoginRequest,
+    GoogleLoginRequest,
+    LoginResponse,
+    RefreshRequest,
+    TokenPair,
+)
+from backend.models.user import User
+from backend.services.auth_service import AuthService, get_auth_service, get_current_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-auth_service = AuthService()
 
 
-@router.post("/email/login")
-async def validate_email_login_route(request: EmailAuthRequest) -> dict:
-    user = await auth_service.authenticate_user(email=request.email, password=request.pwd)
-    if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
-
-    token_info = await auth_service.get_or_create_token(user.id)
-
-    return {
-        "status": 1,
-        "data": {
-            "access_token": token_info["access_token"],
-            "token_type": token_info["token_type"],
-            "refresh_token": token_info["refresh_token"],
-            "user": {
-                "id": user.id,
-                "email": user.email,
-                "name": user.name,
-                "picture": user.picture if hasattr(user, "picture") else None,
-            },
-        },
-        "message": "Email login successful",
-    }
+@router.post("/google/login", response_model=LoginResponse)
+async def google_login(
+    body: GoogleLoginRequest,
+    service: Annotated[AuthService, Depends(get_auth_service)],
+) -> LoginResponse:
+    return await service.login_with_google(body.token)
 
 
-@router.post("/google/login")
-async def validate_google_login_route(request: GoogleAuthRequest) -> dict:
-    user = await auth_service.authenticate_google_user(request.token)
-    if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Google authorization code")
-
-    token_info = await auth_service.get_or_create_token(user.id)
-
-    return {
-        "status": 1,
-        "data": {
-            "access_token": token_info["access_token"],
-            "token_type": token_info["token_type"],
-            "refresh_token": token_info["refresh_token"],
-            "user": {
-                "id": user.id,
-                "email": user.email,
-                "name": user.name,
-                "picture": user.picture if hasattr(user, "picture") else None,
-            },
-        },
-        "message": "Google login successful",
-    }
+@router.post("/apple/login", response_model=LoginResponse)
+async def apple_login(
+    body: AppleLoginRequest,
+    service: Annotated[AuthService, Depends(get_auth_service)],
+) -> LoginResponse:
+    return await service.login_with_apple(
+        identity_token=body.identity_token,
+        email=str(body.email) if body.email else None,
+        full_name=body.full_name,
+    )
 
 
-@router.post("/token/refresh")
-async def refresh_token_route(request: RefreshTokenRequest) -> dict:
-    token_info = await auth_service.refresh_access_token(request.refresh_token)
-
-    return {
-        "status": 1,
-        "data": {
-            "access_token": token_info["access_token"],
-            "token_type": token_info["token_type"],
-            "refresh_token": token_info["refresh_token"],
-        },
-        "message": "Token refreshed successfully",
-    }
+@router.post("/token/refresh", response_model=TokenPair)
+async def refresh_token(
+    body: RefreshRequest,
+    service: Annotated[AuthService, Depends(get_auth_service)],
+) -> TokenPair:
+    return await service.refresh_tokens(body.refresh_token)
 
 
-@router.post("/access_token")
-async def get_access_token_route(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]) -> dict:
-    user = await auth_service.authenticate_user(name=form_data.username, password=form_data.password)
-    if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect username or password")
-
-    token_info = await auth_service.get_or_create_token(user.id)
-
-    return {
-        "access_token": token_info["access_token"],
-        "token_type": token_info["token_type"],
-        "message": "Access token generated successfully",
-    }
+@router.post("/logout")
+async def logout(
+    user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[AuthService, Depends(get_auth_service)],
+) -> dict:
+    await service.revoke_all_for_user(user.id)
+    return {"id": user.id, "logged_out": True}

@@ -1,15 +1,12 @@
+.DS_Store
 venv
-.env
 __pycache__
-.env.local
-node_modules
-.pyc
-.vscode
-storage
-.vite
-repo
+*.py[cod]
 
-.claude/settings.json
+# Secrets / local config
+.env
+.env.local
+.env.prod
 
 # iOS / Xcode
 **/xcuserdata/
@@ -19,3 +16,7 @@ DerivedData/
 *.dSYM.zip
 *.dSYM
 ios/PetCare/PetCare/Info.plist
+
+# Editor / tool caches
+.vscode
+.claude/settings.json

@@ -1,1 +1,0 @@
-export { useWeight } from './useWeight';

@@ -1,9 +1,0 @@
-/*
- * App.css — intentionally near-empty.
- *
- * The legacy Vite template rules (`#root`, `.logo`, `.card`, `.read-the-docs`)
- * were removed in #52 because they referenced dead colors (`#646cff`) and
- * collided with the design token system. This file is not currently imported
- * anywhere; it is preserved as an empty entry point in case future global
- * non-token CSS needs a home outside `index.css` / `tokens.css`.
- */

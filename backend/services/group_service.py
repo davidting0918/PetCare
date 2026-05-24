@@ -1,705 +1,622 @@
-import random
+"""Group / member / invitation business logic.
+
+Roles are simple enough to inline (no permission matrix):
+  - CREATOR-only:   update_member_role, remove_member, delete_group
+  - CREATOR+MEMBER: create_invitation
+  - any member:     view group, list members, list pets
+
+Ownership / membership is enforced here in the service layer. The FKs on
+`group_members` / `group_invitations` exist for cascade behavior, not for
+app-visible errors — every read/mutation re-checks the active membership row.
+
+ID generation:
+  - group id: 8 lowercase-alphanumeric chars via secrets.token_hex(4)
+    (compatible with the schema's varchar(8))
+  - invitation id: 13-char timestamp+random, matching the schema's varchar(13)
+  - invite_code: 6 uppercase letters (human-shareable)
+"""
+
+import logging
 import secrets
 import string
-from datetime import datetime as dt
-from datetime import timedelta as td
-from datetime import timezone as tz
-from typing import Any, Dict, List, Optional
+from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
 
-from backend.core.db_manager import get_db
+from backend.core.postgres_database import PostgresAsyncClient
 from backend.models.group import (
     CreateGroupRequest,
     CreateInvitationRequest,
-    Group,
-    GroupInfo,
-    GroupInvitation,
     GroupMember,
-    GroupMemberInfo,
-    GroupPermission,
+    GroupPet,
     GroupRole,
-    InvitationInfo,
+    GroupSummary,
+    InvitationCreated,
+    InvitationPreview,
     InvitationStatus,
     JoinGroupRequest,
+    MemberSummary,
     RemoveMemberRequest,
     UpdateMemberRoleRequest,
+    group_invitation_table,
+    group_member_table,
+    group_table,
 )
-from backend.models.user import UserInfo
+
+logger = logging.getLogger(__name__)
+
+MAX_GROUPS_PER_USER = 10
+INVITATION_TTL_DAYS = 7
 
 
 class GroupService:
-    """
-    Enhanced GroupService using dedicated GroupMember relationships.
-    Provides simple permission control with CREATOR, MEMBER, and VIEWER roles.
+    def __init__(self, db: PostgresAsyncClient):
+        self._db = db
 
-    Permission Model:
-    - CREATOR: Full control (create invitations, update roles, remove members)
-    - MEMBER: Can view group, create invitations, participate
-    - VIEWER: Read-only access to group content
+    # ────── ID generation ──────
 
-    Core functions:
-    1. create_group - Create a new group with creator membership
-    2. create_invitation - Generate invite codes for joining (any member)
-    3. join_group_by_code - Join group using invite code
-    4. update_member_role - Update member permissions (CREATOR only)
-    5. remove_member - Remove members from group (CREATOR only)
-    """
-
-    def __init__(self):
-        # No need to initialize database here - it's handled globally
-        pass
-
-    @property
-    def db(self):
-        """Get database client from global manager"""
-        return get_db()
-
-    @staticmethod
-    def _generate_invitation_id() -> str:
-        """
-        use 10 digits current timestamp + 3 digit random number
-        """
-        return str(int(dt.now(tz.utc).timestamp())) + str(random.randint(100, 999))
-
-    @staticmethod
-    def _generate_group_id() -> str:
-        """
-        Generate a unique 8-character group ID using lowercase letters and digits.
-        This provides 36^8 ≈ 2.8 trillion possible combinations with minimal collision risk.
-
-        Returns:
-            str: 8-character group ID (e.g., 'a5b2c9x1')
-        """
-        alphabet = string.ascii_lowercase + string.digits  # a-z, 0-9 (36 characters)
-        return "".join(secrets.choice(alphabet) for _ in range(8))
-
-    async def _get_user_membership(self, group_id: str, user_id: str) -> Optional[GroupMember]:
-        """Get user's membership info if they are a member of the group"""
-
-        sql = f"""
-        select * from group_members gm
-        where gm.group_id = '{group_id}' and gm.user_id = '{user_id}' and gm.is_active = True"""
-        membership_dict = await self.db.read_one(sql)
-        return GroupMember(**membership_dict) if membership_dict else None
-
-    async def _is_group_member(self, group_id: str, user_id: str) -> bool:
-        """Check if user is a member of the group"""
-        membership = await self._get_user_membership(group_id, user_id)
-        return membership is not None
-
-    async def _check_permission(self, group_id: str, user_id: str, permission: str) -> bool:
-        """Check if user has specific permission in the group"""
-        membership = await self._get_user_membership(group_id, user_id)
-        if not membership:
-            return False
-        return GroupPermission.can_perform(membership.role, permission)
-
-    async def _add_user_to_group(
-        self, group_id: str, user_id: str, role: GroupRole = GroupRole.MEMBER, invited_by: Optional[str] = None
-    ):
-        """
-        Atomically add user to group by creating a GroupMember record.
-        This replaces the old dual-list update system with a dedicated membership system.
-        """
-        # Check if membership already exists (avoid duplicates)
-        existing_membership = await self._get_user_membership(group_id, user_id)
-        if existing_membership:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="User is already a member of this group"
+    async def _generate_group_id(self) -> str:
+        for _ in range(5):
+            candidate = secrets.token_hex(4)  # 8 hex chars
+            existing = await self._db.read_one(
+                f"SELECT 1 FROM {group_table} WHERE id = $1", candidate
             )
+            if existing is None:
+                return candidate
+        raise RuntimeError("Failed to generate a unique group id after 5 attempts")
 
-        # Create new membership record
-        membership = GroupMember(
-            group_id=group_id,
-            user_id=user_id,
-            role=role,
-            created_at=dt.now(tz.utc),
-            updated_at=dt.now(tz.utc),
-            invited_by=invited_by,
-            is_active=True,
+    def _generate_invitation_id(self) -> str:
+        # Schema's varchar(13). Timestamp (10) + random (3) keeps natural sort
+        # by creation time without needing a separate created_at index.
+        return str(int(datetime.now(timezone.utc).timestamp())) + str(secrets.randbelow(900) + 100)
+
+    async def _generate_invite_code(self) -> str:
+        # 6 uppercase letters, retry on the rare collision (unique constraint).
+        alphabet = string.ascii_uppercase
+        for _ in range(5):
+            candidate = "".join(secrets.choice(alphabet) for _ in range(6))
+            existing = await self._db.read_one(
+                f"SELECT 1 FROM {group_invitation_table} WHERE invite_code = $1", candidate
+            )
+            if existing is None:
+                return candidate
+        raise RuntimeError("Failed to generate a unique invite code after 5 attempts")
+
+    # ────── Membership helpers ──────
+
+    async def _get_membership(self, group_id: str, user_id: str) -> GroupMember | None:
+        row = await self._db.read_one(
+            f"""
+            SELECT * FROM {group_member_table}
+            WHERE group_id = $1 AND user_id = $2 AND is_active = TRUE
+            """,
+            group_id, user_id,
         )
+        return GroupMember(**row) if row else None
 
-        # Insert membership record
-        await self.db.insert_one("group_members", membership.model_dump())
-
-    # ================== Permission Management Functions (CREATOR Only) ==================
-
-    async def update_member_role(
-        self, group_id: str, request: UpdateMemberRoleRequest, actor_user_id: str
-    ) -> Dict[str, Any]:
-        """
-        Update a member's role in the group (CREATOR only).
-
-        Args:
-            group_id: Target group ID
-            request: Role update request (user_id, new_role)
-            actor_user_id: User performing the action (must be CREATOR)
-
-        Returns:
-            dict: Success message with updated member info
-        """
-        # Get actor's membership - only CREATOR can update roles
-        actor_membership = await self._get_user_membership(group_id, actor_user_id)
-        if not actor_membership:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are not a member of this group")
-
-        # Simple permission check: Only CREATOR can update member roles
-        if actor_membership.role != GroupRole.CREATOR:
+    async def _require_membership(self, group_id: str, user_id: str) -> GroupMember:
+        membership = await self._get_membership(group_id, user_id)
+        if membership is None:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="Only group creators can change member roles"
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not a member of this group",
             )
+        return membership
 
-        # Get target member's current membership
-        target_membership = await self._get_user_membership(group_id, request.user_id)
-        if not target_membership:
+    async def _require_role(
+        self, group_id: str, user_id: str, allowed: set[GroupRole]
+    ) -> GroupMember:
+        membership = await self._require_membership(group_id, user_id)
+        if membership.role not in allowed:
+            roles = ", ".join(sorted(r.value for r in allowed))
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Target user is not a member of this group"
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"This action requires one of these roles: {roles}",
             )
+        return membership
 
-        # Prevent assigning CREATOR role (only one creator per group)
-        if request.new_role == GroupRole.CREATOR:
+    async def _get_active_group(self, group_id: str) -> dict:
+        row = await self._db.read_one(
+            f"SELECT * FROM {group_table} WHERE id = $1 AND is_active = TRUE",
+            group_id,
+        )
+        if row is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Group not found"
+            )
+        return row
+
+    async def _add_member(
+        self,
+        group_id: str,
+        user_id: str,
+        role: GroupRole,
+        invited_by: str | None = None,
+    ) -> None:
+        existing = await self._get_membership(group_id, user_id)
+        if existing:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot assign CREATOR role - only one creator per group",
+                detail="User is already a member of this group",
             )
+        now = datetime.now(timezone.utc)
+        await self._db.insert_one(
+            group_member_table,
+            {
+                "group_id": group_id,
+                "user_id": user_id,
+                "role": role.value,
+                "invited_by": invited_by,
+                "is_active": True,
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
 
-        # Prevent changing creator's role
-        if target_membership.role == GroupRole.CREATOR:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot change the creator's role")
+    async def _member_count(self, group_id: str) -> int:
+        row = await self._db.read_one(
+            f"""
+            SELECT COUNT(*)::int AS count FROM {group_member_table}
+            WHERE group_id = $1 AND is_active = TRUE
+            """,
+            group_id,
+        )
+        return int(row["count"]) if row else 0
 
-        # Update the member's role
-        sql = f"""
-        update group_members
-        set role = '{request.new_role.value}'
-        where group_id = '{group_id}' and user_id = '{request.user_id}'
-        """
-        await self.db.execute(sql)
+    # ────── Core: create / delete groups ──────
 
-        return {
-            "user_id": request.user_id,
-            "new_role": request.new_role.value,
-            "updated_by": actor_user_id,
-        }
-
-    async def remove_member(self, group_id: str, request: RemoveMemberRequest, actor_user_id: str) -> Dict[str, Any]:
-        """
-        Remove a member from the group (CREATOR only).
-
-        Args:
-            group_id: Target group ID
-            request: Member removal request (user_id)
-            actor_user_id: User performing the action (must be CREATOR)
-
-        Returns:
-            dict: Success message
-        """
-        # Get actor's membership - only CREATOR can remove members
-        actor_membership = await self._get_user_membership(group_id, actor_user_id)
-        if not actor_membership:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are not a member of this group")
-
-        # Simple permission check: Only CREATOR can remove members
-        if actor_membership.role != GroupRole.CREATOR:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only group creators can remove members")
-
-        # Get target member's current membership
-        target_membership = await self._get_user_membership(group_id, request.user_id)
-        if not target_membership:
+    async def create_group(self, request: CreateGroupRequest, creator_id: str) -> GroupSummary:
+        rows = await self._db.read(
+            f"""
+            SELECT 1 FROM {group_table}
+            WHERE creator_id = $1 AND is_active = TRUE
+            """,
+            creator_id,
+        )
+        if len(rows) >= MAX_GROUPS_PER_USER:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Target user is not a member of this group"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"You have reached the maximum of {MAX_GROUPS_PER_USER} groups",
             )
 
-        # Prevent removing the group creator (creator cannot remove themselves)
-        if target_membership.role == GroupRole.CREATOR:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot remove the group creator")
+        group_id = await self._generate_group_id()
+        now = datetime.now(timezone.utc)
+        await self._db.insert_one(
+            group_table,
+            {
+                "id": group_id,
+                "name": request.name,
+                "creator_id": creator_id,
+                "is_active": True,
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+        await self._add_member(group_id, creator_id, GroupRole.CREATOR)
 
-        # Deactivate the membership
-        sql = f"""
-        update group_members
-        set is_active = False
-        where group_id = '{group_id}' and user_id = '{request.user_id}'
-        """
-        await self.db.execute(sql)
-
-        return {
-            "removed_group_id": group_id,
-            "removed_user_id": request.user_id,
-            "removed_by": actor_user_id,
-            "updated_at": dt.now(tz.utc),
-        }
-
-    async def delete_group(self, group_id: str, actor_user_id: str) -> Dict[str, Any]:
-        """
-        Soft delete a group (CREATOR only).
-        Sets is_active to False for the group instead of physically deleting it.
-
-        Args:
-            group_id: Target group ID to delete
-            actor_user_id: User performing the action (must be CREATOR)
-
-        Returns:
-            dict: Success message with deleted group info
-        """
-        # Get actor's membership - only CREATOR can delete group
-        actor_membership = await self._get_user_membership(group_id, actor_user_id)
-        if not actor_membership:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are not a member of this group")
-
-        # Only CREATOR can delete the group
-        if actor_membership.role != GroupRole.CREATOR:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="Only group creators can delete the group"
-            )
-
-        # Check if group exists and is active
-        sql = f"""
-        select id, name, creator_id, is_active
-        from groups
-        where id = '{group_id}'
-        """
-        result = await self.db.read_one(sql)
-        if not result:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
-
-        if not result["is_active"]:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Group is already deleted")
-
-        # Soft delete the group by setting is_active to False
-        sql = f"""
-        update groups
-        set is_active = False, updated_at = '{dt.now(tz.utc).isoformat()}'
-        where id = '{group_id}'
-        """
-        await self.db.execute(sql)
-
-        return {
-            "deleted_group_id": group_id,
-            "group_name": result["name"],
-            "deleted_by": actor_user_id,
-            "deleted_at": dt.now(tz.utc),
-            "message": "Group has been successfully deleted",
-        }
-
-    # ================== Core Functions ==================
-
-    async def create_group(self, request: CreateGroupRequest, creator_id: str) -> GroupInfo:
-        """
-        Create a new group with the creator as the first member.
-
-        Args:
-            request: Group creation details (name)
-            creator_id: User ID of the group creator
-
-        Returns:
-            GroupInfo: Created group information
-        """
-        # first need to check if the user has created more than 10 groups
-        sql = f"""select * from groups g where g.creator_id = '{creator_id}' and g.is_active = True"""
-        user_groups = await self.db.read(sql)
-        if len(user_groups) >= 10:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="You have reached the maximum number of groups"
-            )
-        # Generate unique group ID using secure random alphanumeric characters
-        group_id = self._generate_group_id()
-        current_time = dt.now(tz.utc)
-
-        group = Group(
+        # `personal_group_id` is populated by AuthService for personal groups.
+        return GroupSummary(
             id=group_id,
             name=request.name,
             creator_id=creator_id,
-            created_at=current_time,
-            updated_at=current_time,
-            is_active=True,
+            member_count=1,
+            role=GroupRole.CREATOR,
+            is_personal=False,
+            created_at=now,
+            updated_at=now,
         )
 
-        # Save group to database
-        await self.db.insert_one("groups", group.model_dump())
+    async def create_personal_group(self, owner_id: str, owner_name: str) -> str:
+        """Used by auth_service on first login. Returns the new group id.
 
-        # Add creator as first member with CREATOR role
-        await self._add_user_to_group(group_id=group_id, user_id=creator_id, role=GroupRole.CREATOR)
-
-        return GroupInfo(
-            id=group.id,
-            name=group.name,
-            creator_id=group.creator_id,
-            created_at=group.created_at,
-            updated_at=group.updated_at,
-            member_count=1,  # Creator is the only member initially
-            is_creator=True,
-            is_active=group.is_active,
+        Skips the MAX_GROUPS_PER_USER check — every user gets exactly one
+        personal group regardless of how many they otherwise create.
+        """
+        group_id = await self._generate_group_id()
+        now = datetime.now(timezone.utc)
+        await self._db.insert_one(
+            group_table,
+            {
+                "id": group_id,
+                "name": owner_name,
+                "creator_id": owner_id,
+                "is_active": True,
+                "created_at": now,
+                "updated_at": now,
+            },
         )
+        await self._add_member(group_id, owner_id, GroupRole.CREATOR)
+        return group_id
+
+    async def delete_group(self, group_id: str, actor_id: str) -> dict:
+        await self._require_role(group_id, actor_id, {GroupRole.CREATOR})
+        group_row = await self._get_active_group(group_id)
+
+        # Refuse to delete the actor's personal group — it's the default
+        # container for their pets.
+        user_row = await self._db.read_one(
+            "SELECT personal_group_id FROM users WHERE id = $1", actor_id
+        )
+        if user_row and user_row.get("personal_group_id") == group_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot delete your personal group",
+            )
+
+        now = datetime.now(timezone.utc)
+        await self._db.execute(
+            f"UPDATE {group_table} SET is_active = FALSE, updated_at = $1 WHERE id = $2",
+            now, group_id,
+        )
+        return {
+            "deleted_group_id": group_id,
+            "group_name": group_row["name"],
+            "deleted_by": actor_id,
+            "deleted_at": now,
+        }
+
+    # ────── Invitations ──────
 
     async def create_invitation(
-        self, group_id: str, user: UserInfo, request: CreateInvitationRequest
-    ) -> Dict[str, Any]:
-        """
-        Create an invitation for someone to join the group.
-        Only CREATOR and MEMBER can create invitations.
-
-        Args:
-            group_id: Target group
-            user: User creating the invitation
-            request: Request containing the role to assign to the invited user
-
-        Returns:
-            Dict containing invitation info and invite code
-        """
-        # Check user is a member of the group with appropriate role
-        membership = await self._get_user_membership(group_id, user.id)
-        if not membership:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are not a member of this group")
-
-        # Only CREATOR and MEMBER can create invitations
-        if membership.role == GroupRole.VIEWER:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="Only CREATOR and MEMBER can create invitations"
-            )
-
-        # Cannot create invitation for CREATOR role
+        self, actor_id: str, request: CreateInvitationRequest
+    ) -> InvitationCreated:
+        await self._require_role(
+            request.group_id, actor_id, {GroupRole.CREATOR, GroupRole.MEMBER}
+        )
         if request.role == GroupRole.CREATOR:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot create invitation for CREATOR role"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot create an invitation for the CREATOR role",
             )
 
-        # Generate invitation ID
-        invitation_id = self._generate_invitation_id()  # Reuse the same secure ID generator
-        invite_code = "".join(secrets.choice(string.ascii_uppercase) for _ in range(6))  # 6 uppercase letters
-        current_time = dt.now(tz.utc)
-        expires_at = dt.now(tz.utc) + td(days=7)  # 7 days expiry
+        group_row = await self._get_active_group(request.group_id)
+        now = datetime.now(timezone.utc)
+        expires_at = now + timedelta(days=INVITATION_TTL_DAYS)
+        invitation_id = self._generate_invitation_id()
+        invite_code = await self._generate_invite_code()
 
-        invitation = GroupInvitation(
+        await self._db.insert_one(
+            group_invitation_table,
+            {
+                "id": invitation_id,
+                "group_id": request.group_id,
+                "invited_by": actor_id,
+                "invite_code": invite_code,
+                "status": InvitationStatus.PENDING.value,
+                "role": request.role.value,
+                "expires_at": expires_at,
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+
+        return InvitationCreated(
             id=invitation_id,
-            group_id=group_id,
-            invited_by=user.id,
+            group_id=request.group_id,
+            group_name=group_row["name"],
             invite_code=invite_code,
             role=request.role,
-            status=InvitationStatus.PENDING,
-            created_at=current_time,
             expires_at=expires_at,
+            share_message=f"Join my pet care group '{group_row['name']}' with code: {invite_code}",
         )
 
-        # Save invitation
-        await self.db.insert_one("group_invitations", invitation.model_dump())
-
-        # Get group and user info for response
-        sql = f"""select * from groups g where g.id = '{group_id}'"""
-        group_dict = await self.db.read_one(sql)
-
-        return {
-            "invitation": InvitationInfo(
-                id=invitation.id,
-                group_name=group_dict["name"],
-                invited_by_name=user.name,
-                invite_code=invite_code,
-                created_at=invitation.created_at,
-                expires_at=invitation.expires_at,
-                role=request.role,
-            ).model_dump(),
-            "invite_code": invite_code,
-            "share_message": f"Join my pet care group '{group_dict['name']}' with code: {invite_code}",
-        }
-
-    async def get_invitation_info(self, invite_code: str, user_id: str) -> Dict[str, Any]:
-        """
-        Retrieve invitation information without joining the group.
-        Validates invitation exists and is not expired.
-        Used to preview invitation details before confirming join.
-
-        Args:
-            invite_code: Invitation code to lookup
-            user_id: User requesting the information
-
-        Returns:
-            Dict with group_name, invited_by_name, role, expires_at, group_id
-
-        Raises:
-            HTTPException: If invitation not found, expired, or user already member
-        """
-        current_time = dt.now(tz.utc)
-
-        # Find valid invitation
-        sql = f"""
-        select * from group_invitations gi
-        where
-            gi.invite_code = '{invite_code}'
-            and gi.status = '{InvitationStatus.PENDING.value}'
-            and gi.expires_at > '{current_time}'
-        """
-        invitation_dict = await self.db.read_one(sql)
-
-        if not invitation_dict:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invalid or expired invitation code")
-
-        group_id = invitation_dict["group_id"]
-
-        # Check if user is already a member
-        if await self._is_group_member(group_id, user_id):
+    async def get_invitation_preview(self, invite_code: str, viewer_id: str) -> InvitationPreview:
+        now = datetime.now(timezone.utc)
+        invitation = await self._db.read_one(
+            f"""
+            SELECT * FROM {group_invitation_table}
+            WHERE invite_code = $1 AND status = $2 AND expires_at > $3
+            """,
+            invite_code.upper(), InvitationStatus.PENDING.value, now,
+        )
+        if invitation is None:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="You are already a member of this group"
+                status_code=status.HTTP_404_NOT_FOUND, detail="Invalid or expired invitation code"
             )
 
-        # Get group information
-        sql = f"""select * from groups g where g.id = '{group_id}' and g.is_active = True"""
-        group_dict = await self.db.read_one(sql)
-
-        if not group_dict:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found or inactive")
-
-        # Get inviter information
-        sql = f"""select name, email from users where id = '{invitation_dict['invited_by']}' and is_active = True"""
-        inviter_dict = await self.db.read_one(sql)
-
-        if not inviter_dict:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inviter not found")
-
-        return {
-            "id": invitation_dict["id"],
-            "group_id": group_id,
-            "group_name": group_dict["name"],
-            "invited_by_name": inviter_dict["name"],
-            "invite_code": invite_code,
-            "role": invitation_dict["role"],
-            "created_at": invitation_dict["created_at"],
-            "expires_at": invitation_dict["expires_at"],
-        }
-
-    async def join_group_by_code(self, request: JoinGroupRequest, user_id: str) -> GroupInfo:
-        """
-        Join a group using an invitation code.
-
-        Args:
-            request: Join request with invite code
-            user_id: User wanting to join
-
-        Returns:
-            GroupInfo: Information about the joined group
-        """
-        current_time = dt.now(tz.utc)
-
-        # Find valid invitation
-        sql = f"""
-        select * from group_invitations gi
-        where
-            gi.invite_code = '{request.invite_code}'
-            and gi.status = '{InvitationStatus.PENDING.value}'
-            and gi.expires_at > '{current_time}'
-        """
-        invitation_dict = await self.db.read_one(sql)
-
-        if not invitation_dict:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invalid or expired invitation code")
-
-        group_id = invitation_dict["group_id"]
-
-        # Check if user is already a member
-        if await self._is_group_member(group_id, user_id):
+        # If the viewer is already a member, surface that early so the client
+        # can route them straight to the group instead of asking them to "join".
+        membership = await self._get_membership(invitation["group_id"], viewer_id)
+        if membership:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="You are already a member of this group"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="You are already a member of this group",
             )
 
-        # Get the role from invitation
-        role = GroupRole(invitation_dict["role"])
+        group_row = await self._get_active_group(invitation["group_id"])
+        inviter_row = await self._db.read_one(
+            "SELECT name FROM users WHERE id = $1 AND is_active = TRUE",
+            invitation["invited_by"],
+        )
+        if inviter_row is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Inviter no longer exists"
+            )
 
-        # Add user to group atomically with the role specified in invitation
-        # The invited_by field is retrieved from the invitation
-        invited_by = invitation_dict.get("invited_by")  # Who created this invitation
-        await self._add_user_to_group(group_id=group_id, user_id=user_id, role=role, invited_by=invited_by)
-
-        # Update invitation status
-        sql = f"""
-        update
-            group_invitations
-        set status = '{InvitationStatus.ACCEPTED.value}', accepted_by = '{user_id}', updated_at = '{current_time}'
-        where id = '{invitation_dict['id']}'
-        """
-        await self.db.execute(sql)
-
-        # Get updated group info
-        sql = f"""select * from groups g where g.id = '{group_id}' and g.is_active = True"""
-        group_dict = await self.db.read_one(sql)
-
-        if not group_dict:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to join group")
-
-        sql = f"""
-        select count(*) from group_members gm where gm.group_id = '{group_id}' and gm.is_active = True
-        """
-        member_count = await self.db.read_one(sql)
-
-        return GroupInfo(
-            id=group_dict["id"],
-            name=group_dict["name"],
-            creator_id=group_dict["creator_id"],
-            created_at=group_dict["created_at"],
-            updated_at=group_dict["updated_at"],
-            member_count=member_count["count"],
-            is_creator=(user_id == group_dict["creator_id"]),
-            is_active=group_dict["is_active"],
+        return InvitationPreview(
+            id=invitation["id"],
+            group_id=invitation["group_id"],
+            group_name=group_row["name"],
+            invited_by_name=inviter_row["name"],
+            invite_code=invitation["invite_code"],
+            role=GroupRole(invitation["role"]),
+            expires_at=invitation["expires_at"],
+            created_at=invitation["created_at"],
         )
 
-    # ================== Helper Functions ==================
+    async def join_by_code(self, request: JoinGroupRequest, user_id: str) -> GroupSummary:
+        now = datetime.now(timezone.utc)
+        invite_code = request.invite_code.upper()
 
-    async def get_user_groups(self, user_id: str) -> List[Dict[str, Any]]:
-        """
-        Get all groups where user is an active member.
-        Excludes the user's personal default group.
+        # Atomically claim the invitation. If the WHERE clause matches (still
+        # pending + not expired), it flips to ACCEPTED and tells us which
+        # group + role to use; otherwise RETURNING is empty and we 404.
+        invitation = await self._db.execute_returning(
+            f"""
+            UPDATE {group_invitation_table}
+            SET status = $1, accepted_by = $2, updated_at = $3
+            WHERE invite_code = $4 AND status = $5 AND expires_at > $3
+            RETURNING id, group_id, role, invited_by
+            """,
+            InvitationStatus.ACCEPTED.value,
+            user_id,
+            now,
+            invite_code,
+            InvitationStatus.PENDING.value,
+        )
+        if invitation is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Invalid or expired invitation code"
+            )
 
-        Args:
-            user_id: User ID to get groups for
+        group_id = invitation["group_id"]
+        role = GroupRole(invitation["role"])
 
-        Returns:
-            List[Dict[str, Any]]
-        """
-        # First, get user's personal_group_id to exclude it
-        user_sql = f"select personal_group_id from users where id = '{user_id}'"
-        user_result = await self.db.read_one(user_sql)
-        personal_group_id = user_result.get("personal_group_id") if user_result else None
+        try:
+            await self._add_member(group_id, user_id, role, invited_by=invitation["invited_by"])
+        except HTTPException:
+            # Already a member — roll the invitation back to PENDING so it
+            # stays usable for whoever else has the code, and tell the user.
+            await self._db.execute(
+                f"""
+                UPDATE {group_invitation_table}
+                SET status = $1, accepted_by = NULL, updated_at = $2
+                WHERE id = $3
+                """,
+                InvitationStatus.PENDING.value, now, invitation["id"],
+            )
+            raise
 
-        sql = f"""
-        select
-            gm.group_id,
-            g.name as group_name,
-            gm.user_id,
-            u1.name as user_name,
-            u1.email as user_email,
-            gm.role,
-            gm.created_at,
-            gm.updated_at,
-            gm.invited_by,
-            u2.name as invited_by_name,
-            gm.is_active
-        from
-            group_members gm
-        left join groups g on (gm.group_id = g.id)
-        left join users u1 on (gm.user_id = u1.id)
-        left join users u2 on (gm.invited_by = u2.id)
-        where
-            gm.user_id = '{user_id}'
-            and gm.is_active = true
-            and g.is_active = true
-            and u1.is_active = true
-            {f"and gm.group_id != '{personal_group_id}'" if personal_group_id else ""}
-        """
-        memberships = await self.db.read(sql)
+        group_row = await self._get_active_group(group_id)
+        count = await self._member_count(group_id)
+        user_personal = await self._db.read_one(
+            "SELECT personal_group_id FROM users WHERE id = $1", user_id
+        )
+        is_personal = bool(user_personal and user_personal.get("personal_group_id") == group_id)
+        return GroupSummary(
+            id=group_id,
+            name=group_row["name"],
+            creator_id=group_row["creator_id"],
+            member_count=count,
+            role=role,
+            is_personal=is_personal,
+            created_at=group_row["created_at"],
+            updated_at=group_row["updated_at"],
+        )
 
-        members = [GroupMemberInfo(**membership) for membership in memberships]
+    # ────── Listing ──────
+
+    async def list_my_groups(self, user_id: str) -> list[GroupSummary]:
+        rows = await self._db.read(
+            f"""
+            SELECT
+                g.id,
+                g.name,
+                g.creator_id,
+                g.created_at,
+                g.updated_at,
+                gm.role,
+                (SELECT COUNT(*)::int FROM {group_member_table} m
+                   WHERE m.group_id = g.id AND m.is_active = TRUE) AS member_count
+            FROM {group_member_table} gm
+            JOIN {group_table} g ON g.id = gm.group_id
+            WHERE gm.user_id = $1
+              AND gm.is_active = TRUE
+              AND g.is_active = TRUE
+            ORDER BY g.created_at DESC
+            """,
+            user_id,
+        )
+
+        user_row = await self._db.read_one(
+            "SELECT personal_group_id FROM users WHERE id = $1", user_id
+        )
+        personal_id = user_row.get("personal_group_id") if user_row else None
+
+        return [
+            GroupSummary(
+                id=r["id"],
+                name=r["name"],
+                creator_id=r["creator_id"],
+                member_count=int(r["member_count"]),
+                role=GroupRole(r["role"]),
+                is_personal=(personal_id is not None and r["id"] == personal_id),
+                created_at=r["created_at"],
+                updated_at=r["updated_at"],
+            )
+            for r in rows
+        ]
+
+    async def list_members(self, group_id: str, viewer_id: str) -> list[MemberSummary]:
+        await self._require_membership(group_id, viewer_id)
+        rows = await self._db.read(
+            f"""
+            SELECT
+                gm.user_id,
+                gm.role,
+                gm.invited_by,
+                gm.created_at AS joined_at,
+                u.name,
+                u.email,
+                u.picture,
+                inviter.name AS invited_by_name
+            FROM {group_member_table} gm
+            JOIN users u ON u.id = gm.user_id
+            LEFT JOIN users inviter ON inviter.id = gm.invited_by
+            WHERE gm.group_id = $1
+              AND gm.is_active = TRUE
+              AND u.is_active = TRUE
+            """,
+            group_id,
+        )
+        members = [
+            MemberSummary(
+                user_id=r["user_id"],
+                name=r["name"],
+                email=r["email"],
+                picture=r.get("picture"),
+                role=GroupRole(r["role"]),
+                invited_by=r.get("invited_by"),
+                invited_by_name=r.get("invited_by_name"),
+                joined_at=r["joined_at"],
+            )
+            for r in rows
+        ]
+        # Creator first, then by join date.
+        members.sort(key=lambda m: (0 if m.role == GroupRole.CREATOR else 1, m.joined_at))
         return members
 
-    async def get_group_members(self, group_id: str, user_id: str) -> List[GroupMemberInfo]:
-        """
-        Get all members of a group with enhanced membership information.
-        User must have 'view_members' permission to see group members.
+    # ────── Member management (CREATOR only) ──────
 
-        Args:
-            group_id: Group ID
-            user_id: User requesting the information
+    async def update_member_role(
+        self, request: UpdateMemberRoleRequest, actor_id: str
+    ) -> dict:
+        await self._require_role(request.group_id, actor_id, {GroupRole.CREATOR})
 
-        Returns:
-            List[GroupMemberInfo]: List of group members with roles and membership details
-        """
-        # Check if user has permission to view members
-        if not await self._check_permission(group_id, user_id, "view_members"):
+        if request.new_role == GroupRole.CREATOR:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to view group members"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot assign CREATOR role — only one creator per group",
             )
 
-        sql = f"""
-        select
-            gm.*,
-            u.name as user_name,
-            u.email as user_email,
-            u.picture as user_picture,
-            g.name as group_name
-        from group_members gm
-        left join users u on (gm.user_id = u.id)
-        left join groups g on (gm.group_id = g.id)
-        where
-            gm.group_id = '{group_id}'
-            and gm.is_active = True
-            and u.is_active = True
-            and g.is_active = True
-        """
-        members = await self.db.read(sql)
+        target = await self._get_membership(request.group_id, request.user_id)
+        if target is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Target user is not a member of this group",
+            )
+        if target.role == GroupRole.CREATOR:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot change the creator's role",
+            )
 
-        members = [GroupMemberInfo(**member) for member in members]
-
-        # Sort members: CREATOR first, then by join date
-        members.sort(
-            key=lambda m: (0 if m.role == GroupRole.CREATOR else 1, m.created_at)  # Creator first  # Then by join date
+        now = datetime.now(timezone.utc)
+        await self._db.execute(
+            f"""
+            UPDATE {group_member_table}
+            SET role = $1, updated_at = $2
+            WHERE group_id = $3 AND user_id = $4
+            """,
+            request.new_role.value, now, request.group_id, request.user_id,
         )
+        return {
+            "group_id": request.group_id,
+            "user_id": request.user_id,
+            "new_role": request.new_role.value,
+            "updated_by": actor_id,
+            "updated_at": now,
+        }
 
-        return members
+    async def remove_member(self, request: RemoveMemberRequest, actor_id: str) -> dict:
+        await self._require_role(request.group_id, actor_id, {GroupRole.CREATOR})
 
-    # ================== Group Pet Operations ==================
-
-    async def get_group_pets(self, group_id: str, user_id: str) -> List[Dict[str, Any]]:
-        """
-        Get all pets assigned to a specific group.
-        User must be a member of the group to view its pets.
-
-        This method is placed in GroupService (rather than PetService) to maintain
-        the design principle of single service dependency per router.
-
-        Args:
-            group_id: Group ID
-            user_id: User requesting the information
-
-        Returns:
-            List[Dict]: Pets assigned to the group with owner and permission context
-        """
-        # Check if user is a member of the group
-        if not await self._is_group_member(group_id, user_id):
+        target = await self._get_membership(request.group_id, request.user_id)
+        if target is None:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="You must be a member of this group to view its pets"
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Target user is not a member of this group",
+            )
+        if target.role == GroupRole.CREATOR:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot remove the group creator",
             )
 
-        # Get user's role in the group
-        membership = await self._get_user_membership(group_id, user_id)
-        user_role = membership.role if membership else None
+        now = datetime.now(timezone.utc)
+        await self._db.execute(
+            f"""
+            UPDATE {group_member_table}
+            SET is_active = FALSE, updated_at = $1
+            WHERE group_id = $2 AND user_id = $3
+            """,
+            now, request.group_id, request.user_id,
+        )
+        return {
+            "group_id": request.group_id,
+            "user_id": request.user_id,
+            "removed_by": actor_id,
+            "removed_at": now,
+        }
 
-        # Query all pets assigned to this group with owner information
-        sql = f"""
-        select
-            p.id,
-            p.name,
-            p.pet_type,
-            p.breed,
-            p.gender,
-            p.current_weight_kg,
-            p.target_weight_kg,
-            p.daily_calorie_target,
-            p.photo_url,
-            p.owner_id,
-            u.name as owner_name,
-            u.email as owner_email,
-            p.created_at,
-            p.updated_at
-        from pets p
-        left join users u on p.owner_id = u.id
-        where
-            p.group_id = '{group_id}'
-            and p.is_active = true
-            and u.is_active = true
-        order by p.created_at desc
-        """
+    # ────── Group pets ──────
 
-        pets = await self.db.read(sql)
-
-        # Add permission context for each pet
-        result = []
-        for pet in pets:
-            # Determine user's permission level for this pet
-            if pet["owner_id"] == user_id:
+    async def list_group_pets(self, group_id: str, viewer_id: str) -> list[GroupPet]:
+        membership = await self._require_membership(group_id, viewer_id)
+        rows = await self._db.read(
+            """
+            SELECT
+                p.id, p.name, p.pet_type, p.breed, p.gender,
+                p.current_weight_kg, p.target_weight_kg, p.daily_calorie_target,
+                p.photo_url, p.owner_id, p.created_at, p.updated_at,
+                u.name AS owner_name
+            FROM pets p
+            JOIN users u ON u.id = p.owner_id
+            WHERE p.group_id = $1 AND p.is_active = TRUE AND u.is_active = TRUE
+            ORDER BY p.created_at DESC
+            """,
+            group_id,
+        )
+        result: list[GroupPet] = []
+        for pet in rows:
+            if pet["owner_id"] == viewer_id:
                 permission = "owner"
-            elif user_role == GroupRole.CREATOR:
+            elif membership.role == GroupRole.CREATOR:
                 permission = "creator"
-            elif user_role == GroupRole.MEMBER:
+            elif membership.role == GroupRole.MEMBER:
                 permission = "member"
             else:
                 permission = "viewer"
-
-            result.append({**pet, "user_permission": permission})
-
+            result.append(
+                GroupPet(
+                    id=pet["id"],
+                    name=pet["name"],
+                    pet_type=pet["pet_type"],
+                    breed=pet.get("breed"),
+                    gender=pet["gender"],
+                    current_weight_kg=pet.get("current_weight_kg"),
+                    target_weight_kg=pet.get("target_weight_kg"),
+                    daily_calorie_target=pet.get("daily_calorie_target"),
+                    photo_url=pet.get("photo_url"),
+                    owner_id=pet["owner_id"],
+                    owner_name=pet["owner_name"],
+                    user_permission=permission,
+                    created_at=pet["created_at"],
+                    updated_at=pet["updated_at"],
+                )
+            )
         return result
+
+    # ────── Permission gate exposed for OTHER services ──────
+
+    async def assert_group_role(
+        self, group_id: str, user_id: str, allowed: set[GroupRole]
+    ) -> GroupMember:
+        """Public helper for the pet / food / meal / weight / medicine services
+        to enforce group-level permissions without each one re-implementing
+        membership lookup. Use this instead of `_require_role` from outside.
+        """
+        return await self._require_role(group_id, user_id, allowed)
+
+    async def assert_group_member(self, group_id: str, user_id: str) -> GroupMember:
+        return await self._require_membership(group_id, user_id)
