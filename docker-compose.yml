@@ -34,13 +34,19 @@ services:
     container_name: petcare-backend
     restart: unless-stopped
 
+    # Attach to Docker's default bridge (172.17.0.0/16) rather than letting
+    # compose spin up a per-project network on 172.20.x / 172.21.x / etc.
+    # This matches nabu and heracles on the shared EC2 box, so a single
+    # pg_hba.conf rule covering 172.17.0.0/16 works for all three.
+    network_mode: "bridge"
+
     # Bind to loopback only — nginx on the host terminates TLS and proxies in.
     ports:
       - "127.0.0.1:8002:8000"
 
-    # `host.docker.internal` → the host's docker bridge gateway. The
-    # backend's POSTGRES_URI uses this hostname to reach Postgres running
-    # on the host (which is configured to also listen on 172.17.0.1).
+    # `host.docker.internal` → the host's docker bridge gateway (172.17.0.1
+    # on the default bridge). The backend's POSTGRES_URI uses this hostname
+    # to reach Postgres running on the host.
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
